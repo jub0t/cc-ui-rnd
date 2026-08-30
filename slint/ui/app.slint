@@ -1,65 +1,76 @@
 import { Theme } from "theme.slint";
-import { Panel, Section, Row } from "components/panel.slint";
+import { Bezier, Curves, Fmt } from "util.slint";
+import { EffectData, EffectsPanel } from "demo/effects-panel.slint";
+import { TransformPanel } from "demo/transform-panel.slint";
+import { InterpolationPanel } from "demo/interpolation-panel.slint";
+
+// Re-exported so main.rs can reach the globals and the struct.
+export { Curves, Fmt, Theme, Bezier, EffectData }
 
 export component App inherits Window {
-    title: "WolfCut — Slint";
-    preferred-width: 900px;
-    preferred-height: 560px;
+    title: "custom-primitives — Slint";
     background: Theme.page;
-    default-font-size: Theme.text-size;
+    default-font-family: Theme.font;
+    default-font-size: Theme.fs;
+    preferred-width: 1120px;
+    preferred-height: 900px;
+
+    in property <[EffectData]> video-effects;
+    in property <[EffectData]> audio-effects;
+    in property <float> level;
+    in property <float> peak;
+
+    out property <bool> muted: effects.muted;
+
+    callback add-effect(audio: bool);
+    callback remove-effect(id: int);
 
     VerticalLayout {
-        padding: 32px;
-        spacing: 20px;
+        padding-top: 44px;
+        padding-bottom: 44px;
+        padding-left: 24px;
+        padding-right: 24px;
+        spacing: 32px;
         alignment: start;
 
-        Text {
-            text: "Slint port — scaffold";
-            color: Theme.ink;
-            font-size: 20px;
-            font-weight: 600;
+        VerticalLayout {
+            spacing: 8px;
+
+            Text {
+                text: "custom-primitives";
+                color: Theme.fg;
+                font-size: 22px;
+                font-weight: 600;
+                horizontal-alignment: center;
+            }
+            Text {
+                text: "Editor primitives reproduced from the reference inspector. Drag any number "
+                    + "field sideways to scrub, click to type. Shift coarsens, Alt refines.";
+                color: Theme.page-fg-muted;
+                font-size: Theme.fs-lg;
+                horizontal-alignment: center;
+                wrap: word-wrap;
+                max-width: 620px;
+                x: (parent.width - self.width) / 2;
+            }
         }
 
         HorizontalLayout {
             spacing: 24px;
-            alignment: start;
+            alignment: center;
 
-            Panel {
-                width: 340px;
-                title: "Text";
-                note: "scaffold";
-
-                Section {
-                    label: "Content";
-                    Text {
-                        text: "Panel, Section and Row are in place. Primitives land here next.";
-                        color: Theme.ink-muted;
-                        font-size: Theme.text-size-sm;
-                        wrap: word-wrap;
-                    }
-                }
-
-                Section {
-                    label: "Font";
-                    Row {
-                        label: "Family";
-                        Rectangle {
-                            height: Theme.control-height;
-                            background: Theme.field;
-                            border-radius: Theme.radius;
-                            HorizontalLayout {
-                                padding-left: 8px;
-                                Text {
-                                    text: "Inter";
-                                    color: Theme.ink;
-                                    font-size: Theme.text-size-sm;
-                                    vertical-alignment: center;
-                                }
-                            }
-                        }
-                    }
-                }
+            effects := EffectsPanel {
+                video-effects: root.video-effects;
+                audio-effects: root.audio-effects;
+                level: root.level;
+                peak: root.peak;
+                add-effect(audio) => { root.add-effect(audio); }
+                remove-effect(id) => { root.remove-effect(id); }
             }
+
+            TransformPanel { }
+
+            InterpolationPanel { }
         }
     }
 }

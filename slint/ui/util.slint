@@ -1,0 +1,59 @@
+// Small numeric and string helpers shared by the primitives, plus the two
+// globals whose bodies live in Rust.
+
+export struct Bezier {
+    x1: float,
+    y1: float,
+    x2: float,
+    y2: float,
+}
+
+export global Fmt {
+    public pure function clamp(v: float, lo: float, hi: float) -> float {
+        return Math.max(lo, Math.min(hi, v));
+    }
+
+    public pure function round-to(v: float, digits: int) -> float {
+        return Math.round(v * Math.pow(10, digits)) / Math.pow(10, digits);
+    }
+
+    public pure function pad2(n: int) -> string {
+        return n < 10 ? "0\{n}" : "\{n}";
+    }
+
+    // hh:mm:ss, the format the reference In/Out fields print.
+    public pure function timecode(seconds: float) -> string {
+        return Fmt.pad2(Math.floor(seconds / 3600))
+            + ":" + Fmt.pad2(Math.mod(Math.floor(seconds / 60), 60))
+            + ":" + Fmt.pad2(Math.mod(Math.floor(seconds), 60));
+    }
+
+    public pure function decibels(v: float) -> string {
+        return (v > 0 ? "+" : "") + "\{Fmt.round-to(v, 1)} dB";
+    }
+
+    // Slint's string type has no split(), so the inverse of timecode() is
+    // implemented in Rust and bound in main.rs.
+    pure callback parse-timecode(text: string) -> float;
+}
+
+export global Curves {
+    // Solving a CSS cubic-bezier for y at a given x needs an iterative solve,
+    // which Slint's expression language cannot express. Bound in main.rs.
+    pure callback ease(x1: float, y1: float, x2: float, y2: float, at: float) -> float;
+
+    // "0.42, 0, 0.58, 1" -> Bezier. Also Rust, for want of split().
+    pure callback parse(text: string, fallback: Bezier) -> Bezier;
+}
+
+export global Geom {
+    // Point on a circle, in path (viewbox) units. Degrees run clockwise from
+    // 3 o'clock, matching the SVG convention the web Knob uses.
+    public pure function polar-x(cx: float, radius: float, degrees: float) -> float {
+        return cx + radius * Math.cos(degrees * 1deg);
+    }
+
+    public pure function polar-y(cy: float, radius: float, degrees: float) -> float {
+        return cy + radius * Math.sin(degrees * 1deg);
+    }
+}

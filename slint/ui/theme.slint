@@ -1,33 +1,56 @@
-// Design tokens, mirrored from web/src/styles/tokens.css so both
+// Design tokens, mirrored 1:1 from web/src/styles/tokens.css so both
 // implementations describe the same product rather than drifting apart.
+// Retheming is a matter of overriding this block.
 export global Theme {
+    // type
+    out property <string> font: "Inter";
+    out property <length> fs-sm: 11px;
+    out property <length> fs: 12px;
+    out property <length> fs-lg: 13px;
+
     // surfaces
     out property <color> panel: #0d0d0d;
-    out property <color> page: #08080a;
-    out property <color> well: #111111;
     out property <color> raised: #161616;
+    out property <color> well: #111111;
     out property <color> field: #1f1f1f;
     out property <color> field-hover: #272727;
-    out property <color> head: #151515;
+    out property <color> field-active: #303030;
+
+    // hairlines
     out property <color> line: #232323;
-    out property <color> edge: #333333;
+    out property <color> line-strong: #363636;
 
     // text
-    out property <color> ink: #ededed;
-    out property <color> ink-muted: #8b8b8b;
-    out property <color> ink-dim: #5c5c5c;
+    out property <color> fg: #ededed;
+    out property <color> fg-muted: #8b8b8b;
+    out property <color> fg-dim: #5c5c5c;
 
     // accents
     out property <color> accent: #0a84ff;
     out property <color> accent-hover: #3d9bff;
-    out property <color> success: #30d158;
+    out property <color> accent-soft: #0a84ff33;  // rgb(10 132 255 / 0.2)
+    out property <color> green: #30d158;
+    out property <color> on-accent: #ffffff;
+    out property <color> on-green: #06210f;
+
+    // meter ramp
+    out property <color> meter-low: #34c759;
+    out property <color> meter-mid: #ffd60a;
+    out property <color> meter-high: #ff453a;
+
+    // radii
+    out property <length> r-xs: 3px;
+    out property <length> r-sm: 5px;
+    out property <length> r: 7px;
+    out property <length> r-lg: 12px;
 
     // metrics
-    out property <length> control-height: 28px;
-    out property <length> gutter: 14px;
+    out property <length> h: 28px;        // standard control height
     out property <length> gap: 6px;
-    out property <length> radius: 7px;
-    out property <length> radius-panel: 12px;
-    out property <length> text-size: 13px;
-    out property <length> text-size-sm: 12px;
+    out property <length> pad: 14px;      // panel horizontal padding
+    out property <length> label-w: 62px;
+
+    // page chrome, from web/src/App.css
+    out property <color> page: #08080a;
+    out property <color> page-fg-muted: #9a9aa2;
 }

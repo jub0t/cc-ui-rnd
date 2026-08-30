@@ -1,0 +1,180 @@
+import { Theme } from "theme.slint";
+
+// Single adapter between glyph data and the primitives, the counterpart of
+// web/src/primitives/icons.tsx. That file re-exports two icon libraries;
+// Slint has no icon package, so the paths are inlined here.
+//
+// Two sets, drawn on one 24-unit grid:
+//   - stroked   general UI chrome, lucide's shapes at lucide's 1.9 weight
+//   - solid     alignment and transform glyphs, the rail-and-block shapes a
+//               dense inspector wants (Radix draws these on a 15-unit grid)
+//
+// `commands` may only be set in a binding and never read back, so each glyph
+// is its own instance with a literal string rather than one lookup table.
+export enum Glyph {
+    none,
+    plus,
+    minus,
+    close,
+    check,
+    chevron-down,
+    chevron-right,
+    sparkle,
+    eye,
+    lock,
+    frame,
+    copy,
+    flip-h,
+    flip-v,
+    keyframe,
+    angle,
+    align-left,
+    align-center-x,
+    align-right,
+    align-top,
+    align-center-y,
+    align-bottom,
+    distribute,
+    fit,
+}
+
+component Stroked inherits Path {
+    in property <length> size: 14px;
+    in property <brush> tint: Theme.fg-muted;
+    width: root.size;
+    height: root.size;
+    viewbox-width: 24;
+    viewbox-height: 24;
+    stroke: root.tint;
+    // lucide draws at stroke-width 1.9 on a 24 grid; hold that ratio at any size
+    stroke-width: root.size * 1.9 / 24;
+    stroke-line-cap: round;
+    stroke-line-join: round;
+}
+
+component Solid inherits Path {
+    in property <length> size: 14px;
+    in property <brush> tint: Theme.fg-muted;
+    width: root.size;
+    height: root.size;
+    viewbox-width: 24;
+    viewbox-height: 24;
+    fill: root.tint;
+    fill-rule: evenodd;
+}
+
+export component Icon inherits Rectangle {
+    in property <Glyph> glyph;
+    in property <length> size: 14px;
+    in property <brush> tint: Theme.fg-muted;
+    /// solidifies the keyframe diamond, the way `filled` does on KeyframeIcon
+    in property <bool> filled;
+
+    width: root.size;
+    height: root.size;
+
+    if root.glyph == Glyph.plus: Stroked {
+        size: root.size; tint: root.tint;
+        commands: "M 5 12 L 19 12 M 12 5 L 12 19";
+    }
+    if root.glyph == Glyph.minus: Stroked {
+        size: root.size; tint: root.tint;
+        commands: "M 5 12 L 19 12";
+    }
+    if root.glyph == Glyph.close: Stroked {
+        size: root.size; tint: root.tint;
+        commands: "M 18 6 L 6 18 M 6 6 L 18 18";
+    }
+    if root.glyph == Glyph.check: Stroked {
+        size: root.size; tint: root.tint;
+        commands: "M 20 6 L 9 17 L 4 12";
+    }
+    if root.glyph == Glyph.chevron-down: Stroked {
+        size: root.size; tint: root.tint;
+        commands: "M 6 9 L 12 15 L 18 9";
+    }
+    if root.glyph == Glyph.chevron-right: Stroked {
+        size: root.size; tint: root.tint;
+        commands: "M 9 6 L 15 12 L 9 18";
+    }
+    if root.glyph == Glyph.sparkle: Stroked {
+        size: root.size; tint: root.tint;
+        commands: "M 11 4 L 12.5 9.5 L 18 11 L 12.5 12.5 L 11 18 L 9.5 12.5 L 4 11 L 9.5 9.5 Z"
+            + " M 18.5 3 L 19.2 4.8 L 21 5.5 L 19.2 6.2 L 18.5 8 L 17.8 6.2 L 16 5.5 L 17.8 4.8 Z";
+    }
+    if root.glyph == Glyph.eye: Stroked {
+        size: root.size; tint: root.tint;
+        commands: "M 2 12 C 4.5 7 8 5 12 5 C 16 5 19.5 7 22 12"
+            + " C 19.5 17 16 19 12 19 C 8 19 4.5 17 2 12 Z"
+            + " M 15 12 A 3 3 0 0 1 9 12 A 3 3 0 0 1 15 12 Z";
+    }
+    if root.glyph == Glyph.lock: Stroked {
+        size: root.size; tint: root.tint;
+        commands: "M 5 11 L 19 11 L 19 21 L 5 21 Z M 8 11 L 8 7 A 4 4 0 0 1 16 7 L 16 11";
+    }
+    if root.glyph == Glyph.frame: Stroked {
+        size: root.size; tint: root.tint;
+        commands: "M 4 8 L 20 8 M 4 16 L 20 16 M 8 4 L 8 20 M 16 4 L 16 20";
+    }
+    if root.glyph == Glyph.copy: Stroked {
+        size: root.size; tint: root.tint;
+        commands: "M 8 8 L 20 8 L 20 20 L 8 20 Z M 16 4 L 4 4 L 4 16";
+    }
+    if root.glyph == Glyph.flip-h: Stroked {
+        size: root.size; tint: root.tint;
+        commands: "M 12 3 L 12 21 M 8 7 L 3 12 L 8 17 Z M 16 7 L 21 12 L 16 17 Z";
+    }
+    if root.glyph == Glyph.flip-v: Stroked {
+        size: root.size; tint: root.tint;
+        commands: "M 3 12 L 21 12 M 7 8 L 12 3 L 17 8 Z M 7 16 L 12 21 L 17 16 Z";
+    }
+    if root.glyph == Glyph.keyframe: Stroked {
+        size: root.size; tint: root.tint;
+        fill: root.filled ? root.tint : Colors.transparent;
+        commands: "M 12 3 L 21 12 L 12 21 L 3 12 Z";
+    }
+    if root.glyph == Glyph.angle: Stroked {
+        size: root.size; tint: root.tint;
+        commands: "M 4 20 L 20 20 M 4 20 L 17 7 M 14 20 A 10 10 0 0 0 11 12.9";
+    }
+
+    if root.glyph == Glyph.align-left: Solid {
+        size: root.size; tint: root.tint;
+        commands: "M 3 4 L 4.5 4 L 4.5 20 L 3 20 Z M 6 6 L 20 6 L 20 10 L 6 10 Z"
+            + " M 6 14 L 15 14 L 15 18 L 6 18 Z";
+    }
+    if root.glyph == Glyph.align-center-x: Solid {
+        size: root.size; tint: root.tint;
+        commands: "M 11.25 3 L 12.75 3 L 12.75 21 L 11.25 21 Z M 5 6 L 19 6 L 19 10 L 5 10 Z"
+            + " M 8 14 L 16 14 L 16 18 L 8 18 Z";
+    }
+    if root.glyph == Glyph.align-right: Solid {
+        size: root.size; tint: root.tint;
+        commands: "M 19.5 4 L 21 4 L 21 20 L 19.5 20 Z M 4 6 L 18 6 L 18 10 L 4 10 Z"
+            + " M 9 14 L 18 14 L 18 18 L 9 18 Z";
+    }
+    if root.glyph == Glyph.align-top: Solid {
+        size: root.size; tint: root.tint;
+        commands: "M 4 3 L 20 3 L 20 4.5 L 4 4.5 Z M 6 6 L 10 6 L 10 20 L 6 20 Z"
+            + " M 14 6 L 18 6 L 18 15 L 14 15 Z";
+    }
+    if root.glyph == Glyph.align-center-y: Solid {
+        size: root.size; tint: root.tint;
+        commands: "M 3 11.25 L 21 11.25 L 21 12.75 L 3 12.75 Z M 6 5 L 10 5 L 10 19 L 6 19 Z"
+            + " M 14 8 L 18 8 L 18 16 L 14 16 Z";
+    }
+    if root.glyph == Glyph.align-bottom: Solid {
+        size: root.size; tint: root.tint;
+        commands: "M 4 19.5 L 20 19.5 L 20 21 L 4 21 Z M 6 4 L 10 4 L 10 18 L 6 18 Z"
+            + " M 14 9 L 18 9 L 18 18 L 14 18 Z";
+    }
+    if root.glyph == Glyph.distribute: Solid {
+        size: root.size; tint: root.tint;
+        commands: "M 3 4 L 4.5 4 L 4.5 20 L 3 20 Z M 19.5 4 L 21 4 L 21 20 L 19.5 20 Z"
+            + " M 7 7 L 11 7 L 11 17 L 7 17 Z M 13 7 L 17 7 L 17 17 L 13 17 Z";
+    }
+    if root.glyph == Glyph.fit: Solid {
+        size: root.size; tint: root.tint;
+        commands: "M 3 5 L 21 5 L 21 19 L 3 19 Z M 5 7 L 19 7 L 19 17 L 5 17 Z";
+    }
+}

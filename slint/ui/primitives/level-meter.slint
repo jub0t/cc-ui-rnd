@@ -1,0 +1,69 @@
+import { Theme } from "../theme.slint";
+import { Fmt } from "../util.slint";
+
+// Audio level meter. The green/amber/red ramp is painted at full length and
+// revealed by a clipping window, so a colour always means the same level
+// regardless of how far the bar has filled — the same trick the web version
+// plays with clip-path.
+export component LevelMeter inherits Rectangle {
+    /// current level, 0..1
+    in property <float> value;
+    /// peak-hold marker, 0..1; negative hides it
+    in property <float> peak: -1;
+    in property <bool> vertical;
+    /// track thickness; defaults to 6px horizontal, 8px vertical
+    in property <length> thickness: root.vertical ? 8px : 6px;
+
+    property <float> level: Fmt.clamp(root.value, 0, 1);
+    property <float> hold: Fmt.clamp(root.peak, 0, 1);
+
+    // Pinned on the cross axis, free on the main one. Expressed as constraints
+    // rather than a width/height binding, which would be self-referential.
+    min-height: root.vertical ? 40px : root.thickness;
+    max-height: root.vertical ? 100000px : root.thickness;
+    min-width: root.vertical ? root.thickness : 40px;
+    max-width: root.vertical ? root.thickness : 100000px;
+    horizontal-stretch: root.vertical ? 0 : 1;
+    vertical-stretch: root.vertical ? 1 : 0;
+
+    background: Theme.well;
+    border-radius: (root.vertical ? root.width : root.height) / 2;
+    clip: true;
+
+    // reveal window
+    Rectangle {
+        x: 0px;
+        y: root.vertical ? root.height * (1 - root.level) : 0px;
+        width: root.vertical ? root.width : root.width * root.level;
+        height: root.vertical ? root.height * root.level : root.height;
+        clip: true;
+
+        animate width, height, y { duration: 60ms; easing: linear; }
+
+        // full-length ramp, offset back so its stops stay anchored to the track
+        Rectangle {
+            x: 0px;
+            y: root.vertical ? -root.height * (1 - root.level) : 0px;
+            width: root.width;
+            height: root.height;
+            background: root.vertical
+                ? @linear-gradient(0deg,
+                    Theme.meter-low 0%, Theme.meter-low 58%,
+                    Theme.meter-mid 66%, Theme.meter-mid 80%,
+                    Theme.meter-high 88%, Theme.meter-high 100%)
+                : @linear-gradient(90deg,
+                    Theme.meter-low 0%, Theme.meter-low 58%,
+                    Theme.meter-mid 66%, Theme.meter-mid 80%,
+                    Theme.meter-high 88%, Theme.meter-high 100%);
+        }
+    }
+
+    if root.peak >= 0: Rectangle {
+        x: root.vertical ? 0px : root.width * root.hold - 1px;
+        y: root.vertical ? root.height * (1 - root.hold) - 1px : 0px;
+        width: root.vertical ? root.width : 2px;
+        height: root.vertical ? 2px : root.height;
+        background: Theme.fg;
+        opacity: 0.85;
+    }
+}

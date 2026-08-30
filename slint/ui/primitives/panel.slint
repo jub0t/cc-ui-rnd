@@ -1,0 +1,222 @@
+import { Theme } from "../theme.slint";
+import { Glyph, Icon } from "../icons.slint";
+import { FocusRing } from "focus-ring.slint";
+
+// The floating inspector shell.
+export component Panel inherits Rectangle {
+    width: 320px;
+    background: Theme.panel;
+    border-width: 1px;
+    border-color: Theme.line;
+    border-radius: Theme.r-lg;
+    clip: true;
+
+    VerticalLayout {
+        alignment: start;
+        @children
+    }
+}
+
+// Panel header: a title on the leading edge, `@children` as actions on the
+// trailing one.
+export component PanelHeader inherits Rectangle {
+    in property <string> title;
+
+    height: 42px;
+
+    HorizontalLayout {
+        padding-left: Theme.pad;
+        padding-right: Theme.pad;
+        spacing: 8px;
+
+        Text {
+            text: root.title;
+            color: Theme.fg;
+            font-size: Theme.fs-lg;
+            font-weight: 500;
+            vertical-alignment: center;
+        }
+
+        Rectangle { horizontal-stretch: 1; }
+
+        HorizontalLayout {
+            spacing: 2px;
+            @children
+        }
+    }
+}
+
+// A titled group of rows, separated from its neighbours by a hairline.
+//
+// React passes the header actions and the body as two props; a Slint component
+// has a single `@children` slot, so the two halves are separate components the
+// caller nests. That also makes collapsing explicit — an `if` on the body drops
+// it out of the layout, which is what `{showBody && ...}` does in JSX.
+//
+//     Section {
+//         hdr := SectionHeader { title: "Layout"; collapsible: true; }
+//         if hdr.open: SectionBody { Row { ... } }
+//     }
+export component Section inherits VerticalLayout {
+    /// suppress the leading hairline, for the first section in a panel
+    in property <bool> first;
+
+    padding-bottom: 8px;
+
+    if !root.first: Rectangle {
+        height: 1px;
+        background: Theme.line;
+    }
+
+    @children
+}
+
+export component SectionHeader inherits Rectangle {
+    in property <string> title;
+    in property <bool> collapsible;
+    in-out property <bool> open: true;
+
+    height: 36px;
+
+    // Sits below the row so action buttons, added later in the tree, stay on
+    // top of it; the title Text itself takes no pointer events.
+    if root.collapsible: TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.open = !root.open;
+        }
+    }
+
+    HorizontalLayout {
+        padding-left: Theme.pad;
+        padding-right: Theme.pad;
+        spacing: 8px;
+
+        Text {
+            text: root.title;
+            color: Theme.fg;
+            font-size: Theme.fs-lg;
+            font-weight: 500;
+            vertical-alignment: center;
+        }
+
+        if root.collapsible: VerticalLayout {
+            alignment: center;
+            Icon {
+                glyph: root.open ? Glyph.chevron-down : Glyph.chevron-right;
+                size: 12px;
+                tint: Theme.fg-muted;
+            }
+        }
+
+        Rectangle { horizontal-stretch: 1; }
+
+        HorizontalLayout {
+            spacing: 2px;
+            @children
+        }
+    }
+}
+
+export component SectionBody inherits VerticalLayout {
+    spacing: Theme.gap;
+    @children
+}
+
+// One line of the inspector form: muted label on the leading edge, controls on
+// the trailing one. Controls with `horizontal-stretch: 1` split the remaining
+// width evenly, which is what gives paired fields (X/Y, W/H) equal columns.
+export component Row inherits HorizontalLayout {
+    in property <string> label;
+
+    padding-left: Theme.pad;
+    padding-right: Theme.pad;
+    spacing: 8px;
+    min-height: Theme.h;
+
+    if root.label != "": Text {
+        width: Theme.label-w;
+        text: root.label;
+        color: Theme.fg-muted;
+        font-size: Theme.fs;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+
+    HorizontalLayout {
+        spacing: Theme.gap;
+        @children
+    }
+}
+
+export component IconButton inherits Rectangle {
+    in property <Glyph> glyph;
+    /// text label instead of a glyph, for toggles like M / S
+    in property <string> text;
+    /// accessible name; also what a tooltip would show
+    in property <string> label;
+    in property <bool> checked;
+    in property <bool> enabled: true;
+    /// widen past the square default
+    in property <bool> wide;
+    in property <length> icon-size: 14px;
+
+    callback clicked();
+
+    property <brush> tint: root.checked ? Theme.on-accent
+        : (touch.has-hover && root.enabled) ? Theme.fg
+        : Theme.fg-muted;
+
+    width: root.wide ? 40px : 26px;
+    height: 26px;
+    border-radius: Theme.r-sm;
+    opacity: root.enabled ? 1.0 : 0.4;
+    background: root.checked ? Theme.accent
+        : !root.enabled ? Colors.transparent
+        : touch.pressed ? Theme.field-active
+        : touch.has-hover ? Theme.field
+        : Colors.transparent;
+
+    animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+
+    if root.glyph != Glyph.none: Icon {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        glyph: root.glyph;
+        size: root.icon-size;
+        tint: root.tint;
+    }
+
+    if root.text != "": Text {
+        text: root.text;
+        color: root.tint;
+        font-size: Theme.fs;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => {
+            fs.focus();
+            root.clicked();
+        }
+    }
+
+    fs := FocusScope {
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if (event.text == " " || event.text == "\n") {
+                root.clicked();
+                return EventResult.accept;
+            }
+            return EventResult.reject;
+        }
+    }
+
+    FocusRing {
+        active: fs.has-focus;
+        radius: Theme.r-sm;
+    }
+}

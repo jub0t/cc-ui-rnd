@@ -1,0 +1,137 @@
+import { Theme } from "../theme.slint";
+import { Glyph, Icon } from "../icons.slint";
+import { FocusRing } from "focus-ring.slint";
+
+component StepButton inherits Rectangle {
+    in property <Glyph> glyph;
+    in property <bool> enabled: true;
+    callback pressed(shift: bool, alt: bool);
+    callback released();
+
+    width: 30px;
+    opacity: root.enabled ? 1.0 : 0.4;
+    background: !root.enabled ? Colors.transparent
+        : touch.pressed ? Theme.field-active
+        : touch.has-hover ? Theme.field-hover
+        : Colors.transparent;
+
+    animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+
+    Icon {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        glyph: root.glyph;
+        size: 12px;
+        tint: (touch.has-hover && root.enabled) ? Theme.fg : Theme.fg-muted;
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) {
+                root.pressed(event.modifiers.shift, event.modifiers.alt);
+            } else {
+                root.released();
+            }
+        }
+    }
+}
+
+// The minus/plus pair that sits beside a NumberField. Holding repeats: the
+// first press fires immediately, then a timer takes over after `repeat-delay`
+// and runs at `repeat-interval` — the same two-stage cadence the React version
+// builds from setTimeout plus setInterval.
+export component Stepper inherits Rectangle {
+    in property <bool> enabled: true;
+    in property <duration> repeat-delay: 380ms;
+    in property <duration> repeat-interval: 55ms;
+
+    callback stepped(direction: int, shift: bool, alt: bool);
+
+    property <int> held: 0;
+    property <bool> repeating;
+    property <bool> shift;
+    property <bool> alt;
+
+    width: 61px;
+    height: Theme.h;
+    horizontal-stretch: 0;
+    background: Theme.field;
+    border-radius: Theme.r;
+    clip: true;
+
+    function begin(direction: int, shift-key: bool, alt-key: bool) {
+        root.shift = shift-key;
+        root.alt = alt-key;
+        root.repeating = false;
+        root.held = direction;
+        root.stepped(direction, shift-key, alt-key);
+    }
+
+    Timer {
+        interval: root.repeating ? root.repeat-interval : root.repeat-delay;
+        running: root.held != 0;
+        triggered => {
+            root.repeating = true;
+            root.stepped(root.held, root.shift, root.alt);
+        }
+    }
+
+    HorizontalLayout {
+        StepButton {
+            glyph: Glyph.minus;
+            enabled: root.enabled;
+            pressed(shift-key, alt-key) => {
+                fs.focus();
+                root.begin(-1, shift-key, alt-key);
+            }
+            released => {
+                root.held = 0;
+            }
+        }
+
+        Rectangle {
+            width: 1px;
+            VerticalLayout {
+                alignment: center;
+                Rectangle {
+                    height: 14px;
+                    background: Theme.line-strong;
+                }
+            }
+        }
+
+        StepButton {
+            glyph: Glyph.plus;
+            enabled: root.enabled;
+            pressed(shift-key, alt-key) => {
+                fs.focus();
+                root.begin(1, shift-key, alt-key);
+            }
+            released => {
+                root.held = 0;
+            }
+        }
+    }
+
+    fs := FocusScope {
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if (event.text == Key.LeftArrow || event.text == Key.DownArrow) {
+                root.stepped(-1, event.modifiers.shift, event.modifiers.alt);
+                return EventResult.accept;
+            }
+            if (event.text == Key.RightArrow || event.text == Key.UpArrow) {
+                root.stepped(1, event.modifiers.shift, event.modifiers.alt);
+                return EventResult.accept;
+            }
+            return EventResult.reject;
+        }
+    }
+
+    FocusRing {
+        active: fs.has-focus;
+        radius: Theme.r;
+    }
+}
