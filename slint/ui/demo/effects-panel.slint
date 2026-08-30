@@ -176,6 +176,10 @@ export component EffectsPanel inherits VerticalLayout {
                         }
                     }
 
+                    // Wrapped to centre it: the row is 72px and the well 68px,
+                    // and a layout start-aligns a fixed-size child.
+                    VerticalLayout {
+                        alignment: center;
                     Rectangle {
                         width: 90px;
                         height: 68px;
@@ -188,6 +192,7 @@ export component EffectsPanel inherits VerticalLayout {
                             value <=> root.trim;
                             default-value: 0.5;
                         }
+                    }
                     }
                 }
                 Row {

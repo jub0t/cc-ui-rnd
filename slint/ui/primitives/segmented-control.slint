@@ -13,7 +13,13 @@ export component SegmentedControl inherits Rectangle {
 
     callback changed(index: int);
 
-    property <length> seg-w: (root.width - 4px) / Math.max(root.options.length, 1);
+    property <bool> ring;
+
+    // 1px border + 2px padding, so the track insets by 3px on every side. A
+    // Slint border is drawn inside the bounds but children still measure from
+    // the outer edge, so the border has to be added in by hand.
+    property <length> inset: 3px;
+    property <length> seg-w: (root.width - 2 * root.inset) / Math.max(root.options.length, 1);
 
     height: Theme.h;
     min-width: 120px;
@@ -33,6 +39,13 @@ export component SegmentedControl inherits Rectangle {
 
     fs := FocusScope {
         enabled: root.enabled;
+        // :focus-visible — keyboard focus only, see IconButton.
+        focus-gained(reason) => {
+            root.ring = reason == FocusReason.tab-navigation;
+        }
+        focus-lost(reason) => {
+            root.ring = false;
+        }
         key-pressed(event) => {
             if (event.text == Key.RightArrow || event.text == Key.DownArrow) {
                 root.select(Math.mod(root.current + 1, root.options.length));
@@ -47,10 +60,10 @@ export component SegmentedControl inherits Rectangle {
     }
 
     thumb := Rectangle {
-        x: 2px + root.current * root.seg-w;
-        y: 2px;
+        x: root.inset + root.current * root.seg-w;
+        y: root.inset;
         width: root.seg-w;
-        height: root.height - 4px;
+        height: root.height - 2 * root.inset;
         border-radius: Theme.r-sm;
         background: Theme.field-hover;
 
@@ -58,10 +71,10 @@ export component SegmentedControl inherits Rectangle {
     }
 
     for option[index] in root.options: Rectangle {
-        x: 2px + index * root.seg-w;
-        y: 2px;
+        x: root.inset + index * root.seg-w;
+        y: root.inset;
         width: root.seg-w;
-        height: root.height - 4px;
+        height: root.height - 2 * root.inset;
 
         Text {
             text: option;
@@ -85,7 +98,7 @@ export component SegmentedControl inherits Rectangle {
     }
 
     FocusRing {
-        active: fs.has-focus;
+        active: root.ring;
         radius: Theme.r;
     }
 }

@@ -18,6 +18,7 @@ export component Select inherits Rectangle {
 
     callback changed(index: int);
 
+    property <bool> ring;
     property <length> row-h: 26px;
     property <length> list-h: Math.min(240px, root.options.length * root.row-h + 8px);
     // Read from the popup rather than tracked here: a click outside closes it
@@ -58,6 +59,13 @@ export component Select inherits Rectangle {
 
     fs := FocusScope {
         enabled: root.enabled;
+        // :focus-visible — keyboard focus only, see IconButton.
+        focus-gained(reason) => {
+            root.ring = reason == FocusReason.tab-navigation;
+        }
+        focus-lost(reason) => {
+            root.ring = false;
+        }
         key-pressed(event) => {
             if (event.text == Key.DownArrow || event.text == Key.UpArrow
                 || event.text == "\n" || event.text == " ") {
@@ -103,7 +111,7 @@ export component Select inherits Rectangle {
     }
 
     FocusRing {
-        active: fs.has-focus || root.open;
+        active: root.ring || root.open;
         radius: Theme.r;
     }
 

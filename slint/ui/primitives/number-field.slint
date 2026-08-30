@@ -140,29 +140,35 @@ export component NumberField inherits Rectangle {
             }
         }
 
-        if root.keyframe: Rectangle {
-            width: 18px;
-            height: 18px;
-            border-radius: Theme.r-xs;
-            background: kf.has-hover ? Theme.field-active : Colors.transparent;
+        // Wrapped, because a layout start-aligns a fixed-size child on the
+        // cross axis: an 18px button in a 28px field would ride 5px high.
+        if root.keyframe: VerticalLayout {
+            alignment: center;
 
-            Icon {
-                x: (parent.width - self.width) / 2;
-                y: (parent.height - self.height) / 2;
-                glyph: Glyph.keyframe;
-                size: 10px;
-                filled: root.keyframed;
-                tint: root.keyframed ? Theme.accent
-                    : kf.has-hover ? Theme.fg-muted
-                    : Theme.fg-dim;
-            }
+            Rectangle {
+                width: 18px;
+                height: 18px;
+                border-radius: Theme.r-xs;
+                background: kf.has-hover ? Theme.field-active : Colors.transparent;
 
-            kf := TouchArea {
-                enabled: root.enabled;
-                mouse-cursor: pointer;
-                clicked => {
-                    root.keyframed = !root.keyframed;
-                    root.keyframe-toggled(root.keyframed);
+                Icon {
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                    glyph: Glyph.keyframe;
+                    size: 10px;
+                    filled: root.keyframed;
+                    tint: root.keyframed ? Theme.accent
+                        : kf.has-hover ? Theme.fg-muted
+                        : Theme.fg-dim;
+                }
+
+                kf := TouchArea {
+                    enabled: root.enabled;
+                    mouse-cursor: pointer;
+                    clicked => {
+                        root.keyframed = !root.keyframed;
+                        root.keyframe-toggled(root.keyframed);
+                    }
                 }
             }
         }

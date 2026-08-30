@@ -233,7 +233,11 @@ export component BezierEditor inherits Rectangle {
                 } else if (root.grabbed == 1) {
                     fs2.focus();
                 }
-            } else {
+            } else if (event.kind == PointerEventKind.up
+                || event.kind == PointerEventKind.cancel) {
+                // Only a release ends the drag. Slint also delivers `move`
+                // events here, so a plain `else` would drop the handle the
+                // instant the pointer travelled — grab, move, nothing happens.
                 root.grabbed = -1;
             }
         }

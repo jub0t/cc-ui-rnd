@@ -31,7 +31,10 @@ component StepButton inherits Rectangle {
         pointer-event(event) => {
             if (event.kind == PointerEventKind.down) {
                 root.pressed(event.modifiers.shift, event.modifiers.alt);
-            } else {
+            } else if (event.kind == PointerEventKind.up
+                || event.kind == PointerEventKind.cancel) {
+                // `move` arrives here too; treating it as a release would stop
+                // the auto-repeat the moment the pointer twitched.
                 root.released();
             }
         }
@@ -49,6 +52,7 @@ export component Stepper inherits Rectangle {
 
     callback stepped(direction: int, shift: bool, alt: bool);
 
+    property <bool> ring;
     property <int> held: 0;
     property <bool> repeating;
     property <bool> shift;
@@ -66,6 +70,7 @@ export component Stepper inherits Rectangle {
         root.alt = alt-key;
         root.repeating = false;
         root.held = direction;
+        repeat.restart();
         root.stepped(direction, shift-key, alt-key);
     }
 
@@ -74,6 +79,13 @@ export component Stepper inherits Rectangle {
     // swallow the press.
     fs := FocusScope {
         enabled: root.enabled;
+        // :focus-visible — keyboard focus only, see IconButton.
+        focus-gained(reason) => {
+            root.ring = reason == FocusReason.tab-navigation;
+        }
+        focus-lost(reason) => {
+            root.ring = false;
+        }
         key-pressed(event) => {
             if (event.text == Key.LeftArrow || event.text == Key.DownArrow) {
                 root.stepped(-1, event.modifiers.shift, event.modifiers.alt);
@@ -87,11 +99,17 @@ export component Stepper inherits Rectangle {
         }
     }
 
-    Timer {
+    repeat := Timer {
         interval: root.repeating ? root.repeat-interval : root.repeat-delay;
         running: root.held != 0;
         triggered => {
-            root.repeating = true;
+            // A Timer keeps the period it was armed with, so dropping from the
+            // delay to the interval needs an explicit re-arm. Without it the
+            // whole hold ticks at 380ms instead of accelerating to 55ms.
+            if (!root.repeating) {
+                root.repeating = true;
+                repeat.restart();
+            }
             root.stepped(root.held, root.shift, root.alt);
         }
     }
@@ -134,7 +152,7 @@ export component Stepper inherits Rectangle {
     }
 
     FocusRing {
-        active: fs.has-focus;
+        active: root.ring;
         radius: Theme.r;
     }
 }

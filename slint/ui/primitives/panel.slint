@@ -166,24 +166,30 @@ export component IconButton inherits Rectangle {
     property <brush> tint: root.checked ? Theme.on-accent
         : (touch.has-hover && root.enabled) ? Theme.fg
         : Theme.fg-muted;
+    property <length> side: 26px;
+    property <bool> ring;
 
-    width: root.wide ? 40px : 26px;
-    height: 26px;
-    border-radius: Theme.r-sm;
-    opacity: root.enabled ? 1.0 : 0.4;
-    background: root.checked ? Theme.accent
-        : !root.enabled ? Colors.transparent
-        : touch.pressed ? Theme.field-active
-        : touch.has-hover ? Theme.field
-        : Colors.transparent;
-
-    animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+    // Fixed across, free along. A Slint layout start-aligns a fixed-size child
+    // on the cross axis — there is no `align-items: center` — so the root takes
+    // whatever height the row hands it and the chip centres itself inside,
+    // which keeps the button honest in a 28px row and a 42px header alike.
+    width: root.wide ? 40px : root.side;
+    min-height: root.side;
 
     // First in the tree, so the TouchArea below sits above it. A FocusScope
     // takes pointer events to focus itself, and one declared last would eat the
     // click before the button ever saw it — focus ring, no action.
     fs := FocusScope {
         enabled: root.enabled;
+        // :focus-visible — a ring for keyboard focus only. Slint keeps focus
+        // after a click and has no equivalent rule, so the reason is what
+        // separates a Tab from a press.
+        focus-gained(reason) => {
+            root.ring = reason == FocusReason.tab-navigation;
+        }
+        focus-lost(reason) => {
+            root.ring = false;
+        }
         key-pressed(event) => {
             if (event.text == " " || event.text == "\n") {
                 root.clicked();
@@ -193,33 +199,48 @@ export component IconButton inherits Rectangle {
         }
     }
 
-    if root.glyph != Glyph.none: Icon {
-        x: (parent.width - self.width) / 2;
-        y: (parent.height - self.height) / 2;
-        glyph: root.glyph;
-        size: root.icon-size;
-        tint: root.tint;
-    }
+    chip := Rectangle {
+        y: (root.height - root.side) / 2;
+        width: root.width;
+        height: root.side;
+        border-radius: Theme.r-sm;
+        opacity: root.enabled ? 1.0 : 0.4;
+        background: root.checked ? Theme.accent
+            : !root.enabled ? Colors.transparent
+            : touch.pressed ? Theme.field-active
+            : touch.has-hover ? Theme.field
+            : Colors.transparent;
 
-    if root.text != "": Text {
-        text: root.text;
-        color: root.tint;
-        font-size: Theme.fs;
-        horizontal-alignment: center;
-        vertical-alignment: center;
-    }
+        animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
-    touch := TouchArea {
-        enabled: root.enabled;
-        mouse-cursor: pointer;
-        clicked => {
-            fs.focus();
-            root.clicked();
+        if root.glyph != Glyph.none: Icon {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            glyph: root.glyph;
+            size: root.icon-size;
+            tint: root.tint;
         }
-    }
 
-    FocusRing {
-        active: fs.has-focus;
-        radius: Theme.r-sm;
+        if root.text != "": Text {
+            text: root.text;
+            color: root.tint;
+            font-size: Theme.fs;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+
+        touch := TouchArea {
+            enabled: root.enabled;
+            mouse-cursor: pointer;
+            clicked => {
+                fs.focus();
+                root.clicked();
+            }
+        }
+
+        FocusRing {
+            active: root.ring;
+            radius: Theme.r-sm;
+        }
     }
 }

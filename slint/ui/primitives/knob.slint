@@ -19,6 +19,8 @@ export component Knob inherits Rectangle {
 
     callback changed(value: float);
 
+    property <bool> ring;
+
     // 270deg of sweep with the dead zone at the bottom, the way hardware knobs read.
     property <float> start-angle: 135;
     property <float> sweep: 270;
@@ -125,6 +127,13 @@ export component Knob inherits Rectangle {
 
     fs := FocusScope {
         enabled: root.enabled;
+        // :focus-visible — keyboard focus only, see IconButton.
+        focus-gained(reason) => {
+            root.ring = reason == FocusReason.tab-navigation;
+        }
+        focus-lost(reason) => {
+            root.ring = false;
+        }
         key-pressed(event) => {
             if (event.text == Key.Home) {
                 root.apply(root.minimum);
@@ -194,7 +203,7 @@ export component Knob inherits Rectangle {
     }
 
     FocusRing {
-        active: fs.has-focus;
+        active: root.ring;
         radius: root.diameter / 2;
     }
 }

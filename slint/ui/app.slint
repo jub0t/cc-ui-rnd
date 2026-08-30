@@ -33,6 +33,21 @@ export component App inherits Window {
     callback add-effect(audio: bool);
     callback remove-effect(id: int);
 
+    // Clicking anything that is not a control blurs the one that had focus,
+    // the way a browser does. Slint holds focus until something else takes it,
+    // so without this a number field stays in its editing state — ring and all
+    // — for the rest of the session. Both sit first in the tree so every real
+    // control is above them and takes its own clicks.
+    sink := FocusScope {
+        focus-on-tab-navigation: false;
+    }
+
+    TouchArea {
+        clicked => {
+            sink.focus();
+        }
+    }
+
     VerticalLayout {
         padding-top: 44px;
         padding-bottom: 44px;
@@ -49,6 +64,7 @@ export component App inherits Window {
                 color: Theme.fg;
                 font-size: 22px;
                 font-weight: 600;
+                letter-spacing: -0.33px;   // the -0.015em the web heading uses
                 horizontal-alignment: center;
             }
             Text {
