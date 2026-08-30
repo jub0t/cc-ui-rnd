@@ -54,23 +54,36 @@ push or remove, and the simulated programme level, because Slint has no RNG.
 Formatting in the other direction — `Fmt.timecode`, `Fmt.decibels` — is plain
 arithmetic and stays in `util.slint`.
 
-## Renderers
+## Renderer
 
-The default build uses FemtoVG, which is GPU-accelerated (OpenGL) and pure
-Rust, so cross-compiling to macOS, Linux and Windows needs nothing beyond
-`rustup target add`. Skia is available but opt-in:
+FemtoVG, via Slint's default features. It is GPU-accelerated over OpenGL and
+pure Rust, so cross-compiling to macOS, Linux and Windows needs nothing beyond
+`rustup target add`.
 
-```sh
-cargo run --features skia          # A/B text fidelity on a dev box
-SLINT_BACKEND=winit-femtovg cargo run --features skia   # force the other one
-```
+Slint also ships a Skia renderer. It was evaluated and rejected, and the
+reasoning is worth keeping because the obvious argument for it is wrong: this
+is **not** a GPU-vs-no-GPU choice. Both render on the GPU. What Skia actually
+adds is text and path rasterization quality — narrower than it first appears.
 
-Skia is deliberately not the default. It is not a GPU-vs-no-GPU choice — both
-render on the GPU. What Skia adds is text and path rasterization quality; what
-it costs is a prebuilt C++ library that drags in `cc`, `bindgen` and
-`clang-sys`, so every cross-compilation target needs a C++ toolchain and a
-matching sysroot. It is toolchain-coupled at link time too: the prebuilt
-`skia.lib` requires MSVC 17.13+ and fails with an opaque `LNK2019` on 17.12.
+What it costs is a prebuilt C++ library, which pulls `cc`, `bindgen` and
+`clang-sys` into the dependency graph. Every cross-compilation target then
+needs a C++ toolchain and a matching sysroot instead of just a Rust target,
+and the failure mode is opaque: the prebuilt `skia.lib` requires MSVC 17.13+
+and dies with `LNK2019` on 17.12 — at link time, on a native build, with a
+fully standard Visual Studio install.
+
+Predictable cross-compilation across the three desktop targets outranks the
+text fidelity, so Skia is not wired in — there is no feature flag for it.
+
+Note that `skia-safe` and `skia-bindings` still appear in `Cargo.lock`: Cargo
+records a dependency's optional packages whether or not they are enabled, and
+Slint declares them. They are never fetched or compiled by a normal build, but
+`cargo vendor` does fetch everything a lockfile names, which is worth knowing
+before setting up an offline or air-gapped build.
+
+To try Skia anyway, add `features = ["renderer-skia"]` to the `slint`
+dependency. With both renderers compiled in the winit backend selects Skia, and
+`SLINT_BACKEND=winit-femtovg` forces the other.
 
 ### Why the text weights differ from the tokens
 
@@ -82,9 +95,11 @@ panel renders lighter than the same tokens do in a browser.
 The compensation is deliberately confined to those two properties. Colours and
 sizes stay byte-identical to `tokens.css`, because bending those to chase the
 look would fork the design from `web/` silently — the exact drift this repo
-exists to catch. Reset both to 400/500 when building with `--features skia`, or
-if FemtoVG ever gains gamma-correct blending; leaving them on top of a
-gamma-correct renderer will read as too heavy.
+exists to catch. Reset both to 400/500 if FemtoVG ever gains gamma-correct
+blending, or if the renderer is swapped for Skia; leaving the compensation on
+top of a gamma-correct renderer will read as too heavy. The real fix is
+gamma-correct glyph compositing in femtovg's shader, which is an upstream
+change rather than anything configurable here.
 
 ## Where the two implementations diverge
 

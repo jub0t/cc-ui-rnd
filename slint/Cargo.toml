@@ -4,26 +4,11 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 
-[features]
-default = []
-
-# Opt-in only: `cargo run --features skia`.
-#
-# Skia is not a GPU-vs-no-GPU choice — the default FemtoVG renderer is already
-# GPU-accelerated via OpenGL. What Skia adds is text and path rasterization
-# quality, and what it costs is a prebuilt C++ library, which is the one thing
-# that makes cross-compiling to mac/linux/windows unpredictable: it drags in
-# cc, bindgen and clang-sys, so every target needs a C++ toolchain and a
-# matching sysroot rather than just `rustup target add`. It is also toolchain-
-# coupled at link time — the prebuilt skia.lib wants MSVC 17.13+ and fails with
-# an opaque LNK2019 on 17.12.
-#
-# So it stays a flag for A/B-ing fidelity on a dev box, never a release default.
-# When the winit backend has both compiled in it picks Skia; force the other
-# with SLINT_BACKEND=winit-femtovg.
-skia = ["slint/renderer-skia"]
-
 [dependencies]
+# Default features give the winit backend and the FemtoVG renderer, which is
+# GPU-accelerated over OpenGL and pure Rust — so cross-compiling needs nothing
+# beyond `rustup target add`. Slint's Skia renderer was evaluated and rejected;
+# slint/README.md records why.
 slint = "1.14"
 
 [build-dependencies]
