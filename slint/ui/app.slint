@@ -1,0 +1,65 @@
+import { Theme } from "theme.slint";
+import { Panel, Section, Row } from "components/panel.slint";
+
+export component App inherits Window {
+    title: "WolfCut — Slint";
+    preferred-width: 900px;
+    preferred-height: 560px;
+    background: Theme.page;
+    default-font-size: Theme.text-size;
+
+    VerticalLayout {
+        padding: 32px;
+        spacing: 20px;
+        alignment: start;
+
+        Text {
+            text: "Slint port — scaffold";
+            color: Theme.ink;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        HorizontalLayout {
+            spacing: 24px;
+            alignment: start;
+
+            Panel {
+                width: 340px;
+                title: "Text";
+                note: "scaffold";
+
+                Section {
+                    label: "Content";
+                    Text {
+                        text: "Panel, Section and Row are in place. Primitives land here next.";
+                        color: Theme.ink-muted;
+                        font-size: Theme.text-size-sm;
+                        wrap: word-wrap;
+                    }
+                }
+
+                Section {
+                    label: "Font";
+                    Row {
+                        label: "Family";
+                        Rectangle {
+                            height: Theme.control-height;
+                            background: Theme.field;
+                            border-radius: Theme.radius;
+                            HorizontalLayout {
+                                padding-left: 8px;
+                                Text {
+                                    text: "Inter";
+                                    color: Theme.ink;
+                                    font-size: Theme.text-size-sm;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
