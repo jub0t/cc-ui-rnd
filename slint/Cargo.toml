@@ -4,24 +4,35 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 
+[features]
+default = []
+
+# Opt-in only: `cargo run --features skia`.
+#
+# Skia is not a GPU-vs-no-GPU choice — the default FemtoVG renderer is already
+# GPU-accelerated via OpenGL. What Skia adds is text and path rasterization
+# quality, and what it costs is a prebuilt C++ library, which is the one thing
+# that makes cross-compiling to mac/linux/windows unpredictable: it drags in
+# cc, bindgen and clang-sys, so every target needs a C++ toolchain and a
+# matching sysroot rather than just `rustup target add`. It is also toolchain-
+# coupled at link time — the prebuilt skia.lib wants MSVC 17.13+ and fails with
+# an opaque LNK2019 on 17.12.
+#
+# So it stays a flag for A/B-ing fidelity on a dev box, never a release default.
+# When the winit backend has both compiled in it picks Skia; force the other
+# with SLINT_BACKEND=winit-femtovg.
+skia = ["slint/renderer-skia"]
+
 [dependencies]
 slint = "1.14"
-
-# Swapping FemtoVG for Skia matches Chrome's text rasterization, which is what
-# makes 400-weight text on a dark panel carry the same visual weight as web/.
-# It needs MSVC 17.13+: the prebuilt skia.lib references STL symbols
-# (__std_search_1, __std_find_first_of_trivial_pos_1) that 17.12 does not ship,
-# and the link fails with LNK2019. Note FemtoVG must be dropped, not merely
-# supplemented — with both compiled in, the winit backend picks FemtoVG first.
-#
-# slint = { version = "1.14", default-features = false, features = [
-#     "std", "backend-default", "renderer-skia", "renderer-software",
-#     "accessibility", "compat-1-2", "system-tray",
-# ] }
 
 [build-dependencies]
 slint-build = "1.14"
 
 [profile.release]
 opt-level = "s"
-lto = true
+# "thin" rather than `true` (which is fat LTO). Fat LTO re-optimises the whole
+# dependency graph in one serial link step — that is where the 13-minute
+# release build went. Thin LTO keeps most of the win, runs in parallel across
+# codegen units, and cuts the link to a fraction of it.
+lto = "thin"

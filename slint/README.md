@@ -54,6 +54,38 @@ push or remove, and the simulated programme level, because Slint has no RNG.
 Formatting in the other direction — `Fmt.timecode`, `Fmt.decibels` — is plain
 arithmetic and stays in `util.slint`.
 
+## Renderers
+
+The default build uses FemtoVG, which is GPU-accelerated (OpenGL) and pure
+Rust, so cross-compiling to macOS, Linux and Windows needs nothing beyond
+`rustup target add`. Skia is available but opt-in:
+
+```sh
+cargo run --features skia          # A/B text fidelity on a dev box
+SLINT_BACKEND=winit-femtovg cargo run --features skia   # force the other one
+```
+
+Skia is deliberately not the default. It is not a GPU-vs-no-GPU choice — both
+render on the GPU. What Skia adds is text and path rasterization quality; what
+it costs is a prebuilt C++ library that drags in `cc`, `bindgen` and
+`clang-sys`, so every cross-compilation target needs a C++ toolchain and a
+matching sysroot. It is toolchain-coupled at link time too: the prebuilt
+`skia.lib` requires MSVC 17.13+ and fails with an opaque `LNK2019` on 17.12.
+
+### Why the text weights differ from the tokens
+
+`Theme.weight-body` is 500 and `Theme.weight-title` is 600, where `web/` uses
+400 and 500. That is renderer compensation, not a design change: FemtoVG
+composites glyph coverage without gamma correction, so light text on a dark
+panel renders lighter than the same tokens do in a browser.
+
+The compensation is deliberately confined to those two properties. Colours and
+sizes stay byte-identical to `tokens.css`, because bending those to chase the
+look would fork the design from `web/` silently — the exact drift this repo
+exists to catch. Reset both to 400/500 when building with `--features skia`, or
+if FemtoVG ever gains gamma-correct blending; leaving them on top of a
+gamma-correct renderer will read as too heavy.
+
 ## Where the two implementations diverge
 
 Everything below is a language difference, not a design change. The rendered
