@@ -5,19 +5,19 @@ edition = "2021"
 publish = false
 
 [dependencies]
-# Skia is the rasterizer Chrome draws with, so matching it is what makes
-# 400-weight text on a dark panel carry the same visual weight here as it does
-# in web/. FemtoVG is dropped rather than merely supplemented: when both are
-# compiled in, the winit backend picks FemtoVG first and Skia never runs.
-slint = { version = "1.14", default-features = false, features = [
-    "std",
-    "backend-default",
-    "renderer-skia",
-    "renderer-software",
-    "accessibility",
-    "compat-1-2",
-    "system-tray",
-] }
+slint = "1.14"
+
+# Swapping FemtoVG for Skia matches Chrome's text rasterization, which is what
+# makes 400-weight text on a dark panel carry the same visual weight as web/.
+# It needs MSVC 17.13+: the prebuilt skia.lib references STL symbols
+# (__std_search_1, __std_find_first_of_trivial_pos_1) that 17.12 does not ship,
+# and the link fails with LNK2019. Note FemtoVG must be dropped, not merely
+# supplemented — with both compiled in, the winit backend picks FemtoVG first.
+#
+# slint = { version = "1.14", default-features = false, features = [
+#     "std", "backend-default", "renderer-skia", "renderer-software",
+#     "accessibility", "compat-1-2", "system-tray",
+# ] }
 
 [build-dependencies]
 slint-build = "1.14"
