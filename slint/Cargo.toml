@@ -15,9 +15,16 @@ slint = "1.14"
 slint-build = "1.14"
 
 [profile.release]
-opt-level = "s"
+# 3, not "s". "s" optimises for binary size and gives up inlining and
+# vectorisation to get it, which is the wrong trade for an editor UI that
+# redraws continuously — size is not a constraint on desktop.
+opt-level = 3
 # "thin" rather than `true` (which is fat LTO). Fat LTO re-optimises the whole
 # dependency graph in one serial link step — that is where the 13-minute
 # release build went. Thin LTO keeps most of the win, runs in parallel across
 # codegen units, and cuts the link to a fraction of it.
+#
+# codegen-units is left at the default (16). Forcing it to 1 would buy a little
+# more optimisation at the cost of serialising codegen, and build time already
+# hurts enough.
 lto = "thin"
