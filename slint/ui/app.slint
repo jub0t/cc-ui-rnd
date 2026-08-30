@@ -1,3 +1,11 @@
+// Inter is bundled rather than assumed: the web build names it first in a
+// font stack and degrades to the system UI face, but a desktop binary should
+// look the same on a machine that has never installed it. One file per weight
+// the design uses — 400 body, 500 titles, 600 the page heading.
+import "fonts/Inter-Regular.ttf";
+import "fonts/Inter-Medium.ttf";
+import "fonts/Inter-SemiBold.ttf";
+
 import { Theme } from "theme.slint";
 import { Bezier, Curves, Fmt } from "util.slint";
 import { EffectData, EffectsPanel } from "demo/effects-panel.slint";

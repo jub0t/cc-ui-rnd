@@ -20,7 +20,9 @@ export component Select inherits Rectangle {
 
     property <length> row-h: 26px;
     property <length> list-h: Math.min(240px, root.options.length * root.row-h + 8px);
-    property <bool> open;
+    // Read from the popup rather than tracked here: a click outside closes it
+    // without telling us, so a hand-rolled flag goes stale.
+    property <bool> open: list.is-open;
     property <int> active;
     property <string> label: (root.current >= 0 && root.current < root.options.length)
         ? root.options[root.current]
@@ -42,7 +44,6 @@ export component Select inherits Rectangle {
             root.current = index;
             root.changed(index);
         }
-        root.open = false;
         list.close();
         fs.focus();
     }
@@ -52,7 +53,6 @@ export component Select inherits Rectangle {
             return;
         }
         root.active = Math.max(root.current, 0);
-        root.open = true;
         list.show();
     }
 
@@ -149,7 +149,6 @@ export component Select inherits Rectangle {
                         return EventResult.accept;
                     }
                     if (event.text == Key.Escape) {
-                        root.open = false;
                         list.close();
                         fs.focus();
                         return EventResult.accept;
