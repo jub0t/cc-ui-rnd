@@ -2,7 +2,7 @@ import { EffectsPanel } from './demo/EffectsPanel'
 import { InterpolationPanel } from './demo/InterpolationPanel'
 import { TransformPanel } from './demo/TransformPanel'
 import { LabSection } from './demo/lab/LabSection'
-import { RelaySection } from './demo/relay/RelaySection'
+import { EditorPanels } from './demo/editor/EditorPanels'
 import './App.css'
 
 export function App() {
@@ -22,7 +22,7 @@ export function App() {
       </div>
 
       <hr className="divider" />
-      <RelaySection />
+      <EditorPanels />
 
       <hr className="divider" />
       <LabSection />

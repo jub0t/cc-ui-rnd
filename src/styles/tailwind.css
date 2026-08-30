@@ -1,0 +1,75 @@
+/* Tailwind v4, deliberately WITHOUT preflight.
+   The custom-primitives section owns its own resets, and a global preflight
+   would silently restyle it. Instead the reset below is scoped to [data-tw],
+   so only the sections that opt in are affected. */
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+@theme {
+  --color-panel: #0d0d0d;
+  --color-well: #111111;
+  --color-raised: #161616;
+  --color-field: #1f1f1f;
+  --color-fieldhi: #272727;
+  --color-line: #232323;
+  --color-linesoft: #1b1b1b;
+  --color-edge: #333333;
+
+  --color-ink: #ededed;
+  --color-inkmute: #8b8b8b;
+  --color-inkdim: #5c5c5c;
+
+  --color-accent: #0a84ff;
+  --color-accenthi: #3d9bff;
+  --color-success: #30d158;
+  --color-warn: #e07b33;
+
+  --radius-panel: 12px;
+
+  --font-ui: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+@layer base {
+  [data-tw],
+  [data-tw] *,
+  [data-tw] *::before,
+  [data-tw] *::after {
+    box-sizing: border-box;
+    border-width: 0;
+    border-style: solid;
+    border-color: var(--color-line);
+  }
+
+  [data-tw] h1,
+  [data-tw] h2,
+  [data-tw] h3,
+  [data-tw] h4,
+  [data-tw] p {
+    margin: 0;
+    font-size: inherit;
+    font-weight: inherit;
+  }
+
+  [data-tw] button {
+    padding: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  [data-tw] button:disabled { cursor: default; }
+
+  [data-tw] input,
+  [data-tw] textarea {
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    outline: none;
+  }
+
+  [data-tw] svg { display: block; flex: none; }
+
+  [data-tw] :focus-visible { outline: none; }
+}

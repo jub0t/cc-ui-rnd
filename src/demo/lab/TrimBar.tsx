@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { clamp, cx, useElementSize, usePointerDrag } from '../../primitives'
-import { seeded, timecode } from '../relay/format'
+import { seeded, timecode } from '../editor/format'
 import styles from './lab.module.css'
 
 const CLIP_SECONDS = 42.5
