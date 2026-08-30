@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
-import { AudioLines, Check, Search, Upload, Video } from 'lucide-react'
+import { AudioLines, Check, Search, Upload } from 'lucide-react'
 import { SegmentedControl, clamp } from '../../primitives'
 import { duration, seeded, timecode } from './format'
 import { Button, Panel, Section, TextInput, cn } from './ui'
@@ -107,14 +107,14 @@ function AssetCard({ asset, selected, onToggle }: { asset: Asset; selected: bool
           </>
         )}
 
-        <span
-          className={cn(
-            'absolute top-1.5 left-1.5 grid size-[19px] place-items-center rounded-sm text-white',
-            isVideo ? 'bg-accent' : 'bg-warn',
-          )}
-        >
-          {isVideo ? <Video size={12} /> : <AudioLines size={12} />}
-        </span>
+        {/* Only audio is badged. Video is the default in a bin and its duration
+            already says the clip is temporal, so a badge on every video marks
+            the norm rather than the exception — pure noise. */}
+        {!isVideo && (
+          <span className="absolute top-1.5 left-1.5 grid size-[19px] place-items-center rounded-sm bg-warn text-white">
+            <AudioLines size={12} />
+          </span>
+        )}
 
         {selected && (
           <span className="absolute top-1.5 right-1.5 grid size-[18px] place-items-center rounded-full bg-accent text-white">

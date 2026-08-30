@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { Eye, EyeOff, Upload } from 'lucide-react'
+import { Eye, EyeOff, Italic, Upload } from 'lucide-react'
 import { SegmentedControl, Select, useElementSize } from '../../primitives'
 import { rgba } from './format'
-import { Button, CHECKER, ColorField, Panel, Readout, Reveal, Row, Section, Slider, TextArea, TextButton, Toggle, cn } from './ui'
+import { Button, CHECKER, ColorField, Panel, Readout, Reveal, Row, Section, Slider, TextArea, Toggle, cn } from './ui'
 
 const FAMILIES = [
   { value: 'Inter', label: 'Inter' },
@@ -56,10 +56,19 @@ export function TextPanel() {
   const previewPx = canvas.height * size
   const projectPx = Math.round(size * PROJECT_HEIGHT)
 
+  // A collapsed section still has to report what it holds, otherwise folding
+  // one hides settings you have no way of noticing are on.
+  const familyLabel = FAMILIES.find((f) => f.value === family)?.label ?? family
+  const weightLabel = WEIGHTS.find((w) => w.value === weight)?.label ?? weight
+  const backdropLabel = BACKDROPS.find((b) => b.value === backdrop)?.label ?? backdrop
+  const effectsSummary = [shadow && 'Shadow', plate && 'Plate'].filter(Boolean).join(' · ') || 'None'
+
   return (
     <Panel title="Text" width={340}>
       <Section
+        collapsible
         label="Preview"
+        summary={backdropLabel}
         action={
           <Button
             variant="ghost"
@@ -119,7 +128,7 @@ export function TextPanel() {
         </Row>
       </Section>
 
-      <Section label="Content">
+      <Section collapsible label="Content" summary={content || 'Empty'}>
         <TextArea
           value={content}
           onChange={setContent}
@@ -128,20 +137,36 @@ export function TextPanel() {
         />
       </Section>
 
-      <Section label="Font">
-        <div className="flex gap-1.5">
-          <div className="min-w-0 flex-1">
-            <Select options={FAMILIES} value={family} onChange={setFamily} aria-label="Font family" />
-          </div>
-          <div className="w-[104px] flex-none">
-            <Select options={WEIGHTS} value={weight} onChange={setWeight} aria-label="Font weight" />
-          </div>
-        </div>
+      <Section
+        collapsible
+        label="Font"
+        summary={`${familyLabel} ${weightLabel} · ${(size * 100).toFixed(1)}%`}
+        action={
+          <Button variant="ghost" size="icon" aria-label="Add a font file">
+            <Upload size={14} />
+          </Button>
+        }
+      >
+        {/* One control per row, on the panel's own label grammar. Family gets
+            the full width because font names are long; weight shares its row
+            with italic because both describe the same style. */}
+        <Row label="Family">
+          <Select options={FAMILIES} value={family} onChange={setFamily} aria-label="Font family" />
+        </Row>
 
-        <TextButton>
-          <Upload size={13} />
-          Add a font file
-        </TextButton>
+        <Row label="Weight">
+          <Select options={WEIGHTS} value={weight} onChange={setWeight} aria-label="Font weight" />
+          <Button
+            variant={italic ? 'primary' : 'default'}
+            size="icon"
+            aria-pressed={italic}
+            aria-label="Italic"
+            title="Italic"
+            onClick={() => setItalic(!italic)}
+          >
+            <Italic size={13} />
+          </Button>
+        </Row>
 
         <Readout
           primary={`${(size * 100).toFixed(1)}% of frame height`}
@@ -157,13 +182,9 @@ export function TextPanel() {
             bubble={(v) => `${(v * 100).toFixed(1)}%`}
           />
         </Readout>
-
-        <Row label="Italic">
-          <Toggle checked={italic} onChange={setItalic} aria-label="Italic" />
-        </Row>
       </Section>
 
-      <Section label="Colour">
+      <Section collapsible label="Colour" summary={`${fill} · ${Math.round(opacity * 100)}%`}>
         <Row label="Fill">
           <ColorField value={fill} onChange={setFill} alpha={opacity} aria-label="Fill colour" />
         </Row>
@@ -178,7 +199,7 @@ export function TextPanel() {
         </Readout>
       </Section>
 
-      <Section label="Effects">
+      <Section collapsible defaultOpen={false} label="Effects" summary={effectsSummary}>
         <Row label="Drop shadow">
           <Toggle checked={shadow} onChange={setShadow} aria-label="Drop shadow" />
         </Row>

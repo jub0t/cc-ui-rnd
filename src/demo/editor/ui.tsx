@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react'
+import { ChevronRight } from 'lucide-react'
 import { cva } from 'class-variance-authority'
 import type { VariantProps } from 'class-variance-authority'
 import clsx from 'clsx'
@@ -48,19 +49,85 @@ export function Panel({
 export function Section({
   label,
   action,
+  summary,
+  collapsible = false,
+  defaultOpen = true,
   children,
 }: {
   label: string
   action?: ReactNode
+  /** shown in the header only while collapsed, so a folded section still
+   *  reports what it is holding rather than hiding it */
+  summary?: ReactNode
+  collapsible?: boolean
+  defaultOpen?: boolean
   children: ReactNode
 }) {
+  const [open, setOpen] = useState(defaultOpen)
+  // A popover inside a section (the font Select) must not be clipped, so the
+  // overflow guard is lifted once the open transition has finished. Timed
+  // rather than transitionend-driven, so it still settles under reduced motion.
+  const [settled, setSettled] = useState(defaultOpen)
+
+  useEffect(() => {
+    if (!open) {
+      setSettled(false)
+      return
+    }
+    const id = window.setTimeout(() => setSettled(true), 220)
+    return () => window.clearTimeout(id)
+  }, [open])
+
+  // Equal 14px inset on every side, matching the panel gutter — the body
+  // used to sit flush against its header with only a bottom pad.
+  const body = <div className="flex flex-col gap-1.5 p-3.5">{children}</div>
+
+  if (!collapsible) {
+    return (
+      <section className="border-t border-line">
+        <div className="flex h-9 items-center justify-between gap-2 px-3.5">
+          <h4 className="text-[13px] font-medium text-ink">{label}</h4>
+          {action}
+        </div>
+        {body}
+      </section>
+    )
+  }
+
   return (
-    <section className="border-t border-line pb-2.5">
-      <div className="flex h-9 items-center justify-between gap-2 px-3.5">
-        <h4 className="text-[13px] font-medium text-ink">{label}</h4>
+    <section className="border-t border-line">
+      {/* Only a toggling header carries the raised tone, so the colour itself
+          says "this bar does something" before the chevron is even read. */}
+      <div className="flex h-9 items-center gap-2 bg-head px-3.5 transition-colors hover:bg-headhi">
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((current) => !current)}
+          className="flex h-full min-w-0 flex-1 items-center gap-1.5 rounded text-left focus-visible:ring-1 focus-visible:ring-accent"
+        >
+          <ChevronRight
+            size={13}
+            className={cn(
+              'text-inkdim transition-transform duration-200 motion-reduce:transition-none',
+              open && 'rotate-90',
+            )}
+          />
+          <span className="text-[13px] font-medium text-ink">{label}</span>
+          {!open && summary !== undefined && (
+            <span className="ml-auto min-w-0 truncate pl-2 text-[11px] text-inkdim">{summary}</span>
+          )}
+        </button>
         {action}
       </div>
-      <div className="flex flex-col gap-1.5 px-3.5">{children}</div>
+
+      <div
+        className={cn(
+          'grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none',
+          open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
+        )}
+      >
+        <div className={cn('min-h-0', !(open && settled) && 'overflow-hidden')}>{body}</div>
+      </div>
     </section>
   )
 }

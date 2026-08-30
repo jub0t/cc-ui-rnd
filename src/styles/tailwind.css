@@ -15,6 +15,9 @@
   --color-line: #232323;
   --color-linesoft: #1b1b1b;
   --color-edge: #333333;
+  /* reserved for collapsible section headers: the tint IS the affordance */
+  --color-head: #151515;
+  --color-headhi: #1c1c1c;
 
   --color-ink: #ededed;
   --color-inkmute: #8b8b8b;
