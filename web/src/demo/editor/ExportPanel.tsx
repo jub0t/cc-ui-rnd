@@ -28,7 +28,7 @@ type Tier = (typeof TIERS)[number]['value']
 
 const AUDIO_BPS = 192_000
 const PROJECT_SECONDS = 154
-const FOLDER = 'C:\\Users\\jfore\\OneDrive\\Documents\\Desktop\\Relay'
+const FOLDER = 'C:\\Users\\Editor\\Documents\\Relay'
 
 /** The size the export will actually be — the number the choice hinges on. */
 function estimate(mbps: number, height: number, fps: number) {
