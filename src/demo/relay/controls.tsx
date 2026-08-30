@@ -227,18 +227,29 @@ export function Progress({ value, done = false }: { value: number; done?: boolea
 /* Layout                                                                     */
 /* ------------------------------------------------------------------------ */
 
-export function Group({ label, children }: { label: string; children: ReactNode }) {
+export function Group({
+  label,
+  action,
+  children,
+}: {
+  label: string
+  action?: ReactNode
+  children: ReactNode
+}) {
   return (
     <section className={shell.group}>
-      <h3 className={shell.groupLabel}>{label}</h3>
-      {children}
+      <div className={shell.groupHead}>
+        <h3 className={shell.groupLabel}>{label}</h3>
+        {action}
+      </div>
+      <div className={shell.groupBody}>{children}</div>
     </section>
   )
 }
 
 export function PropRow({ label, children }: { label?: string; children: ReactNode }) {
   return (
-    <div className={shell.propRow}>
+    <div className={cx(shell.propRow, label === undefined && shell.propRowFull)}>
       {label !== undefined && <span className={shell.propLabel}>{label}</span>}
       <div className={shell.propControls}>{children}</div>
     </div>
