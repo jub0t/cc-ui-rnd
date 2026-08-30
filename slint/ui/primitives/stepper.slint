@@ -69,6 +69,24 @@ export component Stepper inherits Rectangle {
         root.stepped(direction, shift-key, alt-key);
     }
 
+    // Declared before the buttons so their TouchAreas sit above it; a
+    // FocusScope takes pointer events to focus itself and would otherwise
+    // swallow the press.
+    fs := FocusScope {
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if (event.text == Key.LeftArrow || event.text == Key.DownArrow) {
+                root.stepped(-1, event.modifiers.shift, event.modifiers.alt);
+                return EventResult.accept;
+            }
+            if (event.text == Key.RightArrow || event.text == Key.UpArrow) {
+                root.stepped(1, event.modifiers.shift, event.modifiers.alt);
+                return EventResult.accept;
+            }
+            return EventResult.reject;
+        }
+    }
+
     Timer {
         interval: root.repeating ? root.repeat-interval : root.repeat-delay;
         running: root.held != 0;
@@ -112,21 +130,6 @@ export component Stepper inherits Rectangle {
             released => {
                 root.held = 0;
             }
-        }
-    }
-
-    fs := FocusScope {
-        enabled: root.enabled;
-        key-pressed(event) => {
-            if (event.text == Key.LeftArrow || event.text == Key.DownArrow) {
-                root.stepped(-1, event.modifiers.shift, event.modifiers.alt);
-                return EventResult.accept;
-            }
-            if (event.text == Key.RightArrow || event.text == Key.UpArrow) {
-                root.stepped(1, event.modifiers.shift, event.modifiers.alt);
-                return EventResult.accept;
-            }
-            return EventResult.reject;
         }
     }
 

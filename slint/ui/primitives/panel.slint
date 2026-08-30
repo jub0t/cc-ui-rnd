@@ -179,6 +179,20 @@ export component IconButton inherits Rectangle {
 
     animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
+    // First in the tree, so the TouchArea below sits above it. A FocusScope
+    // takes pointer events to focus itself, and one declared last would eat the
+    // click before the button ever saw it — focus ring, no action.
+    fs := FocusScope {
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if (event.text == " " || event.text == "\n") {
+                root.clicked();
+                return EventResult.accept;
+            }
+            return EventResult.reject;
+        }
+    }
+
     if root.glyph != Glyph.none: Icon {
         x: (parent.width - self.width) / 2;
         y: (parent.height - self.height) / 2;
@@ -201,17 +215,6 @@ export component IconButton inherits Rectangle {
         clicked => {
             fs.focus();
             root.clicked();
-        }
-    }
-
-    fs := FocusScope {
-        enabled: root.enabled;
-        key-pressed(event) => {
-            if (event.text == " " || event.text == "\n") {
-                root.clicked();
-                return EventResult.accept;
-            }
-            return EventResult.reject;
         }
     }
 
