@@ -20,6 +20,9 @@ export component App inherits Window {
     background: Theme.page;
     default-font-family: Theme.font;
     default-font-size: Theme.fs;
+    // One line rather than a weight on every Text: everything inherits the
+    // compensated body weight, and only titles override it. See theme.slint.
+    default-font-weight: Theme.weight-body;
     preferred-width: 1120px;
     preferred-height: 900px;
 

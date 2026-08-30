@@ -8,6 +8,26 @@ export global Theme {
     out property <length> fs: 12px;
     out property <length> fs-lg: 13px;
 
+    // Renderer compensation, not a design decision.
+    //
+    // FemtoVG composites glyph coverage without gamma correction, so light text
+    // on a dark panel comes out lighter than the identical tokens do in a
+    // browser (which corrects for it). The colours and sizes above are mirrored
+    // from tokens.css and must stay that way — editing those to chase the look
+    // would fork the design from web/ silently, which is the one thing this
+    // repo exists to avoid. Weight is the one axis that compensates without
+    // touching a shared token, and both faces are already bundled, so it costs
+    // nothing at runtime.
+    //
+    // Reset to 400/500 to remove the compensation. Do that if you build with
+    // --features skia, or if FemtoVG ever gains gamma-correct blending —
+    // otherwise the text will be over-corrected and read as too heavy.
+    //
+    // Only small text is compensated: the page heading stays at 600 because at
+    // 22px the thinning is not perceptible and there is no Bold face bundled.
+    out property <int> weight-body: 500;    // 400 uncompensated
+    out property <int> weight-title: 600;   // 500 uncompensated
+
     // surfaces
     out property <color> panel: #0d0d0d;
     out property <color> raised: #161616;
