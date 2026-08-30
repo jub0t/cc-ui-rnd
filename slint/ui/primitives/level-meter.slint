@@ -45,7 +45,13 @@ export component LevelMeter inherits Rectangle {
             height: root.vertical ? track.height * root.level : track.height;
             clip: true;
 
-            animate width, height, y { duration: 60ms; easing: linear; }
+            // Deliberately not animated. The level already arrives at the feed
+            // rate, so animating only interpolates between samples that are
+            // smooth already — and because it re-arms on every sample it is
+            // permanently in flight, which pins Slint's render loop to the
+            // monitor refresh rate rather than the feed rate. FemtoVG has no
+            // partial rendering, so each of those frames repaints the whole
+            // window. A real programme meter is sample-stepped anyway.
 
             // full-length ramp, offset back so its stops stay anchored to the track
             Rectangle {
