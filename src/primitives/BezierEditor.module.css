@@ -1,0 +1,53 @@
+.canvas {
+  position: relative;
+  width: 100%;
+  background: var(--cp-well);
+  border: 1px solid var(--cp-line);
+  border-radius: var(--cp-r);
+  overflow: hidden;
+  touch-action: none;
+}
+
+.canvas.disabled { opacity: 0.45; pointer-events: none; }
+
+.rail {
+  stroke: var(--cp-line);
+  stroke-width: 1;
+}
+
+.curve {
+  fill: none;
+  stroke: var(--cp-accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.leash {
+  stroke: var(--cp-accent);
+  stroke-width: 1.5;
+  opacity: 0.9;
+}
+
+.anchor {
+  fill: var(--cp-accent);
+}
+
+.hit {
+  fill: transparent;
+  cursor: grab;
+}
+
+.point {
+  fill: var(--cp-accent);
+  stroke: var(--cp-panel);
+  stroke-width: 1.5;
+  pointer-events: none;
+  transition: r 120ms var(--cp-ease);
+}
+
+.handle { outline: none; }
+.handle:hover .point,
+.handle:focus-visible .point { r: 7; }
+.handle:focus-visible .point { stroke: #fff; }
+.handleActive .hit { cursor: grabbing; }
+.handleActive .point { r: 7; }

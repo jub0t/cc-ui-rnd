@@ -1,0 +1,169 @@
+/* Composition-level styling for the reference screens. The reusable pieces
+   live in src/primitives; everything here is demo scaffolding. */
+
+.editorHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 42px;
+  padding: 0 var(--cp-pad);
+  flex: none;
+}
+
+.editorTitle {
+  margin: 0;
+  font-size: var(--cp-fs-lg);
+  font-weight: 500;
+}
+
+.zoomSelect {
+  flex: none;
+  width: 84px;
+}
+
+.zoomSelect button {
+  background: none;
+  color: var(--cp-fg-muted);
+}
+
+.alignToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px;
+  padding: 2px var(--cp-pad) 10px;
+}
+
+/* --- effect chips ------------------------------------------------------- */
+
+.chipField {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 0;
+  min-width: 0;
+  height: var(--cp-h);
+  padding: 0 4px 0 4px;
+  background: var(--cp-field);
+  border-radius: var(--cp-r);
+}
+
+.chipBadge,
+.chipBadgeAudio {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--cp-r-sm);
+  background: var(--cp-accent);
+  color: #fff;
+}
+
+.chipBadgeAudio { background: var(--cp-green); color: #06210f; }
+
+.chipLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chipRemove { width: 22px; height: 22px; }
+
+/* --- audio -------------------------------------------------------------- */
+
+/* Doubled selector so this beats Panel.module.css's .row padding regardless
+   of which module the bundler emits first. */
+.volumeRow.volumeRow {
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+.volumeStack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cp-gap);
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.msGroup {
+  display: flex;
+  gap: 1px;
+  background: var(--cp-well);
+  border-radius: var(--cp-r);
+  overflow: hidden;
+}
+
+.msGroup > button {
+  flex: 1 1 0;
+  height: var(--cp-h);
+  border-radius: 0;
+  background: var(--cp-field);
+}
+
+.knobWell {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 90px;
+  height: 68px;
+  background: var(--cp-field);
+  border-radius: var(--cp-r);
+}
+
+/* --- interpolation ------------------------------------------------------ */
+
+.textField {
+  flex: 1 1 0;
+  min-width: 0;
+  height: var(--cp-h);
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--cp-r);
+  background: var(--cp-field);
+  color: var(--cp-fg);
+  font: inherit;
+  font-size: var(--cp-fs);
+  font-variant-numeric: tabular-nums;
+  outline: none;
+}
+
+.textField:hover { background: var(--cp-field-hover); }
+.textField:focus { box-shadow: var(--cp-focus); }
+
+.previewTrack {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 0;
+  min-width: 0;
+  height: var(--cp-h);
+  padding: 0 8px;
+  background: var(--cp-field);
+  border-radius: var(--cp-r);
+}
+
+.previewDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--cp-fg-muted);
+  transition-property: transform;
+  transition-duration: 1.2s;
+  will-change: transform;
+}
+
+.note {
+  margin: 0;
+  color: var(--cp-fg-dim);
+  font-size: var(--cp-fs);
+  line-height: 1.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .previewDot { transition: none; }
+}

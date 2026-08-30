@@ -1,0 +1,52 @@
+.page {
+  min-height: 100vh;
+  padding: 56px 24px 96px;
+  /* Page sits a step lighter than the panels so they read as recessed wells,
+     the way the full editor screenshot does. */
+  background-color: #16161a;
+  background-image:
+    radial-gradient(900px 520px at 50% -10%, rgb(10 132 255 / 0.13), transparent 62%),
+    radial-gradient(760px 460px at 88% 112%, rgb(48 209 88 / 0.06), transparent 60%);
+  background-attachment: fixed;
+  color: #ededed;
+}
+
+.pageHeader {
+  max-width: 620px;
+  margin: 0 auto 44px;
+  text-align: center;
+}
+
+.pageHeader h1 {
+  margin: 0 0 8px;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.pageHeader p {
+  margin: 0;
+  color: #9a9aa2;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.gallery {
+  display: grid;
+  /* Pinned at three columns so the panels always read as one row. `safe center`
+     centers them but falls back to start-aligned when the viewport is too
+     narrow, so the leftmost panel never becomes unreachable while scrolling. */
+  grid-template-columns: repeat(3, 320px);
+  justify-content: safe center;
+  align-items: start;
+  gap: 24px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+}
+
+.divider {
+  max-width: 1120px;
+  margin: 72px auto 44px;
+  border: 0;
+  border-top: 1px solid rgb(255 255 255 / 0.07);
+}

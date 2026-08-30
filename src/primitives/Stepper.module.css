@@ -1,0 +1,33 @@
+.group {
+  display: flex;
+  flex: none;
+  align-items: center;
+  height: var(--cp-h);
+  background: var(--cp-field);
+  border-radius: var(--cp-r);
+  overflow: hidden;
+}
+
+.button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--cp-fg-muted);
+  cursor: pointer;
+  transition: background 100ms var(--cp-ease), color 100ms var(--cp-ease);
+}
+
+.button:hover:not(:disabled) { background: var(--cp-field-hover); color: var(--cp-fg); }
+.button:active:not(:disabled) { background: var(--cp-field-active); }
+.button:focus-visible { outline: none; box-shadow: var(--cp-focus); }
+.button:disabled { opacity: 0.4; cursor: default; }
+
+.divider {
+  width: 1px;
+  height: 14px;
+  background: var(--cp-line-strong);
+}

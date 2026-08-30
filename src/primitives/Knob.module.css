@@ -1,0 +1,38 @@
+.knob {
+  display: grid;
+  place-items: center;
+  flex: none;
+  border-radius: 50%;
+  cursor: ns-resize;
+  touch-action: none;
+  outline: none;
+}
+
+.knob:focus-visible { box-shadow: var(--cp-focus); }
+.knob.disabled { cursor: default; opacity: 0.45; }
+
+.body {
+  fill: var(--cp-well);
+  stroke: var(--cp-line);
+  stroke-width: 1;
+}
+
+.track {
+  fill: none;
+  stroke: var(--cp-line-strong);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.fill {
+  fill: none;
+  stroke: var(--cp-accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.needle {
+  stroke: var(--cp-fg);
+  stroke-width: 2;
+  stroke-linecap: round;
+}

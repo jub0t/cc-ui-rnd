@@ -1,0 +1,322 @@
+/* ------------------------------------------------------------------------
+   Relay revamp — scoped theme layer.
+   The primitives read --cp-* tokens, so remapping them here retextures
+   Select / SegmentedControl / NumberField without editing a single primitive.
+   ------------------------------------------------------------------------ */
+
+.root {
+  /* palette */
+  --rl-accent: #4c8dff;
+  --rl-accent-hover: #6ba0ff;
+  --rl-accent-soft: rgb(76 141 255 / 0.15);
+  --rl-success: #3ecf8e;
+  --rl-warn: #f0a742;
+
+  --rl-bg: #0e0e11;
+  --rl-surface: #14141a;
+  --rl-raised: #1b1b22;
+  --rl-field: #202028;
+  --rl-field-hover: #282833;
+  --rl-line: #26262f;
+  --rl-line-soft: #1d1d24;
+
+  --rl-fg: #ececf0;
+  --rl-fg-muted: #9696a3;
+  --rl-fg-dim: #6a6a78;
+
+  --rl-r-sm: 6px;
+  --rl-r: 9px;
+  --rl-r-lg: 14px;
+  --rl-h: 32px;
+  --rl-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  /* top-edge catchlight: the cheapest way to make a dark surface look lit */
+  --rl-lift: inset 0 1px 0 rgb(255 255 255 / 0.05);
+  --rl-focus: 0 0 0 1px var(--rl-accent), 0 0 0 4px var(--rl-accent-soft);
+
+  /* retheme the primitives to match */
+  --cp-accent: var(--rl-accent);
+  --cp-accent-soft: var(--rl-accent-soft);
+  --cp-field: var(--rl-field);
+  --cp-field-hover: var(--rl-field-hover);
+  --cp-field-active: #30303d;
+  --cp-well: var(--rl-bg);
+  --cp-raised: var(--rl-raised);
+  --cp-line: var(--rl-line);
+  --cp-line-strong: #34343f;
+  --cp-fg: var(--rl-fg);
+  --cp-fg-muted: var(--rl-fg-muted);
+  --cp-fg-dim: var(--rl-fg-dim);
+  --cp-h: var(--rl-h);
+  --cp-r: var(--rl-r);
+
+  max-width: 1120px;
+  margin: 0 auto;
+  color: var(--rl-fg);
+  font-size: 13px;
+}
+
+.sectionHead {
+  max-width: 640px;
+  margin: 0 auto 28px;
+  text-align: center;
+}
+
+.sectionHead h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.sectionHead p {
+  margin: 0;
+  color: var(--rl-fg-muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+/* --- window shell ------------------------------------------------------- */
+
+.window {
+  background: var(--rl-surface);
+  border: 1px solid var(--rl-line);
+  border-radius: 18px;
+  box-shadow: 0 30px 70px rgb(0 0 0 / 0.5), var(--rl-lift);
+  overflow: hidden;
+}
+
+.tabBar {
+  position: relative;
+  display: flex;
+  gap: 2px;
+  padding: 8px 10px 0;
+  background: var(--rl-bg);
+  border-bottom: 1px solid var(--rl-line);
+}
+
+.tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 14px 12px;
+  border: 0;
+  background: none;
+  color: var(--rl-fg-dim);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: var(--rl-r-sm) var(--rl-r-sm) 0 0;
+  transition: color 160ms var(--rl-ease);
+}
+
+.tab:hover { color: var(--rl-fg-muted); }
+.tab:focus-visible { outline: none; box-shadow: var(--rl-focus); }
+.tabActive { color: var(--rl-fg); }
+
+.tabBadge {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 99px;
+  background: var(--rl-field);
+  color: var(--rl-fg-muted);
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.tabActive .tabBadge { background: var(--rl-accent); color: #fff; }
+
+.tabInk {
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--rl-accent);
+  box-shadow: 0 0 12px var(--rl-accent);
+  transition: transform 260ms var(--rl-ease), width 260ms var(--rl-ease);
+  pointer-events: none;
+}
+
+.body {
+  min-height: 520px;
+  background: var(--rl-surface);
+}
+
+/* --- shared tab scaffolding --------------------------------------------- */
+
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+
+.stage {
+  padding: 22px;
+  border-right: 1px solid var(--rl-line);
+  min-width: 0;
+}
+
+.inspector {
+  padding: 6px 0 22px;
+  min-width: 0;
+}
+
+.group { padding: 16px 18px 4px; }
+.group + .group { border-top: 1px solid var(--rl-line-soft); }
+
+.groupLabel {
+  margin: 0 0 12px;
+  color: var(--rl-fg-dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.propRow {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  padding: 3px 0;
+}
+
+.propRowStack {
+  display: block;
+  padding: 3px 0 6px;
+}
+
+.propLabel {
+  color: var(--rl-fg-muted);
+  font-size: 12.5px;
+}
+
+.propControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* value + its plain-language consequence, the core hierarchy fix */
+.readout {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.readoutPrimary {
+  color: var(--rl-fg);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.readoutSecondary {
+  color: var(--rl-fg-dim);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* nested controls revealed by a toggle */
+.reveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 240ms var(--rl-ease), opacity 200ms var(--rl-ease);
+  opacity: 0;
+}
+
+.revealOpen { grid-template-rows: 1fr; opacity: 1; }
+
+.revealInner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.revealBody {
+  margin: 6px 0 2px;
+  padding: 10px 12px;
+  background: var(--rl-bg);
+  border: 1px solid var(--rl-line-soft);
+  border-radius: var(--rl-r);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal, .tabInk { transition: none; }
+}
+
+/* --- buttons ------------------------------------------------------------ */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: var(--rl-h);
+  padding: 0 14px;
+  border: 1px solid var(--rl-line);
+  border-radius: var(--rl-r);
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.05), rgb(255 255 255 / 0.01));
+  color: var(--rl-fg);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 140ms var(--rl-ease), border-color 140ms var(--rl-ease),
+    transform 120ms var(--rl-ease);
+}
+
+.button:hover:not(:disabled) { background: var(--rl-field-hover); border-color: #34343f; }
+.button:active:not(:disabled) { transform: translateY(1px); }
+.button:focus-visible { outline: none; box-shadow: var(--rl-focus); }
+.button:disabled { opacity: 0.45; cursor: default; }
+
+.buttonPrimary {
+  border-color: transparent;
+  background: linear-gradient(180deg, var(--rl-accent-hover), var(--rl-accent));
+  color: #fff;
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.18) inset, 0 6px 18px rgb(76 141 255 / 0.28);
+}
+
+.buttonPrimary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #7fadff, var(--rl-accent-hover));
+  border-color: transparent;
+}
+
+.buttonGhost {
+  border-color: transparent;
+  background: none;
+  color: var(--rl-fg-muted);
+}
+
+.buttonGhost:hover:not(:disabled) { background: var(--rl-field); color: var(--rl-fg); }
+
+.buttonLarge { height: 40px; font-size: 13.5px; padding: 0 20px; }
+.buttonBlock { width: 100%; }
+
+.textButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 2px;
+  border: 0;
+  background: none;
+  color: var(--rl-accent);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: var(--rl-r-sm);
+}
+
+.textButton:hover { color: var(--rl-accent-hover); text-decoration: underline; }
+.textButton:focus-visible { outline: none; box-shadow: var(--rl-focus); }
+
+.spin { animation: spin 900ms linear infinite; }
+
+@keyframes spin { to { transform: rotate(360deg); } }

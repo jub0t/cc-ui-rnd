@@ -1,0 +1,72 @@
+.field {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1 1 0;
+  min-width: 0;
+  height: var(--cp-h);
+  padding: 0 4px 0 8px;
+  background: var(--cp-field);
+  border-radius: var(--cp-r);
+  color: var(--cp-fg);
+  font-size: var(--cp-fs);
+  cursor: ew-resize;
+  transition: background 120ms var(--cp-ease), box-shadow 120ms var(--cp-ease);
+}
+
+.field:hover { background: var(--cp-field-hover); }
+
+.field.editing {
+  cursor: text;
+  background: var(--cp-field-hover);
+  box-shadow: var(--cp-focus);
+}
+
+.field.disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.prefix {
+  flex: none;
+  display: flex;
+  align-items: center;
+  color: var(--cp-fg-dim);
+  font-size: var(--cp-fs-sm);
+  line-height: 1;
+  user-select: none;
+}
+
+.input {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: inherit;
+}
+
+.input:disabled { color: inherit; }
+
+.keyframe {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--cp-r-xs);
+  background: none;
+  color: var(--cp-fg-dim);
+  cursor: pointer;
+}
+
+.keyframe:hover { background: var(--cp-field-active); color: var(--cp-fg-muted); }
+.keyframe:focus-visible { outline: none; box-shadow: var(--cp-focus); }
+.keyframeOn, .keyframeOn:hover { color: var(--cp-accent); }

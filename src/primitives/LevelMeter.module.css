@@ -1,0 +1,53 @@
+.track {
+  position: relative;
+  background: var(--cp-well);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.horizontal { width: 100%; }
+.vertical { height: 100%; }
+
+.ramp {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  transition: clip-path 60ms linear;
+}
+
+.horizontal .ramp {
+  background: linear-gradient(
+    90deg,
+    var(--cp-meter-low) 0%,
+    var(--cp-meter-low) 58%,
+    var(--cp-meter-mid) 66%,
+    var(--cp-meter-mid) 80%,
+    var(--cp-meter-high) 88%,
+    var(--cp-meter-high) 100%
+  );
+}
+
+.vertical .ramp {
+  background: linear-gradient(
+    0deg,
+    var(--cp-meter-low) 0%,
+    var(--cp-meter-low) 58%,
+    var(--cp-meter-mid) 66%,
+    var(--cp-meter-mid) 80%,
+    var(--cp-meter-high) 88%,
+    var(--cp-meter-high) 100%
+  );
+}
+
+.peak {
+  position: absolute;
+  background: var(--cp-fg);
+  opacity: 0.85;
+}
+
+.horizontal .peak { top: 0; bottom: 0; width: 2px; margin-left: -1px; }
+.vertical .peak { left: 0; right: 0; height: 2px; margin-bottom: -1px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ramp { transition: none; }
+}
