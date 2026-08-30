@@ -28,10 +28,22 @@ component EasePreview inherits Rectangle {
     background: Theme.field;
     border-radius: Theme.r;
 
+    // Gated on hover rather than left running, which is a deliberate departure
+    // from web/.
+    //
+    // A Slint animation in flight drives the render loop at the monitor's
+    // refresh rate, and FemtoVG has no partial rendering, so every one of those
+    // frames repaints the entire window. Ease is the default mode, so ungated
+    // this single animation — 1200ms out of every 1500ms — held the whole app
+    // at full refresh forever to move one dot. The browser can afford to run it
+    // always because it composites a transform on the GPU without repainting
+    // anything.
     Timer {
         interval: 1500ms;
-        running: root.enabled;
-        triggered => { root.flipped = !root.flipped; }
+        running: root.enabled && hover.has-hover;
+        triggered => {
+            root.flipped = !root.flipped;
+        }
     }
 
     Rectangle {
@@ -40,7 +52,20 @@ component EasePreview inherits Rectangle {
         width: 10px;
         height: 10px;
         border-radius: 5px;
-        background: Theme.fg-muted;
+        // Brighter under the pointer, so the row reads as the thing that plays
+        // rather than looking broken while it sits still.
+        background: hover.has-hover ? Theme.fg : Theme.fg-dim;
+        animate background { duration: 120ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+    }
+
+    hover := TouchArea {
+        changed has-hover => {
+            if (!self.has-hover) {
+                // Park at the start so it reads as ready to play again. The
+                // in-flight animation finishes first, then the loop idles.
+                root.flipped = false;
+            }
+        }
     }
 }
 
