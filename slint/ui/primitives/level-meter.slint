@@ -5,6 +5,11 @@ import { Fmt } from "../util.slint";
 // revealed by a clipping window, so a colour always means the same level
 // regardless of how far the bar has filled — the same trick the web version
 // plays with clip-path.
+//
+// The root takes whatever the row gives it and the track is drawn `thickness`
+// across, centred inside it. Pinning the root itself would need a binding that
+// reads its own height on one axis and a constant on the other, which Slint
+// resolves as a loop.
 export component LevelMeter inherits Rectangle {
     /// current level, 0..1
     in property <float> value;
@@ -17,53 +22,56 @@ export component LevelMeter inherits Rectangle {
     property <float> level: Fmt.clamp(root.value, 0, 1);
     property <float> hold: Fmt.clamp(root.peak, 0, 1);
 
-    // Pinned on the cross axis, free on the main one. Expressed as constraints
-    // rather than a width/height binding, which would be self-referential.
     min-height: root.vertical ? 40px : root.thickness;
-    max-height: root.vertical ? 100000px : root.thickness;
     min-width: root.vertical ? root.thickness : 40px;
-    max-width: root.vertical ? root.thickness : 100000px;
     horizontal-stretch: root.vertical ? 0 : 1;
     vertical-stretch: root.vertical ? 1 : 0;
+    background: transparent;
 
-    background: Theme.well;
-    border-radius: (root.vertical ? root.width : root.height) / 2;
-    clip: true;
-
-    // reveal window
-    Rectangle {
-        x: 0px;
-        y: root.vertical ? root.height * (1 - root.level) : 0px;
-        width: root.vertical ? root.width : root.width * root.level;
-        height: root.vertical ? root.height * root.level : root.height;
+    track := Rectangle {
+        x: root.vertical ? (root.width - root.thickness) / 2 : 0px;
+        y: root.vertical ? 0px : (root.height - root.thickness) / 2;
+        width: root.vertical ? root.thickness : root.width;
+        height: root.vertical ? root.height : root.thickness;
+        background: Theme.well;
+        border-radius: (root.vertical ? self.width : self.height) / 2;
         clip: true;
 
-        animate width, height, y { duration: 60ms; easing: linear; }
-
-        // full-length ramp, offset back so its stops stay anchored to the track
+        // reveal window
         Rectangle {
             x: 0px;
-            y: root.vertical ? -root.height * (1 - root.level) : 0px;
-            width: root.width;
-            height: root.height;
-            background: root.vertical
-                ? @linear-gradient(0deg,
-                    Theme.meter-low 0%, Theme.meter-low 58%,
-                    Theme.meter-mid 66%, Theme.meter-mid 80%,
-                    Theme.meter-high 88%, Theme.meter-high 100%)
-                : @linear-gradient(90deg,
-                    Theme.meter-low 0%, Theme.meter-low 58%,
-                    Theme.meter-mid 66%, Theme.meter-mid 80%,
-                    Theme.meter-high 88%, Theme.meter-high 100%);
-        }
-    }
+            y: root.vertical ? track.height * (1 - root.level) : 0px;
+            width: root.vertical ? track.width : track.width * root.level;
+            height: root.vertical ? track.height * root.level : track.height;
+            clip: true;
 
-    if root.peak >= 0: Rectangle {
-        x: root.vertical ? 0px : root.width * root.hold - 1px;
-        y: root.vertical ? root.height * (1 - root.hold) - 1px : 0px;
-        width: root.vertical ? root.width : 2px;
-        height: root.vertical ? 2px : root.height;
-        background: Theme.fg;
-        opacity: 0.85;
+            animate width, height, y { duration: 60ms; easing: linear; }
+
+            // full-length ramp, offset back so its stops stay anchored to the track
+            Rectangle {
+                x: 0px;
+                y: root.vertical ? -track.height * (1 - root.level) : 0px;
+                width: track.width;
+                height: track.height;
+                background: root.vertical
+                    ? @linear-gradient(0deg,
+                        Theme.meter-low 0%, Theme.meter-low 58%,
+                        Theme.meter-mid 66%, Theme.meter-mid 80%,
+                        Theme.meter-high 88%, Theme.meter-high 100%)
+                    : @linear-gradient(90deg,
+                        Theme.meter-low 0%, Theme.meter-low 58%,
+                        Theme.meter-mid 66%, Theme.meter-mid 80%,
+                        Theme.meter-high 88%, Theme.meter-high 100%);
+            }
+        }
+
+        if root.peak >= 0: Rectangle {
+            x: root.vertical ? 0px : track.width * root.hold - 1px;
+            y: root.vertical ? track.height * (1 - root.hold) - 1px : 0px;
+            width: root.vertical ? track.width : 2px;
+            height: root.vertical ? 2px : track.height;
+            background: Theme.fg;
+            opacity: 0.85;
+        }
     }
 }

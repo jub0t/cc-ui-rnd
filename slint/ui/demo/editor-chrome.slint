@@ -36,6 +36,8 @@ export component AlignToolbar inherits Rectangle {
 
     height: 38px;
 
+    // The alignment set is drawn on Radix's 15-unit grid, so it renders at 15px
+    // to keep one unit on one pixel; at 14px the rails smear into the blocks.
     HorizontalLayout {
         padding-left: Theme.pad;
         padding-right: Theme.pad;
@@ -43,13 +45,13 @@ export component AlignToolbar inherits Rectangle {
         padding-bottom: 10px;
         alignment: space-between;
 
-        IconButton { glyph: Glyph.align-left; label: "Align left"; checked: root.last == 0; clicked => { root.last = 0; } }
-        IconButton { glyph: Glyph.align-center-x; label: "Align centers horizontally"; checked: root.last == 1; clicked => { root.last = 1; } }
-        IconButton { glyph: Glyph.align-right; label: "Align right"; checked: root.last == 2; clicked => { root.last = 2; } }
-        IconButton { glyph: Glyph.align-top; label: "Align top"; checked: root.last == 3; clicked => { root.last = 3; } }
-        IconButton { glyph: Glyph.align-center-y; label: "Align centers vertically"; checked: root.last == 4; clicked => { root.last = 4; } }
-        IconButton { glyph: Glyph.align-bottom; label: "Align bottom"; checked: root.last == 5; clicked => { root.last = 5; } }
-        IconButton { glyph: Glyph.distribute; label: "Distribute evenly"; checked: root.last == 6; clicked => { root.last = 6; } }
-        IconButton { glyph: Glyph.fit; label: "Fit to selection"; checked: root.last == 7; clicked => { root.last = 7; } }
+        IconButton { icon-size: 15px; glyph: Glyph.align-left; label: "Align left"; checked: root.last == 0; clicked => { root.last = 0; } }
+        IconButton { icon-size: 15px; glyph: Glyph.align-center-x; label: "Align centers horizontally"; checked: root.last == 1; clicked => { root.last = 1; } }
+        IconButton { icon-size: 15px; glyph: Glyph.align-right; label: "Align right"; checked: root.last == 2; clicked => { root.last = 2; } }
+        IconButton { icon-size: 15px; glyph: Glyph.align-top; label: "Align top"; checked: root.last == 3; clicked => { root.last = 3; } }
+        IconButton { icon-size: 15px; glyph: Glyph.align-center-y; label: "Align centers vertically"; checked: root.last == 4; clicked => { root.last = 4; } }
+        IconButton { icon-size: 15px; glyph: Glyph.align-bottom; label: "Align bottom"; checked: root.last == 5; clicked => { root.last = 5; } }
+        IconButton { icon-size: 15px; glyph: Glyph.distribute; label: "Distribute evenly"; checked: root.last == 6; clicked => { root.last = 6; } }
+        IconButton { icon-size: 15px; glyph: Glyph.fit; label: "Fit to selection"; checked: root.last == 7; clicked => { root.last = 7; } }
     }
 }
