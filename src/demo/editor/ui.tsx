@@ -6,7 +6,7 @@ import type { VariantProps } from 'class-variance-authority'
 import clsx from 'clsx'
 import type { ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
-import { clamp, decimalsOf, roundTo, usePointerDrag } from '../../primitives'
+import { NumberField, clamp, decimalsOf, roundTo, usePointerDrag } from '../../primitives'
 
 /** clsx for conditionals, tailwind-merge so a passed class always wins. */
 export const cn = (...inputs: ClassValue[]) => twMerge(clsx(inputs))
@@ -440,6 +440,69 @@ export function Slider({
   )
 }
 
+/**
+ * A slider paired with a numeric field. The slider is for finding a value,
+ * the field is for landing on an exact one — neither can do the other's job.
+ *
+ * `scale` lets the field speak a friendlier unit than the stored value: a
+ * 0..1 opacity shows as 0..100 %, a 0..2 em padding as 0..200 % of text size.
+ */
+export function SliderField({
+  value,
+  onChange,
+  min = 0,
+  max = 1,
+  step = 0.01,
+  scale = 1,
+  precision = 0,
+  suffix,
+  ramp,
+  bubble,
+  'aria-label': ariaLabel,
+}: {
+  value: number
+  onChange: (value: number) => void
+  min?: number
+  max?: number
+  step?: number
+  /** multiplier applied for display in the field, e.g. 100 to show a percent */
+  scale?: number
+  precision?: number
+  suffix?: string
+  ramp?: string
+  bubble?: (value: number) => string
+  'aria-label'?: string
+}) {
+  const out = (v: number) => roundTo(v * scale, precision)
+
+  return (
+    <div className="flex items-center gap-2">
+      <Slider
+        value={value}
+        onChange={onChange}
+        min={min}
+        max={max}
+        step={step}
+        ramp={ramp}
+        bubble={bubble}
+        aria-label={ariaLabel}
+      />
+      <div className="w-[66px] flex-none">
+        <NumberField
+          value={out(value)}
+          onChange={(v) => onChange(clamp(v / scale, min, max))}
+          min={out(min)}
+          max={out(max)}
+          step={roundTo(step * scale, 3)}
+          precision={precision}
+          suffix={suffix}
+          aria-label={ariaLabel ? `${ariaLabel} value` : undefined}
+        />
+      </div>
+    </div>
+  )
+}
+
 /* ------------------------------------------------------------------ */
 /* Toggle / ColorField / Progress                                      */
 /* ------------------------------------------------------------------ */
@@ -461,7 +524,9 @@ export function Toggle({
       aria-label={ariaLabel}
       onClick={() => onChange(!checked)}
       className={cn(
-        'relative h-5 w-[34px] flex-none rounded-full transition-colors focus-visible:ring-1 focus-visible:ring-accent',
+        // pushed to the trailing edge: a switch reads as the row's answer, so
+        // it belongs opposite its label rather than crowded up against it
+        'relative ml-auto h-5 w-[34px] flex-none rounded-full transition-colors focus-visible:ring-1 focus-visible:ring-accent',
         checked ? 'bg-accent ring-1 ring-accent ring-inset' : 'bg-field ring-1 ring-line ring-inset hover:bg-fieldhi',
       )}
     >

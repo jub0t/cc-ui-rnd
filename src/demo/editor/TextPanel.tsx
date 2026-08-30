@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Eye, EyeOff, Italic, Upload } from 'lucide-react'
 import { SegmentedControl, Select, useElementSize } from '../../primitives'
 import { rgba } from './format'
-import { Button, CHECKER, ColorField, Panel, Readout, Reveal, Row, Section, Slider, TextArea, Toggle, cn } from './ui'
+import { Button, CHECKER, ColorField, Panel, Readout, Reveal, Row, Section, SliderField, TextArea, Toggle, cn } from './ui'
 
 const FAMILIES = [
   { value: 'Inter', label: 'Inter' },
@@ -31,6 +31,12 @@ const BACKDROPS = [
 
 const FILL: Record<string, string> = { black: '#000000', grey: '#7a7a7a', white: '#ffffff' }
 
+/** Fit hugs the text; Band runs the full frame, the way a lower third does. */
+const PLATE_WIDTHS = [
+  { value: 'fit', label: 'Fit' },
+  { value: 'band', label: 'Band' },
+] as const
+
 const PROJECT_HEIGHT = 1080
 
 export function TextPanel() {
@@ -47,6 +53,13 @@ export function TextPanel() {
   const [plate, setPlate] = useState(false)
   const [plateColor, setPlateColor] = useState('#000000')
   const [plateOpacity, setPlateOpacity] = useState(0.55)
+  const [plateWidth, setPlateWidth] = useState<(typeof PLATE_WIDTHS)[number]['value']>('fit')
+  // padding is held in em so the plate keeps its proportions when the text
+  // is resized — a plate measured in pixels falls apart at another size
+  const [padX, setPadX] = useState(0.6)
+  const [padY, setPadY] = useState(0.3)
+  // 0 = square, 1 = fully rounded, resolved against the plate's own height
+  const [radius, setRadius] = useState(0.16)
   const [guides, setGuides] = useState(true)
   const [backdrop, setBackdrop] = useState<(typeof BACKDROPS)[number]['value']>('black')
 
@@ -62,6 +75,13 @@ export function TextPanel() {
   const weightLabel = WEIGHTS.find((w) => w.value === weight)?.label ?? weight
   const backdropLabel = BACKDROPS.find((b) => b.value === backdrop)?.label ?? backdrop
   const effectsSummary = [shadow && 'Shadow', plate && 'Plate'].filter(Boolean).join(' · ') || 'None'
+
+  // A radius of 1 has to mean "pill" at any padding, so it resolves against
+  // the plate's real half-height rather than a fixed length.
+  const plateEmHeight = 1.25 + padY * 2
+  const radiusPx = (radius * previewPx * plateEmHeight) / 2
+  const radius1080 = Math.round((radius * projectPx * plateEmHeight) / 2)
+  const isBand = plate && plateWidth === 'band'
 
   return (
     <Panel title="Text" width={340}>
@@ -84,21 +104,29 @@ export function TextPanel() {
         <div
           ref={canvasRef}
           style={backdrop === 'checker' ? CHECKER : { background: FILL[backdrop] }}
-          className="relative grid aspect-video w-full place-items-center overflow-hidden rounded-md p-[7%] ring-1 ring-line ring-inset"
+          className="relative grid aspect-video w-full place-items-center overflow-hidden rounded-md ring-1 ring-line ring-inset"
         >
           {guides && <span className="pointer-events-none absolute inset-[9%] border border-dashed border-white/20" />}
 
-          <p
-            className={cn('relative m-0 max-w-full text-center leading-tight [overflow-wrap:anywhere]', plate && 'rounded-[0.18em] px-[0.6em] py-[0.3em]')}
-            style={{
-              fontFamily: family,
-              fontWeight: weight,
-              fontStyle: italic ? 'italic' : 'normal',
-              fontSize: `${previewPx}px`,
-              // the plate carries its own alpha, so text opacity cannot fade it
-              background: plate ? rgba(plateColor, plateOpacity) : undefined,
-            }}
-          >
+          {/* a band ignores the safe inset and runs edge to edge; a fitted
+              plate stays inside it and hugs the text */}
+          <div className={cn('w-full text-center', !isBand && 'px-[7%]')}>
+            <p
+              className={cn(
+                'relative m-0 max-w-full text-center leading-tight [overflow-wrap:anywhere]',
+                isBand ? 'block w-full' : 'inline-block',
+              )}
+              style={{
+                fontFamily: family,
+                fontWeight: weight,
+                fontStyle: italic ? 'italic' : 'normal',
+                fontSize: `${previewPx}px`,
+                // the plate carries its own alpha, so text opacity cannot fade it
+                background: plate ? rgba(plateColor, plateOpacity) : undefined,
+                padding: plate ? `${padY}em ${padX}em` : undefined,
+                borderRadius: plate ? `${radiusPx}px` : undefined,
+              }}
+            >
             <span
               style={{
                 color: fill,
@@ -110,7 +138,8 @@ export function TextPanel() {
             >
               {content || 'Your text'}
             </span>
-          </p>
+            </p>
+          </div>
 
           <div className="absolute bottom-2 left-2 flex gap-1.5 text-[10px] tabular-nums">
             <span className="rounded-sm bg-black/60 px-1.5 py-0.5 text-white/60">1920 × 1080</span>
@@ -169,17 +198,20 @@ export function TextPanel() {
         </Row>
 
         <Readout
-          primary={`${(size * 100).toFixed(1)}% of frame height`}
+          primary="Size"
           secondary={`${projectPx} px at 1080p`}
         >
-          <Slider
+          <SliderField
             value={size}
             onChange={setSize}
             min={0.01}
             max={0.2}
             step={0.001}
-            aria-label="Text size"
+            scale={100}
+            precision={1}
+            suffix="%"
             bubble={(v) => `${(v * 100).toFixed(1)}%`}
+            aria-label="Text size"
           />
         </Readout>
       </Section>
@@ -188,13 +220,19 @@ export function TextPanel() {
         <Row label="Fill">
           <ColorField value={fill} onChange={setFill} alpha={opacity} aria-label="Fill colour" />
         </Row>
-        <Readout primary="Opacity" secondary={`${Math.round(opacity * 100)}%`}>
-          <Slider
+        <Readout primary="Opacity">
+          <SliderField
             value={opacity}
             onChange={setOpacity}
-            aria-label="Opacity"
-            bubble={(v) => `${Math.round(v * 100)}%`}
+            min={0}
+            max={1}
+            step={0.01}
+            scale={100}
+            precision={0}
+            suffix="%"
             ramp={`linear-gradient(90deg, transparent, ${fill})`}
+            bubble={(v) => `${(v * 100).toFixed(0)}%`}
+            aria-label="Opacity"
           />
         </Readout>
       </Section>
@@ -204,11 +242,33 @@ export function TextPanel() {
           <Toggle checked={shadow} onChange={setShadow} aria-label="Drop shadow" />
         </Row>
         <Reveal open={shadow}>
-          <Readout primary="Softness" secondary={`${Math.round(softness * 100)}%`}>
-            <Slider value={softness} onChange={setSoftness} aria-label="Shadow softness" bubble={(v) => `${Math.round(v * 100)}%`} />
+          <Readout primary="Softness">
+            <SliderField
+              value={softness}
+              onChange={setSoftness}
+              min={0}
+              max={1}
+              step={0.01}
+              scale={100}
+              precision={0}
+              suffix="%"
+              bubble={(v) => `${(v * 100).toFixed(0)}%`}
+              aria-label="Shadow softness"
+            />
           </Readout>
-          <Readout primary="Distance" secondary={`${Math.round(distance * 100)}%`}>
-            <Slider value={distance} onChange={setDistance} aria-label="Shadow distance" bubble={(v) => `${Math.round(v * 100)}%`} />
+          <Readout primary="Distance">
+            <SliderField
+              value={distance}
+              onChange={setDistance}
+              min={0}
+              max={1}
+              step={0.01}
+              scale={100}
+              precision={0}
+              suffix="%"
+              bubble={(v) => `${(v * 100).toFixed(0)}%`}
+              aria-label="Shadow distance"
+            />
           </Readout>
         </Reveal>
 
@@ -219,13 +279,77 @@ export function TextPanel() {
           <Row label="Colour">
             <ColorField value={plateColor} onChange={setPlateColor} alpha={plateOpacity} aria-label="Plate colour" />
           </Row>
-          <Readout primary="Plate opacity" secondary={`${Math.round(plateOpacity * 100)}%`}>
-            <Slider
+
+          <Row label="Width">
+            <SegmentedControl
+              options={PLATE_WIDTHS}
+              value={plateWidth}
+              onChange={setPlateWidth}
+              aria-label="Plate width"
+            />
+          </Row>
+
+          <Readout primary="Opacity">
+            <SliderField
               value={plateOpacity}
               onChange={setPlateOpacity}
-              aria-label="Plate opacity"
-              bubble={(v) => `${Math.round(v * 100)}%`}
+              min={0}
+              max={1}
+              step={0.01}
+              scale={100}
+              precision={0}
+              suffix="%"
               ramp={`linear-gradient(90deg, transparent, ${plateColor})`}
+              bubble={(v) => `${(v * 100).toFixed(0)}%`}
+              aria-label="Plate opacity"
+            />
+          </Readout>
+
+          <Readout primary="Padding X" secondary={`${Math.round(padX * projectPx)} px at 1080p`}>
+            <SliderField
+              value={padX}
+              onChange={setPadX}
+              min={0}
+              max={2}
+              step={0.02}
+              scale={100}
+              precision={0}
+              suffix="%"
+              bubble={(v) => `${(v * 100).toFixed(0)}%`}
+              aria-label="Plate padding X"
+            />
+          </Readout>
+
+          <Readout primary="Padding Y" secondary={`${Math.round(padY * projectPx)} px at 1080p`}>
+            <SliderField
+              value={padY}
+              onChange={setPadY}
+              min={0}
+              max={2}
+              step={0.02}
+              scale={100}
+              precision={0}
+              suffix="%"
+              bubble={(v) => `${(v * 100).toFixed(0)}%`}
+              aria-label="Plate padding Y"
+            />
+          </Readout>
+
+          <Readout
+            primary="Corner radius"
+            secondary={radius >= 0.995 ? 'Pill' : `${radius1080} px at 1080p`}
+          >
+            <SliderField
+              value={radius}
+              onChange={setRadius}
+              min={0}
+              max={1}
+              step={0.01}
+              scale={100}
+              precision={0}
+              suffix="%"
+              bubble={(v) => `${(v * 100).toFixed(0)}%`}
+              aria-label="Plate corner radius"
             />
           </Readout>
         </Reveal>
