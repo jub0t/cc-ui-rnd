@@ -1,0 +1,479 @@
+/* Clip inspector. Composition-level styling only — every colour, radius and
+   height comes from tokens.css, so this panel retheme with the ones above it. */
+
+.tabs {
+  display: flex;
+  padding: 10px var(--cp-pad);
+}
+
+/* --- parameter row ------------------------------------------------------ */
+
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.labelGroup {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.label {
+  overflow: hidden;
+  color: var(--cp-fg);
+  font-size: var(--cp-fs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The formatted value lives up here beside the label, the raw one lives in the
+   field below. One says what the setting means, the other is what you edit. */
+.readout {
+  flex: none;
+  color: var(--cp-fg-dim);
+  font-size: var(--cp-fs);
+  font-variant-numeric: tabular-nums;
+}
+
+.body {
+  display: flex;
+  align-items: center;
+  gap: var(--cp-gap);
+}
+
+.field {
+  flex: none;
+  width: 62px;
+}
+
+/* Doubled selector so it beats Panel.module.css's .row padding whichever
+   module the bundler emits first — the same trick panels.module.css uses. */
+.inCard.inCard {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+/* --- fader -------------------------------------------------------------- */
+
+.fader {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  height: var(--cp-h);
+  border: 1px solid var(--cp-line);
+  border-radius: var(--cp-r);
+  background: var(--cp-well);
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.fader:hover { border-color: var(--cp-line-strong); }
+.fader:focus-visible { outline: none; box-shadow: var(--cp-focus); }
+
+.faderOff {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.faderOff:hover { border-color: var(--cp-line); }
+
+.rail {
+  position: absolute;
+  inset: 2px;
+}
+
+.fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: var(--cp-r-xs);
+  background: var(--cp-accent-soft);
+}
+
+/* A bar, not a bead: flat edges land on a value with a precision a circle
+   never has, and at zero the bar still sits inside the track rather than
+   half-hanging off its left edge. */
+.cap {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--cp-accent);
+  transition: background 100ms var(--cp-ease);
+}
+
+.fader:hover .cap,
+.dragging .cap {
+  background: var(--cp-accent-hover);
+}
+
+/* --- switch ------------------------------------------------------------- */
+
+.switchRow {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  min-width: 0;
+}
+
+.switch {
+  position: relative;
+  flex: none;
+  margin-left: auto;
+  width: 34px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--cp-line);
+  border-radius: 999px;
+  background: var(--cp-field);
+  cursor: pointer;
+  transition: background 140ms var(--cp-ease), border-color 140ms var(--cp-ease);
+}
+
+.switch:hover { background: var(--cp-field-hover); }
+.switch:focus-visible { outline: none; box-shadow: var(--cp-focus); }
+
+.switchOn,
+.switchOn:hover {
+  border-color: var(--cp-accent);
+  background: var(--cp-accent);
+}
+
+.thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+  transition: transform 140ms var(--cp-ease);
+}
+
+.switchOn .thumb { transform: translateX(14px); }
+
+/* --- help disclosure ---------------------------------------------------- */
+
+.help {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 1px solid var(--cp-line-strong);
+  border-radius: 50%;
+  background: none;
+  color: var(--cp-fg-dim);
+  font: inherit;
+  font-size: 9px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 100ms var(--cp-ease), border-color 100ms var(--cp-ease);
+}
+
+.help:hover { color: var(--cp-fg-muted); border-color: var(--cp-fg-dim); }
+.help:focus-visible { outline: none; box-shadow: var(--cp-focus); }
+
+.helpOn {
+  border-color: var(--cp-accent);
+  color: var(--cp-accent);
+}
+
+.note {
+  margin: 0;
+  padding: 0 var(--cp-pad) 2px;
+  color: var(--cp-fg-dim);
+  font-size: var(--cp-fs);
+  line-height: 1.5;
+}
+
+/* --- applied card ------------------------------------------------------- */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cp-gap);
+  padding: 0 var(--cp-pad);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 8px;
+  border: 1px solid var(--cp-line);
+  border-radius: var(--cp-r);
+  background: var(--cp-raised);
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 32px;
+  padding: 0 4px 0 10px;
+}
+
+.cardName {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--cp-fg);
+  font-size: var(--cp-fs-lg);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardOff .cardName { color: var(--cp-fg-dim); }
+
+.cardButton { width: 22px; height: 22px; }
+
+.remove:hover:not(:disabled) {
+  background: rgb(255 69 58 / 0.14);
+  color: var(--cp-meter-high);
+}
+
+/* --- browser ------------------------------------------------------------ */
+
+.search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.searchGlyph {
+  position: absolute;
+  left: 9px;
+  color: var(--cp-fg-dim);
+  pointer-events: none;
+}
+
+.searchInput {
+  width: 100%;
+  min-width: 0;
+  height: var(--cp-h);
+  padding: 0 26px 0 28px;
+  border: 1px solid var(--cp-line);
+  border-radius: var(--cp-r);
+  background: var(--cp-well);
+  color: var(--cp-fg);
+  font: inherit;
+  font-size: var(--cp-fs);
+  outline: none;
+}
+
+.searchInput::placeholder { color: var(--cp-fg-dim); }
+.searchInput:hover { border-color: var(--cp-line-strong); }
+.searchInput:focus { box-shadow: var(--cp-focus); }
+
+.searchClear {
+  position: absolute;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--cp-r-xs);
+  background: none;
+  color: var(--cp-fg-dim);
+  cursor: pointer;
+}
+
+.searchClear:hover { color: var(--cp-fg); }
+.searchClear:focus-visible { outline: none; box-shadow: var(--cp-focus); }
+
+.list {
+  display: flex;
+  flex-direction: column;
+  padding-top: 2px;
+}
+
+.listRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 30px;
+  padding: 0 var(--cp-pad);
+  border: 0;
+  background: none;
+  color: var(--cp-fg);
+  font: inherit;
+  font-size: var(--cp-fs);
+  text-align: left;
+  cursor: pointer;
+  transition: background 100ms var(--cp-ease);
+}
+
+.listRow:hover:not(:disabled) { background: var(--cp-field); }
+.listRow:focus-visible { outline: none; box-shadow: var(--cp-focus); }
+
+.listGlyph {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 14px;
+  color: var(--cp-fg-dim);
+  transition: color 100ms var(--cp-ease);
+}
+
+.listRow:hover:not(:disabled) .listGlyph { color: var(--cp-accent); }
+
+.listName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* An applied preset stays listed — its row reports the state instead of
+   vanishing, so the library does not reshuffle under the pointer. */
+.listRowOn {
+  color: var(--cp-fg-dim);
+  cursor: default;
+}
+
+.listRowOn .listGlyph { color: var(--cp-green); }
+
+.listTag {
+  flex: none;
+  margin-left: auto;
+  color: var(--cp-fg-dim);
+  font-size: var(--cp-fs-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cap,
+  .thumb,
+  .switch,
+  .listRow,
+  .listGlyph {
+    transition: none;
+  }
+}
+
+/* --- text panel --------------------------------------------------------- */
+
+.flip { transform: rotate(180deg); }
+
+.textarea {
+  width: 100%;
+  min-height: 76px;
+  padding: 8px 10px;
+  border: 1px solid var(--cp-line);
+  border-radius: var(--cp-r);
+  background: var(--cp-well);
+  color: var(--cp-fg);
+  font: inherit;
+  font-size: var(--cp-fs-lg);
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+}
+
+.textarea::placeholder { color: var(--cp-fg-dim); }
+.textarea:hover { border-color: var(--cp-line-strong); }
+.textarea:focus { box-shadow: var(--cp-focus); }
+
+/* An import target has to look like one before it is used, so it is dashed
+   even at rest rather than only while a file is over it. */
+.dashed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: var(--cp-h);
+  border: 1px dashed var(--cp-line-strong);
+  border-radius: var(--cp-r);
+  background: none;
+  color: var(--cp-fg-muted);
+  font: inherit;
+  font-size: var(--cp-fs);
+  cursor: pointer;
+  transition: color 100ms var(--cp-ease), border-color 100ms var(--cp-ease);
+}
+
+.dashed:hover { border-color: var(--cp-fg-dim); color: var(--cp-fg); }
+.dashed:focus-visible { outline: none; box-shadow: var(--cp-focus); }
+
+.hex {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--cp-h);
+  padding: 0 10px;
+  border: 1px solid var(--cp-line);
+  border-radius: var(--cp-r);
+  background: var(--cp-well);
+  color: var(--cp-fg);
+  font: inherit;
+  font-size: var(--cp-fs);
+  font-variant-numeric: tabular-nums;
+  text-transform: lowercase;
+  outline: none;
+}
+
+.hex:hover { border-color: var(--cp-line-strong); }
+.hex:focus { box-shadow: var(--cp-focus); }
+
+.swatch {
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: var(--cp-h);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--cp-line-strong);
+  border-radius: var(--cp-r);
+  cursor: pointer;
+}
+
+.swatch:focus-within { box-shadow: var(--cp-focus); }
+
+/* The native picker is the whole hit area, blown up past the edges so no
+   platform chrome of its own shows through the swatch. */
+.swatchInput {
+  position: absolute;
+  inset: -8px;
+  width: calc(100% + 16px);
+  height: calc(100% + 16px);
+  padding: 0;
+  border: 0;
+  background: none;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.sample {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 58px;
+  padding: 10px var(--cp-pad);
+  overflow: hidden;
+  background: var(--cp-well);
+  /* Only a top hairline: the Section that follows brings its own, and two
+     adjacent 1px lines read as a 2px seam. */
+  border-top: 1px solid var(--cp-line);
+}
+
+.sampleText {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -36,6 +36,16 @@ export component App inherits Window {
     callback add-effect(audio: bool);
     callback remove-effect(id: int);
 
+    // The level feed is a Rust timer, and a property cannot reach across to
+    // stop it, so the hover edge is forwarded as a callback: Rust arms the
+    // timer on the way in and disarms it on the way out. Idle then costs
+    // nothing, because nothing is dirtying a property.
+    callback meter-watched-changed(watched: bool);
+    changed meter-watched => {
+        root.meter-watched-changed(root.meter-watched);
+    }
+    out property <bool> meter-watched: effects.meter-hovered;
+
     // Clicking anything that is not a control blurs the one that had focus,
     // the way a browser does. Slint holds focus until something else takes it,
     // so without this a number field stays in its editing state — ring and all

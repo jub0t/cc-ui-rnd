@@ -69,6 +69,9 @@ export component EffectsPanel inherits VerticalLayout {
     in property <float> level;
     in property <float> peak;
     in-out property <bool> muted;
+    /// True while the pointer is over the level meter; Rust runs the feed off
+    /// this so the app is not repainting at 30fps when nobody is watching.
+    out property <bool> meter-hovered: meter.hovered;
 
     callback add-effect(audio: bool);
     callback remove-effect(id: int);
@@ -196,7 +199,7 @@ export component EffectsPanel inherits VerticalLayout {
                     }
                 }
                 Row {
-                    LevelMeter {
+                    meter := LevelMeter {
                         value: root.level;
                         peak: root.muted ? -1 : root.peak;
                     }

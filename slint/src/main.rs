@@ -208,27 +208,59 @@ fn main() -> Result<(), slint::PlatformError> {
         .on_parse_timecode(|text| parse_timecode(text.as_str()));
 
     // --- simulated programme level ---------------------------------------
-    let sim = LevelSim::new();
-    let level_timer = Timer::default();
-    level_timer.start(
-        TimerMode::Repeated,
-        std::time::Duration::from_millis(33),
-        {
-            let weak = app.as_weak();
-            move || {
-                let Some(app) = weak.upgrade() else { return };
-                if app.get_muted() {
-                    sim.reset();
-                    app.set_level(0.0);
-                    app.set_peak(0.0);
-                    return;
-                }
-                let (level, peak) = sim.tick(0.033);
-                app.set_level(level);
-                app.set_peak(peak);
+    //
+    // Armed by hover rather than left running for the life of the process.
+    //
+    // Thirty samples a second is an animation however it is produced: each one
+    // writes `level` and `peak`, and FemtoVG redraws the whole window for every
+    // dirty property because it has no partial rendering. Left running, the
+    // feed alone held the app at ~10% of a core doing nothing but re-drawing a
+    // bar nobody was looking at. The meter reports hover (see the TouchArea in
+    // level-meter.slint) and the timer follows it, so an unattended window
+    // costs no frames at all.
+    let sim = Rc::new(LevelSim::new());
+    let level_timer = Rc::new(Timer::default());
+    app.on_meter_watched_changed({
+        let weak = app.as_weak();
+        let sim = sim.clone();
+        let level_timer = level_timer.clone();
+        move |watched| {
+            let Some(app) = weak.upgrade() else { return };
+            if !watched {
+                // Park at silence. Freezing on the last sample would leave the
+                // bar stopped mid-signal, which reads as a hung meter; zero
+                // reads as no programme, which is what it is. Peak goes
+                // negative rather than to zero because that hides the hold
+                // marker outright, the same way muting does — a tick pinned at
+                // the left edge is just debris.
+                level_timer.stop();
+                sim.reset();
+                app.set_level(0.0);
+                app.set_peak(-1.0);
+                return;
             }
-        },
-    );
+            level_timer.start(
+                TimerMode::Repeated,
+                std::time::Duration::from_millis(33),
+                {
+                    let weak = weak.clone();
+                    let sim = sim.clone();
+                    move || {
+                        let Some(app) = weak.upgrade() else { return };
+                        if app.get_muted() {
+                            sim.reset();
+                            app.set_level(0.0);
+                            app.set_peak(0.0);
+                            return;
+                        }
+                        let (level, peak) = sim.tick(0.033);
+                        app.set_level(level);
+                        app.set_peak(peak);
+                    }
+                },
+            );
+        }
+    });
 
     app.run()
 }

@@ -3,6 +3,10 @@ import { InterpolationPanel } from './demo/InterpolationPanel'
 import { TransformPanel } from './demo/TransformPanel'
 import { LabSection } from './demo/lab/LabSection'
 import { EditorPanels } from './demo/editor/EditorPanels'
+import { MediaSection } from './demo/media/MediaSection'
+import { InspectorSection } from './demo/inspector/InspectorSection'
+import { ContextMenuSection } from './demo/menu/ContextMenuDemo'
+import { PreviewSection } from './demo/preview/PreviewPanel'
 import './App.css'
 
 export function App() {
@@ -26,6 +30,18 @@ export function App() {
 
       <hr className="divider" />
       <LabSection />
+
+      <hr className="divider" />
+      <MediaSection />
+
+      <hr className="divider" />
+      <InspectorSection />
+
+      <hr className="divider" />
+      <ContextMenuSection />
+
+      <hr className="divider" />
+      <PreviewSection />
     </main>
   )
 }

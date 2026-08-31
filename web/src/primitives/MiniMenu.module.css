@@ -1,0 +1,113 @@
+/* The compact menu: a short list of verbs, nothing else. Roomier rows and
+   bigger type than ContextMenu — a three-item menu can afford the space, and
+   a menu you hit at speed with the pointer wants the target. */
+
+.surface {
+  position: fixed;
+  z-index: 60;
+  min-width: 196px;
+  max-width: 300px;
+  padding: 6px;
+  border: 1px solid var(--cp-line-strong);
+  border-radius: var(--cp-r-lg);
+  background: var(--cp-raised);
+  color: var(--cp-fg);
+  font-family: var(--cp-font);
+  font-size: var(--cp-fs-lg);
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.6), 0 2px 8px rgb(0 0 0 / 0.45);
+  outline: none;
+  animation: pop 90ms var(--cp-ease);
+}
+
+@keyframes pop {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Measured before it is shown, so the clamp against the viewport edge never
+   plays out as a visible jump. */
+.measuring {
+  visibility: hidden;
+  animation: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--cp-r-sm);
+  background: none;
+  color: var(--cp-fg);
+  font: inherit;
+  font-size: var(--cp-fs-lg);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.item:focus-visible { outline: none; }
+
+.item:hover:not(:disabled),
+.item:focus:not(:disabled) {
+  background: var(--cp-field);
+}
+
+.item:disabled {
+  color: var(--cp-fg-dim);
+  cursor: default;
+}
+
+/* Red at rest, not only on hover: the row that destroys something should be
+   readable as the dangerous one before the pointer ever reaches it. */
+.danger { color: var(--cp-meter-high); }
+.danger .slot { color: var(--cp-meter-high); }
+
+.danger:hover:not(:disabled),
+.danger:focus:not(:disabled) {
+  background: rgb(255 69 58 / 0.14);
+}
+
+/* A fixed slot even for items with no icon, so every label starts on the
+   same x. Ragged labels are what make a menu feel thrown together. */
+.slot {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 16px;
+  color: var(--cp-fg-muted);
+}
+
+.item:disabled .slot { color: var(--cp-fg-dim); }
+
+.label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shortcut {
+  flex: none;
+  padding-left: 16px;
+  color: var(--cp-fg-dim);
+  font-size: var(--cp-fs);
+  font-variant-numeric: tabular-nums;
+}
+
+.item:disabled .shortcut { color: var(--cp-line-strong); }
+
+/* Full bleed: the negative inset cancels the surface padding, so the rule
+   reads as a division of the menu rather than a line drawn inside a row. */
+.separator {
+  height: 1px;
+  margin: 6px -6px;
+  background: var(--cp-line);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .surface { animation: none; }
+}

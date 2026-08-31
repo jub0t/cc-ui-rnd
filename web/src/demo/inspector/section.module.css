@@ -1,0 +1,39 @@
+/* Section chrome for the inspector pair, matching the lab section above it. */
+
+.root {
+  max-width: 1120px;
+  margin: 0 auto;
+  font-family: var(--cp-font);
+  color: var(--cp-fg);
+}
+
+.head {
+  max-width: 620px;
+  margin: 0 auto 28px;
+  text-align: center;
+}
+
+.head h2 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.head p {
+  margin: 0;
+  color: #9a9aa2;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* Both panels are 320px, the same width as the inspectors at the top of the
+   page — `safe center` keeps them reachable when the viewport is narrower
+   than the pair. */
+.grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: safe center;
+  align-items: start;
+  gap: 24px;
+}

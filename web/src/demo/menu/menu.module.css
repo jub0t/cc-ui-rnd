@@ -1,0 +1,160 @@
+.root {
+  max-width: 1120px;
+  margin: 0 auto;
+  font-family: var(--cp-font);
+  color: var(--cp-fg);
+}
+
+.head {
+  max-width: 620px;
+  margin: 0 auto 28px;
+  text-align: center;
+}
+
+.head h2 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.head p {
+  margin: 0;
+  color: #9a9aa2;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.centre {
+  display: flex;
+  justify-content: safe center;
+}
+
+/* --- track ---------------------------------------------------------------
+   The demo surface: a strip of clips over an empty track, because a context
+   menu is only worth judging against something that has different menus in
+   different places. */
+
+.track {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  min-height: 210px;
+  background: var(--cp-well);
+}
+
+.clip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 42px;
+  padding: 0 10px;
+  border: 1px solid var(--cp-line);
+  border-left: 3px solid var(--cp-accent);
+  border-radius: var(--cp-r-sm);
+  background: var(--cp-field);
+  color: var(--cp-fg);
+  font: inherit;
+  font-size: var(--cp-fs);
+  text-align: left;
+  cursor: pointer;
+  transition: background 100ms var(--cp-ease), border-color 100ms var(--cp-ease);
+}
+
+.clip:hover { background: var(--cp-field-hover); }
+.clip:focus-visible { outline: none; box-shadow: var(--cp-focus); }
+
+.clipOn {
+  border-color: var(--cp-accent);
+  background: var(--cp-field-hover);
+}
+
+.clipMuted {
+  border-left-color: var(--cp-fg-dim);
+  color: var(--cp-fg-muted);
+}
+
+.clipLocked { border-left-color: var(--cp-meter-mid); }
+
+.clipName {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.clipMeta {
+  flex: none;
+  color: var(--cp-fg-dim);
+  font-size: var(--cp-fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.tag {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--cp-raised);
+  color: var(--cp-fg-muted);
+  font-size: var(--cp-fs-sm);
+}
+
+/* The empty remainder of the track is a right-click target in its own right,
+   so it has to be reachable and it has to say so. */
+.empty {
+  display: grid;
+  place-items: center;
+  flex: 1 1 auto;
+  min-height: 54px;
+  border: 1px dashed var(--cp-line);
+  border-radius: var(--cp-r-sm);
+  background: none;
+  color: var(--cp-fg-dim);
+  font: inherit;
+  font-size: var(--cp-fs);
+  cursor: pointer;
+}
+
+.empty:hover { border-color: var(--cp-line-strong); color: var(--cp-fg-muted); }
+.empty:focus-visible { outline: none; box-shadow: var(--cp-focus); }
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 var(--cp-pad);
+  border-top: 1px solid var(--cp-line);
+  color: var(--cp-fg-muted);
+  font-size: var(--cp-fs);
+}
+
+.statusDot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cp-green);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clip { transition: none; }
+}
+
+.statusRight {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  color: var(--cp-fg-dim);
+}
+
+/* The mode switch lives in the panel header, whose actions slot is flex:none —
+   the segmented control needs a width to size against. */
+.modeSwitch {
+  display: flex;
+  width: 176px;
+}

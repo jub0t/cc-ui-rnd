@@ -19,6 +19,11 @@ export component LevelMeter inherits Rectangle {
     /// track thickness; defaults to 6px horizontal, 8px vertical
     in property <length> thickness: root.vertical ? 8px : 6px;
 
+    /// True while the pointer is over the meter. The caller uses this to run
+    /// the feed only while someone is looking at it — see the note on the
+    /// TouchArea at the bottom of this file.
+    out property <bool> hovered: hover.has-hover;
+
     property <float> level: Fmt.clamp(root.value, 0, 1);
     property <float> hold: Fmt.clamp(root.peak, 0, 1);
 
@@ -80,4 +85,20 @@ export component LevelMeter inherits Rectangle {
             opacity: 0.85;
         }
     }
+
+    // Hover is reported rather than acted on, because the samples come from
+    // Rust and only Rust can stop producing them.
+    //
+    // A level that changes 30 times a second is an animation whatever drives
+    // it: every sample dirties a property, and FemtoVG has no partial
+    // rendering, so each one repaints the whole window. Ungated that is a
+    // permanent 30fps redraw of a 1120x900 window to wiggle one bar — the app
+    // never goes idle. Gating it here rather than on the enclosing Section is
+    // the cheaper of the two: the section also covers the volume and trim
+    // knobs and the M/S buttons, so it would hold the feed open through every
+    // adjustment made near the meter, while this box is only the meter itself.
+    //
+    // It covers the root, not the track, so the target is the full 28px row
+    // the layout hands us and not the 6px bar.
+    hover := TouchArea { }
 }

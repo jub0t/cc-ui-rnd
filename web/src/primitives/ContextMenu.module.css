@@ -1,0 +1,120 @@
+.surface {
+  position: fixed;
+  z-index: 60;
+  min-width: 184px;
+  max-width: 320px;
+  padding: 4px;
+  border: 1px solid var(--cp-line-strong);
+  border-radius: var(--cp-r);
+  background: var(--cp-raised);
+  color: var(--cp-fg);
+  font-family: var(--cp-font);
+  font-size: var(--cp-fs);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.55), 0 2px 6px rgb(0 0 0 / 0.4);
+  outline: none;
+  animation: pop 90ms var(--cp-ease);
+}
+
+@keyframes pop {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Measured before it is shown, so the clamp against the viewport edge never
+   plays out as a visible jump. */
+.measuring {
+  visibility: hidden;
+  animation: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--cp-r-xs);
+  background: none;
+  color: var(--cp-fg);
+  font: inherit;
+  font-size: var(--cp-fs);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.item:focus-visible { outline: none; }
+
+.item:hover:not(:disabled),
+.item:focus:not(:disabled) {
+  background: var(--cp-field);
+}
+
+.item:disabled {
+  color: var(--cp-fg-dim);
+  cursor: default;
+}
+
+.danger:hover:not(:disabled),
+.danger:focus:not(:disabled) {
+  background: rgb(255 69 58 / 0.16);
+  color: var(--cp-meter-high);
+}
+
+/* A fixed slot even when an item has no icon, so every label starts on the
+   same x. Ragged labels are what make a menu feel thrown together. */
+.slot {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 14px;
+  color: var(--cp-fg-muted);
+}
+
+.item:disabled .slot { color: var(--cp-fg-dim); }
+.danger:hover .slot,
+.danger:focus .slot { color: inherit; }
+
+.label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shortcut {
+  flex: none;
+  padding-left: 12px;
+  color: var(--cp-fg-dim);
+  font-size: var(--cp-fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.item:disabled .shortcut { color: var(--cp-line-strong); }
+
+.chevron {
+  flex: none;
+  margin-right: -2px;
+  color: var(--cp-fg-muted);
+  transform: rotate(-90deg);
+}
+
+.separator {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--cp-line);
+}
+
+.groupLabel {
+  padding: 6px 8px 3px;
+  color: var(--cp-fg-dim);
+  font-size: var(--cp-fs-sm);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .surface { animation: none; }
+}
