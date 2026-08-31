@@ -1,4 +1,5 @@
 import { Theme } from "../theme.slint";
+import { ThinScrollbar } from "../primitives/scrollbar.slint";
 
 // The workspace shell: one of the four resizable regions the editor is built
 // out of, as opposed to `Panel` in primitives/, which is the floating
@@ -102,14 +103,16 @@ export component PaneScroll inherits Rectangle {
         }
     }
 
-    // Indicator, not a control: there is nothing to grab, it just says how far
-    // down the content you are.
-    if root.overflow > 0px: Rectangle {
-        x: parent.width - self.width - 3px;
-        y: -root.at / (root.overflow + root.height) * root.height;
-        width: 3px;
-        height: root.height / (root.overflow + root.height) * root.height;
-        border-radius: 1.5px;
-        background: Theme.line-strong;
+    // The same bar the track stack uses, rather than a second hand-rolled one
+    // a pixel narrower. This offset runs negative — the content is moved up to
+    // scroll down — so it is flipped on the way in and back on the way out.
+    ThinScrollbar {
+        x: parent.width - self.width - 1px;
+        y: 0;
+        height: root.height;
+        viewport: root.height;
+        content: root.height + root.overflow;
+        offset: -root.at;
+        scrolled(to) => { root.offset = -to; }
     }
 }
