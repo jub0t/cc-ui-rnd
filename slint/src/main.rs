@@ -5,6 +5,11 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use slint::{Model, ModelRc, SharedString, Timer, TimerMode, VecModel};
+// The drag payload type. Slint keeps `data-transfer` opaque in the language
+// and hands it to the host to build, but the public Rust API has not caught up
+// with the element yet — this is where the generated code itself reaches for
+// it (`sp::DataTransfer`), so it is the same type the callbacks below expect.
+use slint::private_unstable_api::re_exports::DataTransfer;
 
 slint::include_modules!();
 
@@ -135,6 +140,11 @@ impl Library {
             MediaFilter::Audio => kind == MediaKind::Audio,
             MediaFilter::Images => kind == MediaKind::Image,
         }
+    }
+
+    /// One row of the bin, by the id a drag payload carries.
+    fn item(&self, id: i32) -> Option<MediaItemData> {
+        self.items.borrow().iter().find(|item| item.id == id).cloned()
     }
 
     fn count(&self, kind: MediaKind) -> i32 {
@@ -427,6 +437,11 @@ const OUTPUTS: [(i32, i32); 6] = [
 /// reference's model puts it. Trims and splits both floor at this.
 const MIN_DURATION: f32 = 1.0 / 60.0;
 
+/// How long a title or a filter layer runs when it is placed: long enough to
+/// read, short enough that trimming it is a nudge rather than a fight. The
+/// same three seconds the reference gives a new title.
+const LAYER_DURATION: f32 = 3.0;
+
 /// Steps per second the drawn waveform is quantised to. See `Studio::wave`:
 /// it is what keeps a trim from synthesising a new envelope on every pointer
 /// event, and the grid is fine enough that no step of it is visible.
@@ -440,8 +455,12 @@ struct ClipDoc {
     /// Track id, not a row: rows are a fact about the view, and a clip that
     /// stored one would be wrong the moment a lane above it was removed.
     track: String,
-    /// The file behind it, for the peaks. Empty for a title.
+    /// The file behind it, for the peaks. Empty for a title and for a filter.
     media: String,
+    /// The catalogue id a filter layer was made from — "telephone", "hall".
+    /// Empty for everything else. The label the lane draws is `name`; this is
+    /// what an engine would be handed, and what a project file would store.
+    preset: String,
     start: f32,
     duration: f32,
     /// In-point: how far into the media the clip starts.
@@ -616,7 +635,29 @@ struct Studio {
     menu_target: Option<String>,
     menu_token: i32,
     gesture: Gesture,
+    /// The drag from the library that is over the lanes, already resolved
+    /// into the clip it would leave. None when nothing is hovering.
+    drop: Option<DropPlan>,
     next_id: u32,
+}
+
+/// A drag from the library, resolved against the timeline.
+///
+/// One struct for both halves of the gesture, because the ghost the lanes draw
+/// and the clip the release makes have to be the same thing — the hover
+/// answers "what would this be", and the drop is that answer, committed.
+#[derive(Clone)]
+struct DropPlan {
+    kind: ClipKind,
+    /// What the clip will be called, and what the ghost's header says.
+    label: String,
+    /// The catalogue id, for a filter.
+    preset: String,
+    /// The bin's media id, for a clip cut from a file.
+    media: String,
+    start: f32,
+    duration: f32,
+    row: i32,
 }
 
 /// Every model the window is handed, kept for its lifetime rather than
@@ -764,6 +805,162 @@ impl Studio {
         best
     }
 
+    /// What a library payload names — "media:12", "text:default:Title",
+    /// "filter:telephone:Telephone" — before the timeline has decided where to
+    /// put it.
+    ///
+    /// `start` and `row` come back zeroed: a drop takes both from the pointer,
+    /// and a click has to choose them, so neither can be settled here. None is
+    /// a payload this tree cannot read — a drag from another application,
+    /// which is also how one is refused.
+    fn incoming(payload: &str, library: &Library) -> Option<DropPlan> {
+        let mut fields = payload.splitn(3, ':');
+        let (sort, id) = (fields.next()?, fields.next()?);
+        let label = fields.next().unwrap_or(id);
+
+        let (kind, label, preset, media, duration) = match sort {
+            "media" => {
+                let item = library.item(id.parse().ok()?)?;
+                (
+                    match item.kind {
+                        MediaKind::Audio => ClipKind::Audio,
+                        MediaKind::Image => ClipKind::Image,
+                        _ => ClipKind::Video,
+                    },
+                    item.name.to_string(),
+                    String::new(),
+                    format!("m{}", item.id),
+                    // A still has no length of its own — it runs for as long
+                    // as it is given, which is the same span a title gets.
+                    if item.kind == MediaKind::Image { LAYER_DURATION } else { item.duration },
+                )
+            }
+            "text" => (
+                ClipKind::Text,
+                label.to_string(),
+                String::new(),
+                String::new(),
+                LAYER_DURATION,
+            ),
+            "filter" => (
+                ClipKind::Filter,
+                label.to_string(),
+                id.to_string(),
+                String::new(),
+                LAYER_DURATION,
+            ),
+            _ => return None,
+        };
+
+        Some(DropPlan {
+            kind,
+            label,
+            preset,
+            media,
+            start: 0.0,
+            duration: duration.max(MIN_DURATION),
+            row: 0,
+        })
+    }
+
+    /// A drag over the lanes: the pointer names the moment and the lane.
+    ///
+    /// None is a refusal, and the drag is told — the lanes turn it into
+    /// `DragAction.none`, which is what puts up the no-drop cursor.
+    fn plan(&self, payload: &str, seconds: f32, row: i32, library: &Library) -> Option<DropPlan> {
+        let mut plan = Studio::incoming(payload, library)?;
+
+        let lanes = self.now().tracks.len() as i32;
+        if lanes == 0 {
+            return None;
+        }
+        // Past the foot of the stack is the last lane, not nothing: the lanes
+        // are drawn taller than the tracks on them, and a drop in that empty
+        // band means the lane above it.
+        plan.row = row.clamp(0, lanes - 1);
+        // A locked lane takes no drops, the same way it takes no presses.
+        if self.row_track(plan.row).is_none_or(|track| track.locked) {
+            return None;
+        }
+        // The same snap the gestures use pulls the start onto whatever edge is
+        // nearby — so a filter laid over a clip can be laid over exactly it.
+        plan.start = self
+            .snapped(seconds.max(0.0), 8.0 * self.seconds_per_pixel, "")
+            .max(0.0);
+        Some(plan)
+    }
+
+    /// A card clicked rather than dragged: no pointer over the lanes, so the
+    /// playhead names the moment and the topmost lane with room for it — which
+    /// is a question only answerable once the length is known, which is why
+    /// the row is settled here and not in `incoming`.
+    fn plan_at_playhead(&mut self, payload: &str, library: &Library) -> Option<DropPlan> {
+        let mut plan = Studio::incoming(payload, library)?;
+        plan.start = self.playhead.max(0.0);
+        plan.row = self.free_row(plan.start, plan.duration);
+        Some(plan)
+    }
+
+    /// Commit a plan, and select what it made.
+    fn place(&mut self, plan: &DropPlan) -> Option<String> {
+        let track = self.row_track(plan.row)?.id.clone();
+        let id = self.mint("c");
+        let mut placed = clip(
+            &id,
+            &plan.label,
+            plan.kind,
+            &track,
+            &plan.media,
+            plan.start,
+            plan.duration,
+        );
+        placed.preset = plan.preset.clone();
+        if plan.kind == ClipKind::Text {
+            // Something to see on the lane and to type over in the inspector.
+            // An empty title reads as a broken one.
+            placed.text_body = "New title".into();
+        }
+        self.now_mut().clips.push(placed);
+        // Selected, so the inspector opens on what was just placed rather than
+        // on whatever happened to be selected before it.
+        self.selection = vec![id.clone()];
+        Some(id)
+    }
+
+    /// The topmost lane with room for a clip of this length at this moment,
+    /// adding one above the stack when every lane is busy.
+    ///
+    /// Only the click paths need this. A drop has a pointer, and a pointer is
+    /// a better answer than any rule.
+    fn free_row(&mut self, start: f32, duration: f32) -> i32 {
+        let lanes = self.now().tracks.len() as i32;
+        for row in 0..lanes {
+            let Some(track) = self.row_track(row) else { continue };
+            if track.locked {
+                continue;
+            }
+            let lane = track.id.clone();
+            let busy = self.now().clips.iter().any(|clip| {
+                clip.track == lane && clip.start < start + duration && start < clip.end()
+            });
+            if !busy {
+                return row;
+            }
+        }
+        let id = self.mint("T");
+        let name = self.next_track_name();
+        // Pushed, not inserted: the model runs bottom-up, so the end of the
+        // list is the top of the stack — which is row zero.
+        self.now_mut().tracks.push(TrackDoc {
+            id,
+            name,
+            visible: true,
+            muted: false,
+            locked: false,
+        });
+        0
+    }
+
     /// Why the selection cannot be merged, or None when it can. The reason is
     /// carried rather than a bare bool: a button that greys out without saying
     /// why leaves you guessing at the rule.
@@ -797,7 +994,7 @@ impl Studio {
         self.selection.len() == 1
             && self
                 .clip(&self.selection[0])
-                .is_some_and(|clip| clip.kind != ClipKind::Image)
+                .is_some_and(|clip| !matches!(clip.kind, ClipKind::Image | ClipKind::Filter))
     }
 
     /// The memoised envelope for one clip.
@@ -947,7 +1144,10 @@ impl Studio {
         // nowhere better to live.
         // Mute is the gain, not a flag: there is one number that decides
         // whether a clip is heard, and a second one would have to agree with it.
-        rows.push(check("mute", "Mute", "M", clip.volume <= 0.0, !locked && clip.kind != ClipKind::Image));
+        // A still has no sound and a filter layer has no sound of its own —
+        // it treats what is under it — so neither offers a gain to cut.
+        let audible = !matches!(clip.kind, ClipKind::Image | ClipKind::Filter);
+        rows.push(check("mute", "Mute", "M", clip.volume <= 0.0, !locked && audible));
         rows.push(check("lock", "Lock track", "", locked, true));
         rows.push(rule());
         rows.push(MenuItemData {
@@ -1087,6 +1287,12 @@ impl Studio {
         // A title's one tool is to speak its words; it has no sound to detach.
         if clip.kind == ClipKind::Text {
             return vec![row("speak", "Generate voice", Glyph::Volume, true)];
+        }
+        // A filter layer has neither: no words to speak and no track to lift
+        // out of it. The tray hides the button rather than opening an empty
+        // menu — see has_av_tools.
+        if clip.kind == ClipKind::Filter {
+            return Vec::new();
         }
 
         let has_sound = clip.kind != ClipKind::Image;
@@ -1287,7 +1493,7 @@ impl Studio {
             .clips
             .iter()
             .filter(|clip| {
-                clip.kind != ClipKind::Audio
+                matches!(clip.kind, ClipKind::Video | ClipKind::Image | ClipKind::Text)
                     && clip.start <= self.playhead
                     && self.playhead < clip.end()
             })
@@ -1298,6 +1504,21 @@ impl Studio {
         );
         app.set_preview_duration(self.duration());
         app.set_playing(self.playing);
+
+        // The ghost. Published as a whole rather than as an `active` flag
+        // beside five stale numbers: the lanes draw it or they do not, and a
+        // half-updated one would draw the last drag in the place of this one.
+        app.set_drop(match &self.drop {
+            Some(plan) => DropData {
+                active: true,
+                kind: plan.kind,
+                label: plan.label.as_str().into(),
+                start: plan.start,
+                duration: plan.duration,
+                row: plan.row,
+            },
+            None => DropData::default(),
+        });
 
         app.set_selected_clip(self.selected());
         app.set_timeline_current_tab(self.active as i32);
@@ -1460,6 +1681,7 @@ fn clip(
         kind,
         track: track.into(),
         media: media.into(),
+        preset: String::new(),
         start,
         duration,
         source_start: 0.0,
@@ -1577,6 +1799,7 @@ fn demo_studio() -> Studio {
         menu_target: None,
         menu_token: 0,
         gesture: Gesture::None,
+        drop: None,
         next_id: 100,
     }
 }
@@ -1767,12 +1990,11 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     });
 
-    // Both ends of these are unbuilt: there is no timeline to place a clip on
-    // and no file picker in this crate — the reference opens Tauri's, and
-    // reaching for a native dialog here is a dependency decision, not a
-    // detail of the panel. The callbacks exist so the panel is wired to
-    // something the day either lands.
-    app.on_media_activate(|_id| {});
+    // No file picker in this crate — the reference opens Tauri's, and reaching
+    // for a native dialog here is a dependency decision, not a detail of the
+    // panel. The callback exists so the panel is wired to something the day
+    // one lands. (`media-activate` is handled with the timeline's own drops,
+    // further down: it needs the studio a double-click puts a clip into.)
     app.on_import_media(|| {});
 
 
@@ -2207,6 +2429,122 @@ fn main() -> Result<(), slint::PlatformError> {
     // There is no command stack in this tree, so this only ends the gesture.
     app.on_clip_released(on_lanes!(|state| {
         state.gesture = Gesture::None;
+    }));
+
+    // ── drag and drop from the library ──
+    //
+    // Two callbacks over one resolver. The hover asks what the drop would
+    // leave and publishes the answer as the ghost the lanes draw; the drop
+    // asks the same question again and commits it. Asking twice rather than
+    // trusting the last hover is deliberate: the release carries its own
+    // position, and a drop that landed a pixel from where the ghost was would
+    // be a bug nobody could see.
+    app.on_drag_hovered({
+        let weak = app.as_weak();
+        let studio = studio.clone();
+        let models = models.clone();
+        let library = library.clone();
+        move |payload: SharedString, seconds: f32, row: i32| {
+            let Some(app) = weak.upgrade() else { return };
+            {
+                let mut state = studio.borrow_mut();
+                state.drop = state.plan(payload.as_str(), seconds, row, &library);
+            }
+            // The lanes only: this runs on every move of the drag.
+            studio.borrow().publish_lanes(&app, &models);
+        }
+    });
+
+    app.on_dropped({
+        let weak = app.as_weak();
+        let studio = studio.clone();
+        let models = models.clone();
+        let library = library.clone();
+        move |payload: SharedString, seconds: f32, row: i32| {
+            let Some(app) = weak.upgrade() else { return };
+            {
+                let mut state = studio.borrow_mut();
+                state.drop = None;
+                if let Some(plan) = state.plan(payload.as_str(), seconds, row, &library) {
+                    state.place(&plan);
+                }
+            }
+            studio.borrow().publish(&app, &models);
+        }
+    });
+
+    // ── the same three, placed by a click ──
+    //
+    // Every card is still clickable, and a click has no pointer over the
+    // lanes to name a place — so these land at the playhead, on the topmost
+    // lane with room for them.
+    app.on_media_activate({
+        let weak = app.as_weak();
+        let studio = studio.clone();
+        let models = models.clone();
+        let library = library.clone();
+        move |id: i32| {
+            let Some(app) = weak.upgrade() else { return };
+            {
+                let mut state = studio.borrow_mut();
+                if let Some(plan) = state.plan_at_playhead(&format!("media:{id}"), &library) {
+                    state.place(&plan);
+                }
+            }
+            studio.borrow().publish(&app, &models);
+        }
+    });
+
+    app.on_library_add_text({
+        let weak = app.as_weak();
+        let studio = studio.clone();
+        let models = models.clone();
+        let library = library.clone();
+        move || {
+            let Some(app) = weak.upgrade() else { return };
+            {
+                let mut state = studio.borrow_mut();
+                if let Some(plan) = state.plan_at_playhead("text:default:Title", &library) {
+                    state.place(&plan);
+                }
+            }
+            studio.borrow().publish(&app, &models);
+        }
+    });
+
+    app.on_library_apply_filter({
+        let weak = app.as_weak();
+        let studio = studio.clone();
+        let models = models.clone();
+        let library = library.clone();
+        move |id: SharedString, label: SharedString| {
+            let Some(app) = weak.upgrade() else { return };
+            {
+                let mut state = studio.borrow_mut();
+                let payload = format!("filter:{id}:{label}");
+                if let Some(plan) = state.plan_at_playhead(&payload, &library) {
+                    state.place(&plan);
+                }
+            }
+            studio.borrow().publish(&app, &models);
+        }
+    });
+
+    // An effect is not placed: it is a treatment of one clip, and the model
+    // carries exactly one fact about that — whether any are live. Which
+    // effect it was needs the applied-effect chain the inspector's stack is
+    // drawn for, and nothing on this side owns one yet.
+    app.on_library_apply_effect(on_timeline!(|state, _id: SharedString| {
+        let Some(id) = state.selection.first().cloned() else { return };
+        let has_picture = state
+            .clip(&id)
+            .is_some_and(|clip| matches!(clip.kind, ClipKind::Video | ClipKind::Image));
+        if !has_picture {
+            return;
+        }
+        if let Some(clip) = state.now_mut().clips.iter_mut().find(|clip| clip.id == id) {
+            clip.fx = true;
+        }
     }));
 
     app.on_razored(on_timeline!(|state, id: SharedString, seconds: f32| {
@@ -2893,6 +3231,15 @@ fn main() -> Result<(), slint::PlatformError> {
     app.global::<Fmt>().on_tick_interval(tick_interval);
     app.global::<Fmt>()
         .on_parse_frames(|text, rate| parse_frames(text.as_str(), rate));
+
+    // The drag payloads. A `data-transfer` is the platform's own drag object,
+    // so Slint keeps it opaque and leaves building and reading one to the host
+    // language — these two are that language. The payload is plain text
+    // because it crosses a boundary that only carries text and images, and
+    // because a drag that says "media:12" is one that can be read in a log.
+    app.global::<Payload>().on_of(DataTransfer::from);
+    app.global::<Payload>()
+        .on_text(|payload| payload.plain_text().unwrap_or_default());
 
     // --- simulated programme level ---------------------------------------
     //

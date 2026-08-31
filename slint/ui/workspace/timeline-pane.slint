@@ -4,7 +4,9 @@ import { Pane } from "pane.slint";
 import { ContextMenu, MenuItemData } from "../primitives/context-menu.slint";
 import { HairlineSplitter } from "splitter.slint";
 import { ThinScrollbar } from "../primitives/scrollbar.slint";
-import { ClipData, TimelineTabData, TimelineTool, TrackData } from "../timeline/model.slint";
+import {
+    ClipData, DropData, TimelineTabData, TimelineTool, TrackData,
+} from "../timeline/model.slint";
 import { TimelineTabs } from "../timeline/tabs.slint";
 import { TimelineTray } from "../timeline/tray.slint";
 import { TrackHeaders } from "../timeline/track-header.slint";
@@ -72,6 +74,11 @@ export component TimelinePane inherits Rectangle {
     callback band-selected(from-seconds: float, to-seconds: float,
         from-row: int, to-row: int, additive: bool);
     callback scrolled(seconds: float);
+
+    /// A library card dragged over the lanes, and let go of. See DropData.
+    in property <DropData> drop;
+    callback drag-hovered(payload: string, seconds: float, row: int);
+    callback dropped(payload: string, seconds: float, row: int);
     callback track-flag-changed(index: int, visible: bool, muted: bool, locked: bool);
     callback track-removed(index: int);
     callback track-renamed(index: int, name: string);
@@ -225,6 +232,14 @@ export component TimelinePane inherits Rectangle {
                     root.band-selected(a, b, c, d, additive);
                 }
                 scrolled(seconds) => { root.scrolled(seconds); }
+
+                drop: root.drop;
+                drag-hovered(payload, seconds, row) => {
+                    root.drag-hovered(payload, seconds, row);
+                }
+                dropped(payload, seconds, row) => {
+                    root.dropped(payload, seconds, row);
+                }
                 // The stack scrolls here rather than in Rust: it is a property
                 // of looking at the timeline, not of the edit, and nothing on
                 // the Rust side needs to know where the view is parked.

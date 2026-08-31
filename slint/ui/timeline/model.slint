@@ -6,9 +6,12 @@
 // happens to draw it first makes the import graph say something untrue about
 // who owns it.
 
-/// Wider than MediaKind: a title has no file behind it, it *is* its content.
-/// Mirrors the reference's ClipKind.
-export enum ClipKind { video, audio, image, text }
+/// Wider than MediaKind: a title has no file behind it, it *is* its content,
+/// and a filter has no file either — it is a preset dragged from the library's
+/// Filters page that covers a span of time and treats whatever plays under it,
+/// the way CapCut's filter bars do. Mirrors the reference's ClipKind, plus
+/// that layer.
+export enum ClipKind { video, audio, image, text, filter }
 
 /// What a press on a clip means.
 export enum TimelineTool {
@@ -74,6 +77,26 @@ export struct ClipData {
     /// that draws it is `fit: fill`, which stretches the box onto whatever
     /// width the clip currently has. Built once in Rust, where the peaks are.
     wave: string,
+}
+
+/// What a drag from the library will leave on the timeline if it is released
+/// where the pointer is now.
+///
+/// Published by Rust while a drag hovers the lanes rather than worked out in
+/// the panel, so the ghost the lanes draw *is* the drop: the snap, the lane it
+/// lands on and how long it runs are all decided once, in the place that will
+/// have to decide them again when the mouse comes up.
+export struct DropData {
+    /// A drag the timeline will accept is over the lanes. False hides the
+    /// ghost — including for a drag that came from another application, whose
+    /// payload this tree cannot read.
+    active: bool,
+    kind: ClipKind,
+    /// What the clip will be called; drawn in the ghost's header.
+    label: string,
+    start: float,
+    duration: float,
+    row: int,
 }
 
 /// Which axis the alignment segmented control is on. Mirrors TextAlign.

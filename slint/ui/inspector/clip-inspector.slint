@@ -505,6 +505,107 @@ export component AdjustPanel inherits VerticalLayout {
     }
 }
 
+// The panel a filter layer gets instead of Adjust.
+//
+// A layer is not a clip of anything: it has no picture to frame, no gain to
+// set and no rate to change — it treats whatever is playing under it, for as
+// long as it runs. So it gets the two things that *are* its own: how hard it
+// is applied, and how it comes in and goes out.
+//
+// Strength is the clip's `opacity`. That is the same number a picture clip
+// dissolves with, which is exactly what it means here — how much of the
+// treated signal is heard — and one field that means one thing on every kind
+// beats a second that means it only on this one.
+export component FilterPanel inherits VerticalLayout {
+    in property <SelectedClipData> selected;
+
+    callback set(field: ClipField, value: float);
+    callback commit();
+
+    /// A ramp longer than half the layer would overlap the other one.
+    property <float> ramp-limit: Math.max(0.1, Math.min(10, root.selected.duration / 2));
+
+    // Seeded, not bound, for the reason AdjustPanel's are: a control writes to
+    // its own `value`, and an assignment replaces the binding declared here.
+    property <float> strength;
+    property <float> fade-in;
+    property <float> fade-out;
+
+    function seed() {
+        root.strength = root.selected.opacity;
+        root.fade-in = root.selected.fade-in;
+        root.fade-out = root.selected.fade-out;
+    }
+
+    init => { root.seed(); }
+    changed selected => { root.seed(); }
+
+    property <bool> layer-help;
+
+    Section {
+        first: true;
+        layer := SectionHeader {
+            title: "Layer";
+            collapsible: true;
+            summary: InspectorFmt.format(ParamFormat.fraction, root.strength);
+            HelpButton {
+                open: root.layer-help;
+                toggled => { root.layer-help = self.open; }
+            }
+        }
+
+        if layer.open: VerticalLayout {
+
+        if root.layer-help: Note {
+            text: "A layer treats everything under it for as long as it runs."
+                + " Trim it on the timeline to change what it covers.";
+        }
+
+        Param {
+            label: "Strength";
+            value <=> root.strength;
+            minimum: 0;
+            maximum: 1;
+            step: 0.01;
+            default-value: 1;
+            fmt: ParamFormat.fraction;
+            changed(v) => { root.set(ClipField.opacity, v); root.commit(); }
+        }
+
+        }
+    }
+
+    Section {
+        ramps := SectionHeader {
+            title: "Ramps";
+            collapsible: true;
+            summary: (root.fade-in == 0 && root.fade-out == 0) ? "none"
+                : InspectorFmt.format(ParamFormat.seconds2, root.fade-in)
+                    + " / " + InspectorFmt.format(ParamFormat.seconds2, root.fade-out);
+        }
+        if ramps.open: VerticalLayout {
+        Param {
+            label: "Ramp in";
+            value <=> root.fade-in;
+            minimum: 0;
+            maximum: root.ramp-limit;
+            step: 0.05;
+            fmt: ParamFormat.seconds2;
+            changed(v) => { root.set(ClipField.fade-in, v); root.commit(); }
+        }
+        Param {
+            label: "Ramp out";
+            value <=> root.fade-out;
+            minimum: 0;
+            maximum: root.ramp-limit;
+            step: 0.05;
+            fmt: ParamFormat.seconds2;
+            changed(v) => { root.set(ClipField.fade-out, v); root.commit(); }
+        }
+        }
+    }
+}
+
 // The catalogues, mirrored from web/src/demo/inspector/presets.ts. Data only:
 // the stack renders whatever params a preset declares, so adding a processor
 // is one entry here and no change to the panel.

@@ -15,7 +15,7 @@ import "fonts/Synonym-Medium.ttf";
 import "fonts/Synonym-SemiBold.ttf";
 
 import { Theme } from "theme.slint";
-import { Bezier, Curves, Fmt } from "util.slint";
+import { Bezier, Curves, Fmt, Payload } from "util.slint";
 import { EffectData } from "demo/effects-panel.slint";
 import { MediaFilter, MediaItemData, MediaKind } from "workspace/media-pane.slint";
 import { ContextMenu, MenuItemData, MenuRow } from "primitives/context-menu.slint";
@@ -24,14 +24,14 @@ import { ModelData, SettingsData, SettingsDialog } from "dialogs/settings.slint"
 import { TitleBar } from "title-bar.slint";
 import { Workspace } from "workspace/workspace.slint";
 import {
-    ClipData, ClipField, ClipKind, ClipTextField, SelectedClipData,
+    ClipData, ClipField, ClipKind, ClipTextField, DropData, SelectedClipData,
     TextAlignment, TimelineTabData, TimelineTool, TrackData,
 } from "timeline/model.slint";
 
 // Re-exported so main.rs can reach the globals and the struct.
 export {
-    Curves, Fmt, Theme, Bezier, EffectData, MediaFilter, MediaItemData, MediaKind,
-    ClipData, ClipField, ClipKind, ClipTextField, SelectedClipData,
+    Curves, Fmt, Payload, Theme, Bezier, EffectData, MediaFilter, MediaItemData, MediaKind,
+    ClipData, ClipField, ClipKind, ClipTextField, DropData, SelectedClipData,
     TextAlignment, TimelineTabData, TimelineTool, TrackData,
     MenuItemData, MenuRow, ExportData, ExportPhase, ModelData, SettingsData,
 }
@@ -86,7 +86,7 @@ export component App inherits Window {
     callback library-add-text();
     callback library-apply-effect(effect-id: string);
     callback library-apply-transition(transition-id: string);
-    callback library-apply-filter(filter-id: string);
+    callback library-apply-filter(filter-id: string, label: string);
     callback library-save-template();
 
     // The monitor. The playhead and the frame rate are the timeline's, not a
@@ -165,6 +165,13 @@ export component App inherits Window {
     callback band-selected(from-seconds: float, to-seconds: float,
         from-row: int, to-row: int, additive: bool);
     callback scrolled(seconds: float);
+
+    // Drag and drop from the library onto the lanes. `drop` is Rust's running
+    // answer to "where would this land" — the ghost the lanes draw — and it is
+    // also the verdict: inactive means the drag is refused.
+    in property <DropData> drop;
+    callback drag-hovered(payload: string, seconds: float, row: int);
+    callback dropped(payload: string, seconds: float, row: int);
     callback track-flag-changed(index: int, visible: bool, muted: bool, locked: bool);
     callback track-removed(index: int);
     callback track-renamed(index: int, name: string);
@@ -355,6 +362,11 @@ export component App inherits Window {
             menu-selected(id) => { root.menu-selected(id); }
             band-selected(a, b, c, d, additive) => { root.band-selected(a, b, c, d, additive); }
             scrolled(seconds) => { root.scrolled(seconds); }
+            drop: root.drop;
+            drag-hovered(payload, seconds, row) => {
+                root.drag-hovered(payload, seconds, row);
+            }
+            dropped(payload, seconds, row) => { root.dropped(payload, seconds, row); }
             track-flag-changed(index, visible, muted, locked) => {
                 root.track-flag-changed(index, visible, muted, locked);
             }
@@ -364,7 +376,7 @@ export component App inherits Window {
             library-add-text => { root.library-add-text(); }
             library-apply-effect(id) => { root.library-apply-effect(id); }
             library-apply-transition(id) => { root.library-apply-transition(id); }
-            library-apply-filter(id) => { root.library-apply-filter(id); }
+            library-apply-filter(id, label) => { root.library-apply-filter(id, label); }
             library-save-template => { root.library-save-template(); }
         }
     }

@@ -2,7 +2,7 @@ import { Theme, SegmentedControl } from "../primitives/primitives.slint";
 import { Pane, PaneBody, PaneScroll } from "pane.slint";
 import { EffectData } from "../demo/effects-panel.slint";
 import {
-    AdjustPanel, AppliedPresetData, PresetCatalog, PresetStack,
+    AdjustPanel, AppliedPresetData, FilterPanel, PresetCatalog, PresetStack,
 } from "../inspector/clip-inspector.slint";
 import { TextPanel } from "../inspector/text-panel.slint";
 import {
@@ -137,7 +137,12 @@ export component ConfigPane inherits Rectangle {
     // can only say "nothing here".
     property <bool> is-text: root.selected.kind == ClipKind.text;
     property <bool> is-image: root.selected.kind == ClipKind.image;
+    /// A filter layer gets its own lone tab for the same reason a title does:
+    /// it has no transform, no gain and no rate, and every other tab could
+    /// only say "nothing here".
+    property <bool> is-layer: root.selected.kind == ClipKind.filter;
     property <[string]> tabs: root.is-text ? ["Text"]
+        : root.is-layer ? ["Filter"]
         : root.is-image ? ["Adjust", "Effects"]
         : ["Adjust", "Filters", "Effects"];
     /// A one-segment segmented control is a label wearing a costume, so a lone
@@ -316,6 +321,12 @@ export component ConfigPane inherits Rectangle {
 
             PaneScroll {
                 if root.showing == "Adjust": AdjustPanel {
+                    selected: root.selected;
+                    set(field, value) => { root.clip-set(field, value); }
+                    commit => { root.clip-commit(); }
+                }
+
+                if root.showing == "Filter": FilterPanel {
                     selected: root.selected;
                     set(field, value) => { root.clip-set(field, value); }
                     commit => { root.clip-commit(); }

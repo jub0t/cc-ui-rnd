@@ -1,4 +1,4 @@
-import { Theme, Fmt, Glyph, Icon } from "../primitives/primitives.slint";
+import { Theme, Fmt, Glyph, Icon, Payload } from "../primitives/primitives.slint";
 import { Pane, PaneScroll } from "pane.slint";
 
 // The library pane: a strip of pages across the top, then a narrow category
@@ -74,10 +74,17 @@ component LibraryTab inherits Rectangle {
         }
     }
 
-    touch := TouchArea {
-        mouse-cursor: pointer;
-        clicked => {
-            root.clicked();
+    drag := DragArea {
+        // The one style there is, so the payload names no preset — only what
+        // the drop should build.
+        data: Payload.of("text:default:Title");
+        allow-copy: true;
+
+        touch := TouchArea {
+            mouse-cursor: pointer;
+            clicked => {
+                root.clicked();
+            }
         }
     }
 }
@@ -299,6 +306,10 @@ component ImportButton inherits Rectangle {
 component MediaCard inherits Rectangle {
     in property <MediaItemData> item;
 
+    /// Faded while it is in the air, so the ghost on the timeline reads as
+    /// this card moved rather than as a second copy of it.
+    opacity: drag.dragging ? 0.45 : 1.0;
+
     /// modifier-held click: add to or remove from the selection
     callback clicked(additive: bool);
     /// double click: put it on the timeline at the playhead
@@ -318,151 +329,159 @@ component MediaCard inherits Rectangle {
     /// modifier state at the moment of the press — `clicked` does not carry it
     property <bool> additive;
 
-    // Everything is *inside* the card's TouchArea rather than beside it. A
-    // sibling would lose its hover the moment the pointer crossed onto the
-    // remove button — the button is the topmost hit, so nothing behind it is
-    // told the pointer is there any more, and a control revealed on hover
-    // would blink itself out of existence. An ancestor TouchArea is marked
-    // hovered on the way down to its children, before any of them can take
-    // the event, so it keeps the hover the whole time; a descendant that
-    // grabs a press still stops the press from reaching it.
-    card := TouchArea {
-        // The whole card is the drag handle in the reference — dragging one
-        // onto the timeline is how material gets into an edit. There is no
-        // timeline to drop onto yet, so that gesture is not wired here.
-        mouse-cursor: pointer;
-        pointer-event(event) => {
-            if (event.kind == PointerEventKind.down) {
-                root.additive = event.modifiers.shift || event.modifiers.control
-                    || event.modifiers.meta;
+    // The whole card is the drag handle, the way it is in the reference:
+    // dragging one onto the timeline is how material gets into an edit. The
+    // DragArea only intercepts once the press has travelled far enough to be a
+    // drag, so the TouchArea inside keeps its click and its double-click.
+    drag := DragArea {
+        // Copy, not move: the bin keeps the file. A DragArea whose data is
+        // empty never starts a drag, which is the whole of the opt-out.
+        data: Payload.of("media:\{root.item.id}");
+        allow-copy: true;
+
+        // Everything is *inside* the card's TouchArea rather than beside it. A
+        // sibling would lose its hover the moment the pointer crossed onto the
+        // remove button — the button is the topmost hit, so nothing behind it
+        // is told the pointer is there any more, and a control revealed on
+        // hover would blink itself out of existence. An ancestor TouchArea is
+        // marked hovered on the way down to its children, before any of them
+        // can take the event, so it keeps the hover the whole time; a
+        // descendant that grabs a press still stops the press from reaching it.
+        card := TouchArea {
+            mouse-cursor: pointer;
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.down) {
+                    root.additive = event.modifiers.shift || event.modifiers.control
+                        || event.modifiers.meta;
+                }
             }
-        }
-        clicked => {
-            root.clicked(root.additive);
-        }
-        double-clicked => {
-            root.activated();
-        }
-
-        thumb := Rectangle {
-            // aspect-video, and the card's height is derived from the same
-            // ratio, so the label lands exactly under it. y pinned: with only
-            // a height set, the default would centre the tile over the label.
-            y: 0;
-            height: root.width * 9 / 16;
-            border-radius: Theme.r;
-            // The kind's darker hue as the ground, so a card whose artwork has
-            // not arrived is already colour-coded rather than a black hole.
-            background: root.well;
-            border-width: root.item.selected ? 2px : 1px;
-            border-color: root.item.selected ? Theme.accent
-                : card.has-hover ? Theme.line-strong
-                : Theme.line;
-            clip: true;
-
-            if root.item.thumbnail.width > 0: Image {
-                // Sized by hand for the same reason the sidebar is: a
-                // conditional element gets no default fill from its parent.
-                width: parent.width;
-                height: parent.height;
-                source: root.item.thumbnail;
-                // Cover, not contain: letterboxing an 88px thumbnail spends
-                // most of it on bars, and a crop reads better at this size.
-                image-fit: cover;
+            clicked => {
+                root.clicked(root.additive);
+            }
+            double-clicked => {
+                root.activated();
             }
 
-            // Sound draws itself. The envelope and the duration stamp between
-            // them already say "this is an audio file", so there is no mark on
-            // top of them — a badge over a waveform is the same fact twice,
-            // and the one that costs the tile its whole middle.
-            if root.item.wave != "": Path {
-                x: 8px;
+            thumb := Rectangle {
+                // aspect-video, and the card's height is derived from the same
+                // ratio, so the label lands exactly under it. y pinned: with only
+                // a height set, the default would centre the tile over the label.
                 y: 0;
-                width: parent.width - 16px;
-                height: parent.height;
-                commands: root.item.wave;
-                viewbox-width: 1;
-                viewbox-height: 1;
-                fit: fill;
-                fill: root.mark;
-            }
+                height: root.width * 9 / 16;
+                border-radius: Theme.r;
+                // The kind's darker hue as the ground, so a card whose artwork has
+                // not arrived is already colour-coded rather than a black hole.
+                background: root.well;
+                border-width: root.item.selected ? 2px : 1px;
+                border-color: root.item.selected ? Theme.accent
+                    : card.has-hover ? Theme.line-strong
+                    : Theme.line;
+                clip: true;
 
-            // What everything else shows before its artwork exists. Large and
-            // faint on purpose: at the badge's own size and colour it read as
-            // a corner mark duplicated into the middle of the tile rather than
-            // as a placeholder.
-            if root.item.thumbnail.width == 0 && root.item.wave == "": Icon {
-                x: (parent.width - self.width) / 2;
-                y: (parent.height - self.height) / 2;
-                glyph: root.badge;
-                size: 26px;
-                tint: root.mark.with-alpha(0.32);
-            }
-
-            // No corner kind badge, on purpose: web/'s bin relies on what the
-            // artwork already says — footage carries a duration stamp, audio
-            // is a waveform, a still says "still" — so a badge would repeat
-            // information the card gives away at a glance.
-
-            // Duration, bottom right, on its own scrim because what is behind
-            // it is a video frame and cannot be relied on for contrast.
-            Rectangle {
-                x: parent.width - self.width - 4px;
-                y: parent.height - self.height - 4px;
-                width: stamp.width + 7px;
-                height: stamp.height + 2px;
-                border-radius: Theme.r-xs;
-                background: Theme.scrim;
-
-                stamp := Text {
-                    x: (parent.width - self.width) / 2;
-                    y: (parent.height - self.height) / 2;
-                    text: root.item.kind == MediaKind.image
-                        ? "still"
-                        : Fmt.short-duration(root.item.duration);
-                    color: Theme.on-scrim;
-                    font-family: Theme.font-technical;
-                    font-size: 10px;
-                }
-            }
-
-            // Hover-only, like the reference: a permanent delete button on
-            // every card in a full bin is one bin's worth of invitations to
-            // lose work.
-            if card.has-hover: Rectangle {
-                x: parent.width - self.width - 4px;
-                y: 4px;
-                width: 18px;
-                height: 18px;
-                border-radius: Theme.r-xs;
-                background: remove.has-hover ? Theme.danger : Theme.scrim;
-
-                Icon {
-                    x: (parent.width - self.width) / 2;
-                    y: (parent.height - self.height) / 2;
-                    glyph: Glyph.close;
-                    size: 10px;
-                    tint: Theme.on-scrim;
+                if root.item.thumbnail.width > 0: Image {
+                    // Sized by hand for the same reason the sidebar is: a
+                    // conditional element gets no default fill from its parent.
+                    width: parent.width;
+                    height: parent.height;
+                    source: root.item.thumbnail;
+                    // Cover, not contain: letterboxing an 88px thumbnail spends
+                    // most of it on bars, and a crop reads better at this size.
+                    image-fit: cover;
                 }
 
-                remove := TouchArea {
-                    mouse-cursor: pointer;
-                    clicked => {
-                        root.removed();
+                // Sound draws itself. The envelope and the duration stamp between
+                // them already say "this is an audio file", so there is no mark on
+                // top of them — a badge over a waveform is the same fact twice,
+                // and the one that costs the tile its whole middle.
+                if root.item.wave != "": Path {
+                    x: 8px;
+                    y: 0;
+                    width: parent.width - 16px;
+                    height: parent.height;
+                    commands: root.item.wave;
+                    viewbox-width: 1;
+                    viewbox-height: 1;
+                    fit: fill;
+                    fill: root.mark;
+                }
+
+                // What everything else shows before its artwork exists. Large and
+                // faint on purpose: at the badge's own size and colour it read as
+                // a corner mark duplicated into the middle of the tile rather than
+                // as a placeholder.
+                if root.item.thumbnail.width == 0 && root.item.wave == "": Icon {
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                    glyph: root.badge;
+                    size: 26px;
+                    tint: root.mark.with-alpha(0.32);
+                }
+
+                // No corner kind badge, on purpose: web/'s bin relies on what the
+                // artwork already says — footage carries a duration stamp, audio
+                // is a waveform, a still says "still" — so a badge would repeat
+                // information the card gives away at a glance.
+
+                // Duration, bottom right, on its own scrim because what is behind
+                // it is a video frame and cannot be relied on for contrast.
+                Rectangle {
+                    x: parent.width - self.width - 4px;
+                    y: parent.height - self.height - 4px;
+                    width: stamp.width + 7px;
+                    height: stamp.height + 2px;
+                    border-radius: Theme.r-xs;
+                    background: Theme.scrim;
+
+                    stamp := Text {
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                        text: root.item.kind == MediaKind.image
+                            ? "still"
+                            : Fmt.short-duration(root.item.duration);
+                        color: Theme.on-scrim;
+                        font-family: Theme.font-technical;
+                        font-size: 10px;
+                    }
+                }
+
+                // Hover-only, like the reference: a permanent delete button on
+                // every card in a full bin is one bin's worth of invitations to
+                // lose work.
+                if card.has-hover: Rectangle {
+                    x: parent.width - self.width - 4px;
+                    y: 4px;
+                    width: 18px;
+                    height: 18px;
+                    border-radius: Theme.r-xs;
+                    background: remove.has-hover ? Theme.danger : Theme.scrim;
+
+                    Icon {
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                        glyph: Glyph.close;
+                        size: 10px;
+                        tint: Theme.on-scrim;
+                    }
+
+                    remove := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            root.removed();
+                        }
                     }
                 }
             }
-        }
 
-        Text {
-            y: thumb.height + 4px;
-            width: root.width;
-            height: 14px;
-            text: root.item.name;
-            color: root.item.selected ? Theme.fg : Theme.fg-muted;
-            font-size: Theme.fs-sm;
-            vertical-alignment: center;
-            overflow: elide;
+            Text {
+                y: thumb.height + 4px;
+                width: root.width;
+                height: 14px;
+                text: root.item.name;
+                color: root.item.selected ? Theme.fg : Theme.fg-muted;
+                font-size: Theme.fs-sm;
+                vertical-alignment: center;
+                overflow: elide;
+            }
         }
     }
 }
@@ -547,86 +566,98 @@ struct CatalogueItemData {
 // a plus on hover when it works, a "Soon" badge when it does not.
 component CatalogueCard inherits Rectangle {
     in property <CatalogueItemData> item;
+    /// What this card leaves on the timeline when it is dragged there, or
+    /// empty for a page whose entries are applied to the selection rather than
+    /// placed — a DragArea with no data never starts a drag, so one property
+    /// is the whole difference between a draggable page and a clickable one.
+    in property <string> payload;
 
     callback applied();
 
-    card := TouchArea {
-        enabled: root.item.enabled;
-        mouse-cursor: root.item.enabled ? pointer : default;
-        clicked => { root.applied(); }
+    opacity: drag.dragging ? 0.45 : 1.0;
 
-        tile := Rectangle {
-            y: 0;
-            height: root.width * 9 / 16;
-            border-radius: Theme.r;
-            background: Theme.well;
-            border-width: 1px;
-            border-color: (card.has-hover && root.item.enabled)
-                ? Theme.line-strong : Theme.line;
-            clip: true;
+    drag := DragArea {
+        data: Payload.of(root.payload);
+        allow-copy: true;
 
-            if root.item.art.width > 0: Image {
-                x: 0;
+        card := TouchArea {
+            enabled: root.item.enabled;
+            mouse-cursor: root.item.enabled ? pointer : default;
+            clicked => { root.applied(); }
+
+            tile := Rectangle {
                 y: 0;
-                width: parent.width;
-                height: parent.height;
-                source: root.item.art;
-                image-fit: cover;
-            }
+                height: root.width * 9 / 16;
+                border-radius: Theme.r;
+                background: Theme.well;
+                border-width: 1px;
+                border-color: (card.has-hover && root.item.enabled)
+                    ? Theme.line-strong : Theme.line;
+                clip: true;
 
-            if root.item.art.width == 0: Icon {
-                x: (parent.width - self.width) / 2;
-                y: (parent.height - self.height) / 2;
-                glyph: root.item.glyph;
-                size: 22px;
-                tint: Theme.fg-dim;
-            }
+                if root.item.art.width > 0: Image {
+                    x: 0;
+                    y: 0;
+                    width: parent.width;
+                    height: parent.height;
+                    source: root.item.art;
+                    image-fit: cover;
+                }
 
-            if !root.item.enabled: Rectangle {
-                x: parent.width - self.width - 4px;
-                y: parent.height - self.height - 4px;
-                width: soon.width + 8px;
-                height: soon.height + 2px;
-                border-radius: Theme.r-xs;
-                background: Theme.scrim;
-
-                soon := Text {
+                if root.item.art.width == 0: Icon {
                     x: (parent.width - self.width) / 2;
                     y: (parent.height - self.height) / 2;
-                    text: "Soon";
-                    color: Theme.on-scrim;
-                    font-size: 10px;
+                    glyph: root.item.glyph;
+                    size: 22px;
+                    tint: Theme.fg-dim;
+                }
+
+                if !root.item.enabled: Rectangle {
+                    x: parent.width - self.width - 4px;
+                    y: parent.height - self.height - 4px;
+                    width: soon.width + 8px;
+                    height: soon.height + 2px;
+                    border-radius: Theme.r-xs;
+                    background: Theme.scrim;
+
+                    soon := Text {
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                        text: "Soon";
+                        color: Theme.on-scrim;
+                        font-size: 10px;
+                    }
+                }
+
+                if root.item.enabled && card.has-hover: Rectangle {
+                    x: parent.width - self.width - 4px;
+                    y: parent.height - self.height - 4px;
+                    width: 20px;
+                    height: 20px;
+                    border-radius: Theme.r-xs;
+                    background: Theme.scrim;
+
+                    Icon {
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                        glyph: Glyph.plus;
+                        size: 11px;
+                        tint: Theme.on-scrim;
+                    }
                 }
             }
 
-            if root.item.enabled && card.has-hover: Rectangle {
-                x: parent.width - self.width - 4px;
-                y: parent.height - self.height - 4px;
-                width: 20px;
-                height: 20px;
-                border-radius: Theme.r-xs;
-                background: Theme.scrim;
-
-                Icon {
-                    x: (parent.width - self.width) / 2;
-                    y: (parent.height - self.height) / 2;
-                    glyph: Glyph.plus;
-                    size: 11px;
-                    tint: Theme.on-scrim;
-                }
+            Text {
+                x: 0;
+                y: tile.height + 4px;
+                width: root.width;
+                height: 14px;
+                text: root.item.label;
+                color: Theme.fg-muted;
+                font-size: Theme.fs-sm;
+                vertical-alignment: center;
+                overflow: elide;
             }
-        }
-
-        Text {
-            x: 0;
-            y: tile.height + 4px;
-            width: root.width;
-            height: 14px;
-            text: root.item.label;
-            color: Theme.fg-muted;
-            font-size: Theme.fs-sm;
-            vertical-alignment: center;
-            overflow: elide;
         }
     }
 }
@@ -634,8 +665,15 @@ component CatalogueCard inherits Rectangle {
 // The same auto-fill arithmetic as MediaGrid, over catalogue entries.
 component CatalogueGrid inherits Rectangle {
     in property <[CatalogueItemData]> items;
+    /// Names the page for the timeline: "filter" makes every card here a drag
+    /// source that leaves a layer clip, and empty leaves the page click-only.
+    /// The label rides along in the payload because it is written here, in the
+    /// catalogue, and nothing on the Rust side has a copy of it.
+    in property <string> payload-kind;
 
-    callback applied(id: string);
+    /// The label rides along with the id: a page that places something has to
+    /// say what to call it, and the catalogue is the only place that knows.
+    callback applied(id: string, label: string);
 
     property <length> gap: 8px;
     property <length> min-card: 88px;
@@ -654,8 +692,10 @@ component CatalogueGrid inherits Rectangle {
         width: root.card-w;
         height: root.card-h;
         item: entry;
+        payload: root.payload-kind == "" || !entry.enabled ? ""
+            : "\{root.payload-kind}:\{entry.id}:\{entry.label}";
 
-        applied => { root.applied(entry.id); }
+        applied => { root.applied(entry.id, entry.label); }
     }
 }
 
@@ -665,6 +705,8 @@ component CatalogueGrid inherits Rectangle {
 component TextPage inherits Rectangle {
     callback add-text();
 
+    opacity: drag.dragging ? 0.45 : 1.0;
+
     property <length> gap: 8px;
     property <length> min-card: 88px;
     property <int> cols: Math.max(1,
@@ -673,44 +715,57 @@ component TextPage inherits Rectangle {
 
     height: root.card-w * 9 / 16 + 4px + 14px;
 
-    touch := TouchArea {
+    // Pinned to the card and not to the page: a DragArea left to expand would
+    // start a drag from the empty half of the row beside the one card.
+    drag := DragArea {
         x: 0;
         y: 0;
         width: root.card-w;
         height: root.height;
-        mouse-cursor: pointer;
-        clicked => { root.add-text(); }
-        double-clicked => { root.add-text(); }
+        // The one title style there is, so the payload names no preset — only
+        // what the drop should build, and what to call it.
+        data: Payload.of("text:default:Title");
+        allow-copy: true;
 
-        tile := Rectangle {
+        touch := TouchArea {
+            x: 0;
             y: 0;
-            height: root.card-w * 9 / 16;
-            border-radius: Theme.r;
-            // Titles wear the rose the timeline gives them.
-            background: Theme.kind-text-well;
-            border-width: 1px;
-            border-color: touch.has-hover ? Theme.line-strong : Theme.line;
+            width: root.card-w;
+            height: root.height;
+            mouse-cursor: pointer;
+            clicked => { root.add-text(); }
+            double-clicked => { root.add-text(); }
+
+            tile := Rectangle {
+                y: 0;
+                height: root.card-w * 9 / 16;
+                border-radius: Theme.r;
+                // Titles wear the rose the timeline gives them.
+                background: Theme.kind-text-well;
+                border-width: 1px;
+                border-color: touch.has-hover ? Theme.line-strong : Theme.line;
+
+                Text {
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                    text: "Aa";
+                    color: Theme.kind-text;
+                    font-size: 20px;
+                    font-weight: 600;
+                }
+            }
 
             Text {
-                x: (parent.width - self.width) / 2;
-                y: (parent.height - self.height) / 2;
-                text: "Aa";
-                color: Theme.kind-text;
-                font-size: 20px;
-                font-weight: 600;
+                x: 0;
+                y: tile.height + 4px;
+                width: root.card-w;
+                height: 14px;
+                text: "Default title";
+                color: Theme.fg-muted;
+                font-size: Theme.fs-sm;
+                vertical-alignment: center;
+                overflow: elide;
             }
-        }
-
-        Text {
-            x: 0;
-            y: tile.height + 4px;
-            width: root.card-w;
-            height: 14px;
-            text: "Default title";
-            color: Theme.fg-muted;
-            font-size: Theme.fs-sm;
-            vertical-alignment: center;
-            overflow: elide;
         }
     }
 }
@@ -773,7 +828,7 @@ export component MediaPane inherits Rectangle {
     /// Catalogue pages: apply to the selected clip; Rust validates & explains.
     callback apply-effect(effect-id: string);
     callback apply-transition(transition-id: string);
-    callback apply-filter(filter-id: string);
+    callback apply-filter(filter-id: string, label: string);
     /// Templates page: open the save-as-template flow for this project.
     callback save-template();
 
@@ -1259,7 +1314,7 @@ export component MediaPane inherits Rectangle {
                         items: root.transition-category == 0
                             ? root.transitions-basic
                             : root.transitions-motion;
-                        applied(id) => { root.apply-transition(id); }
+                        applied(id, label) => { root.apply-transition(id); }
                     }
                 }
 
@@ -1273,19 +1328,25 @@ export component MediaPane inherits Rectangle {
                             : root.effect-category == 2 ? root.effects-color
                             : root.effect-category == 3 ? root.effects-stylize
                             : root.effects-distort;
-                        applied(id) => { root.apply-effect(id); }
+                        applied(id, label) => { root.apply-effect(id); }
                     }
                 }
 
                 if root.tab == 4: HorizontalLayout {
                     padding: 8px;
 
+                    // The one catalogue that is placed rather than applied:
+                    // a filter is a layer over a span of the timeline, so it
+                    // is dragged onto the lanes like a piece of media. The
+                    // click is kept as the shortcut for the same thing — it
+                    // lands at the playhead instead of under the pointer.
                     CatalogueGrid {
                         horizontal-stretch: 1;
+                        payload-kind: "filter";
                         items: root.filter-category == 0 ? root.filters-voice
                             : root.filter-category == 1 ? root.filters-tone
                             : root.filters-space;
-                        applied(id) => { root.apply-filter(id); }
+                        applied(id, label) => { root.apply-filter(id, label); }
                     }
                 }
 

@@ -83,6 +83,21 @@ export global Curves {
     pure callback parse(text: string, fallback: Bezier) -> Bezier;
 }
 
+// The drag payloads the library panels hand the timeline.
+//
+// A `data-transfer` is opaque in Slint — it is the platform's clipboard/drag
+// object, and only the host language can build or read one. So the payload
+// travels as text through these two, and every drag in this tree names itself
+// the way the menus do: "media:12", "text:default", "filter:telephone".
+export global Payload {
+    /// Wrap a payload string for a DragArea's `data`. A DragArea whose data is
+    /// empty never starts a drag, which is how a card opts out.
+    pure callback of(text: string) -> data-transfer;
+    /// Read one back in a DropArea. Empty for a drag from another application,
+    /// which is how the timeline rejects one.
+    pure callback text(payload: data-transfer) -> string;
+}
+
 export global Geom {
     // Point on a circle, in path (viewbox) units. Degrees run clockwise from
     // 3 o'clock, matching the SVG convention the web Knob uses.

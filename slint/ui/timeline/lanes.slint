@@ -1,7 +1,7 @@
 import { Theme } from "../theme.slint";
-import { Fmt } from "../util.slint";
+import { Fmt, Payload } from "../util.slint";
 import { Glyph, Icon } from "../icons.slint";
-import { ClipData, ClipKind, TimelineTool, TrackData } from "model.slint";
+import { ClipData, ClipKind, DropData, TimelineTool, TrackData } from "model.slint";
 import { ContextMenu, MenuItemData } from "../primitives/context-menu.slint";
 
 // The lanes: the ruler, the banded track stack, the clips on it, the playhead
@@ -17,6 +17,36 @@ import { ContextMenu, MenuItemData } from "../primitives/context-menu.slint";
 // so zooming and panning are one property change rather than a model rewrite.
 // Nothing is culled beyond `visible` — a project this size does not need it,
 // and a windowing scheme is worth writing the day one does.
+
+// ── what a kind looks like ───────────────────────────────────────────────────
+
+// The two colours and the mark a clip wears, by kind. A global rather than
+// three properties on `Clip`, because the drop ghost is not a Clip and still
+// has to be painted as the clip it is about to become — and a ghost that is
+// the wrong colour is worse than no ghost.
+global Paint {
+    public pure function mark(kind: ClipKind) -> color {
+        return kind == ClipKind.audio ? Theme.kind-audio
+            : kind == ClipKind.image ? Theme.kind-image
+            : kind == ClipKind.text ? Theme.kind-text
+            : kind == ClipKind.filter ? Theme.kind-filter
+            : Theme.kind-video;
+    }
+    public pure function well(kind: ClipKind) -> color {
+        return kind == ClipKind.audio ? Theme.kind-audio-well
+            : kind == ClipKind.image ? Theme.kind-image-well
+            : kind == ClipKind.text ? Theme.kind-text-well
+            : kind == ClipKind.filter ? Theme.kind-filter-well
+            : Theme.kind-video-well;
+    }
+    public pure function badge(kind: ClipKind) -> Glyph {
+        return kind == ClipKind.audio ? Glyph.music
+            : kind == ClipKind.image ? Glyph.image
+            : kind == ClipKind.text ? Glyph.sparkle
+            : kind == ClipKind.filter ? Glyph.waveform
+            : Glyph.film;
+    }
+}
 
 // ── one clip ─────────────────────────────────────────────────────────────────
 
@@ -35,27 +65,21 @@ component Clip inherits Rectangle {
     callback razored(seconds: float);
     callback context-requested();
 
-    property <color> mark: root.item.kind == ClipKind.audio ? Theme.kind-audio
-        : root.item.kind == ClipKind.image ? Theme.kind-image
-        : root.item.kind == ClipKind.text ? Theme.kind-text
-        : Theme.kind-video;
-    property <color> well: root.item.kind == ClipKind.audio ? Theme.kind-audio-well
-        : root.item.kind == ClipKind.image ? Theme.kind-image-well
-        : root.item.kind == ClipKind.text ? Theme.kind-text-well
-        : Theme.kind-video-well;
-    property <Glyph> badge: root.item.kind == ClipKind.audio ? Glyph.music
-        : root.item.kind == ClipKind.image ? Glyph.image
-        : root.item.kind == ClipKind.text ? Glyph.sparkle
-        : Glyph.film;
+    property <color> mark: Paint.mark(root.item.kind);
+    property <color> well: Paint.well(root.item.kind);
+    property <Glyph> badge: Paint.badge(root.item.kind);
 
     /// The coloured name strip; the rest of the clip is its body.
     property <length> header-h: 17px;
     property <length> body-h: Math.max(0px, root.height - root.header-h);
     /// A fade on a picture clip is shaded in a band at the foot instead of
     /// over the whole body: the fade is an *audio* property, and shading the
-    /// picture would say it fades to black.
-    property <bool> audio-only: root.item.kind == ClipKind.audio;
-    property <length> fade-h: root.audio-only ? root.body-h : root.body-h * 0.45;
+    /// picture would say it fades to black. A filter layer has no picture to
+    /// mislead about, and its ramp is the whole layer coming up, so it shades
+    /// like sound does.
+    property <bool> fade-whole: root.item.kind == ClipKind.audio
+        || root.item.kind == ClipKind.filter;
+    property <length> fade-h: root.fade-whole ? root.body-h : root.body-h * 0.45;
 
     /// -1 body, 0 leading edge, 1 trailing edge
     property <int> edge-at: touch.mouse-x < root.edge-grab ? 0
@@ -126,9 +150,11 @@ component Clip inherits Rectangle {
         // Where the reference tiles a filmstrip. Nothing in this tree decodes
         // a frame yet, so a picture clip falls back to its kind's mark the way
         // a bin card does — faint and large, so it reads as a placeholder and
-        // not as a badge.
-        if (root.item.kind == ClipKind.video || root.item.kind == ClipKind.image)
-            && root.width > 40px: Icon {
+        // not as a badge. A filter layer takes the same treatment for the
+        // opposite reason: there is no picture to draw, and there never will
+        // be one.
+        if (root.item.kind == ClipKind.video || root.item.kind == ClipKind.image
+            || root.item.kind == ClipKind.filter) && root.width > 40px: Icon {
             x: (parent.width - self.width) / 2;
             y: (parent.height - self.height) / 2;
             glyph: root.badge;
@@ -361,6 +387,17 @@ export component Lanes inherits Rectangle {
     callback track-scrolled(pixels: length);
     callback zoomed(factor: float, anchor-seconds: float);
 
+    /// A drag from the library is over the lanes at this moment and this
+    /// place. Asked on every move of it, because the answer — the ghost below
+    /// — is where the drop would land, and that has to be recomputed as the
+    /// pointer travels.
+    callback drag-hovered(payload: string, seconds: float, row: int);
+    /// Released here. Same three arguments: the drop is the hover, committed.
+    callback dropped(payload: string, seconds: float, row: int);
+    /// The answer to the last hover. `active` is also the verdict — false is
+    /// how the drag is refused, and the cursor says so.
+    in property <DropData> drop;
+
     property <length> px-per-second: 1px / Math.max(root.seconds-per-pixel, 0.000001);
     property <length> lanes-h: Math.max(0px, root.height - root.ruler-height);
     /// x of a moment, in the lanes' own coordinates
@@ -536,6 +573,82 @@ export component Lanes inherits Rectangle {
             background: Theme.accent-soft;
             border-width: 1px;
             border-color: Theme.accent;
+        }
+
+        // ── the drop target ──────────────────────────────────────────────
+        //
+        // Declared after the clips, so a drag reaches it before them — but a
+        // TouchArea ignores drag events and a DropArea ignores everything
+        // else, so the two never take each other's. It covers the lanes and
+        // not the ruler: a drop is a placement on a track, and the ruler is
+        // where time is scrubbed.
+        landing := DropArea {
+            x: 0;
+            y: root.ruler-height;
+            width: parent.width;
+            height: root.lanes-h;
+
+            can-drop(event) => {
+                // Rust is asked rather than told: it is the side that knows
+                // how long the media runs, what the payload names, and where
+                // the snap will pull the start to. It answers by publishing
+                // `drop`, which is both the ghost and the verdict — so this
+                // reads its own answer back, one statement later.
+                root.drag-hovered(Payload.text(event.data),
+                    root.seconds-at(event.position.x),
+                    root.row-at(event.position.y + root.ruler-height));
+                return root.drop.active ? DragAction.copy : DragAction.none;
+            }
+
+            dropped(event) => {
+                root.dropped(Payload.text(event.data),
+                    root.seconds-at(event.position.x),
+                    root.row-at(event.position.y + root.ruler-height));
+                return DragAction.copy;
+            }
+        }
+
+        // ── the ghost ────────────────────────────────────────────────────
+        //
+        // The clip the drop will make, drawn where it will make it. Gated on
+        // `has-drag` as well as on Rust's verdict: a drag that leaves the
+        // lanes gets an Exit and no further hover, so without it the ghost
+        // would sit there after the pointer had gone.
+        if root.drop.active && landing.has-drag: Rectangle {
+            x: root.at(root.drop.start);
+            y: root.ruler-height + root.drop.row * root.lane-height
+                - root.track-scroll + 4px;
+            width: Math.max(2px, root.drop.duration * root.px-per-second);
+            height: root.lane-height - 10px;
+            border-radius: Theme.r-sm;
+            background: Paint.well(root.drop.kind);
+            // The accent, not the kind's mark: this is a target, and every
+            // other target in the window — the band, a selected clip — is
+            // outlined in it.
+            border-width: 2px;
+            border-color: Theme.accent;
+            opacity: 0.85;
+            clip: true;
+
+            Rectangle {
+                x: 0;
+                y: 0;
+                width: parent.width;
+                height: 17px;
+                background: Paint.mark(root.drop.kind);
+
+                if parent.width > 30px: Text {
+                    x: 7px;
+                    y: 0;
+                    width: parent.width - 14px;
+                    height: parent.height;
+                    text: root.drop.label;
+                    color: #ffffff;
+                    font-size: Theme.fs-sm;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+            }
         }
 
         // ── the razor guide ──────────────────────────────────────────────

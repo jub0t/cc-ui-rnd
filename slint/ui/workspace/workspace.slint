@@ -7,8 +7,8 @@ import { MediaFilter, MediaItemData, MediaPane } from "media-pane.slint";
 import { PreviewPane } from "preview-pane.slint";
 import { TimelinePane } from "timeline-pane.slint";
 import {
-    ClipData, ClipField, ClipTextField, SelectedClipData, TimelineTabData,
-    TimelineTool, TrackData,
+    ClipData, ClipField, ClipTextField, DropData, SelectedClipData,
+    TimelineTabData, TimelineTool, TrackData,
 } from "../timeline/model.slint";
 
 // The editor shell: Media | Preview | Config across the top, Timeline across
@@ -45,7 +45,7 @@ export component Workspace inherits Rectangle {
     callback library-add-text();
     callback library-apply-effect(effect-id: string);
     callback library-apply-transition(transition-id: string);
-    callback library-apply-filter(filter-id: string);
+    callback library-apply-filter(filter-id: string, label: string);
     callback library-save-template();
 
     // forwarded to the inspector column
@@ -126,6 +126,12 @@ export component Workspace inherits Rectangle {
     callback band-selected(from-seconds: float, to-seconds: float,
         from-row: int, to-row: int, additive: bool);
     callback scrolled(seconds: float);
+
+    /// A library card dragged onto the lanes. See DropData in the timeline's
+    /// model: the ghost is Rust's answer to the hover, not the panel's guess.
+    in property <DropData> drop;
+    callback drag-hovered(payload: string, seconds: float, row: int);
+    callback dropped(payload: string, seconds: float, row: int);
     callback track-flag-changed(index: int, visible: bool, muted: bool, locked: bool);
     callback track-removed(index: int);
     callback track-renamed(index: int, name: string);
@@ -219,7 +225,7 @@ export component Workspace inherits Rectangle {
         add-text => { root.library-add-text(); }
         apply-effect(id) => { root.library-apply-effect(id); }
         apply-transition(id) => { root.library-apply-transition(id); }
-        apply-filter(id) => { root.library-apply-filter(id); }
+        apply-filter(id, label) => { root.library-apply-filter(id, label); }
         save-template => { root.library-save-template(); }
     }
 
@@ -316,6 +322,11 @@ export component Workspace inherits Rectangle {
         menu-selected(id) => { root.menu-selected(id); }
         band-selected(a, b, c, d, additive) => { root.band-selected(a, b, c, d, additive); }
         scrolled(seconds) => { root.scrolled(seconds); }
+        drop: root.drop;
+        drag-hovered(payload, seconds, row) => {
+            root.drag-hovered(payload, seconds, row);
+        }
+        dropped(payload, seconds, row) => { root.dropped(payload, seconds, row); }
         track-flag-changed(index, visible, muted, locked) => {
             root.track-flag-changed(index, visible, muted, locked);
         }

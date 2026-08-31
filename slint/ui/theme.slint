@@ -125,6 +125,11 @@ export global Theme {
     out property <color> kind-image-well: #251a3d;
     out property <color> kind-text: #e8355e;
     out property <color> kind-text-well: #38131d;
+    // A filter layer is not a medium — nothing was imported to make one — so
+    // it takes the one hue the four media kinds leave free rather than
+    // borrowing whichever of them it happens to sit over.
+    out property <color> kind-filter: #2bc2a8;
+    out property <color> kind-filter-well: #0e2f2a;
 
     // timeline
     //
