@@ -1,6 +1,6 @@
 import { Theme } from "../theme.slint";
 import { Glyph, Icon } from "../icons.slint";
-import { Button, DialogHeading, Modal, Progress } from "../primitives/modal.slint";
+import { Button, DialogSection, Modal, Progress } from "../primitives/modal.slint";
 import { SegmentedControl } from "../primitives/segmented-control.slint";
 import { PaneScroll } from "../workspace/pane.slint";
 
@@ -94,21 +94,66 @@ component ModelRow inherits Rectangle {
         HorizontalLayout {
             spacing: 10px;
 
+            // The radio. A ring that thickens into a filled dot when this is
+            // the model in use, dimmer again when the model is not even here —
+            // three states in one mark, which is what lets the row say what it
+            // is without a word of it.
+            VerticalLayout {
+                alignment: start;
+                padding-top: 2px;
+                Rectangle {
+                    width: 16px;
+                    height: 16px;
+                    border-radius: 8px;
+                    border-width: root.model.active ? 5px : 1.5px;
+                    border-color: root.model.active ? Theme.accent
+                        : root.model.installed ? Theme.line-strong
+                        : Theme.field-active;
+
+                    animate border-width, border-color {
+                        duration: 120ms;
+                        easing: cubic-bezier(0.4, 0, 0.2, 1);
+                    }
+                }
+            }
+
             VerticalLayout {
                 horizontal-stretch: 1;
-                spacing: 1px;
+                spacing: 2px;
 
-                Text {
-                    text: root.model.name;
-                    color: Theme.fg;
-                    font-size: Theme.fs;
-                    font-weight: Theme.weight-title;
-                    overflow: elide;
+                HorizontalLayout {
+                    spacing: 6px;
+                    alignment: start;
+
+                    Text {
+                        text: root.model.name;
+                        color: Theme.fg;
+                        font-size: Theme.fs;
+                        font-weight: Theme.weight-title;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+
+                    if root.model.active: Rectangle {
+                        width: badge.width + 12px;
+                        height: 15px;
+                        border-radius: 7.5px;
+                        background: Theme.accent;
+
+                        badge := Text {
+                            x: (parent.width - self.width) / 2;
+                            y: (parent.height - self.height) / 2;
+                            text: "In use";
+                            color: Theme.on-accent;
+                            font-size: 10px;
+                            font-weight: 600;
+                        }
+                    }
                 }
 
                 Text {
                     text: root.model.note;
-                    color: Theme.fg-dim;
+                    color: Theme.fg-muted;
                     font-size: Theme.fs-sm;
                     overflow: elide;
                 }
@@ -135,7 +180,7 @@ component ModelRow inherits Rectangle {
                 if root.model.downloading: Button {
                     label: "Cancel";
                     glyph: Glyph.close;
-                    danger: true;
+                    ghost: true;
                     clicked => { root.cancel(); }
                 }
 
@@ -151,6 +196,7 @@ component ModelRow inherits Rectangle {
                     glyph: Glyph.import;
                     clicked => { root.download(); }
                 }
+
             }
         }
 
@@ -333,11 +379,9 @@ export component SettingsDialog inherits Modal {
         PaneScroll {
             horizontal-stretch: 1;
 
-            if root.data.tab == 0: VerticalLayout {
-                padding: 18px;
-                spacing: 8px;
-
-                DialogHeading { text: "LANGUAGE"; }
+            if root.data.tab == 0: DialogSection {
+                first: true;
+                title: "Language";
 
                 // Native names: whoever is stranded in a language they cannot
                 // read must still recognise their own in this list.
@@ -349,59 +393,59 @@ export component SettingsDialog inherits Modal {
             }
 
             if root.data.tab == 1: VerticalLayout {
-                padding: 18px;
-                spacing: 8px;
+                DialogSection {
+                    first: true;
+                    title: "Language";
 
-                DialogHeading { text: "TRANSCRIBE IN"; }
-
-                SegmentedControl {
-                    options: ["Auto", "English", "Chinese"];
-                    current: root.data.transcribe-language;
-                    changed(index) => { root.transcribe-language-changed(index); }
+                    SegmentedControl {
+                        options: ["Auto", "English", "Chinese"];
+                        current: root.data.transcribe-language;
+                        changed(index) => { root.transcribe-language-changed(index); }
+                    }
                 }
 
-                Rectangle { height: 6px; }
+                DialogSection {
+                    title: "Models";
 
-                DialogHeading { text: "MODELS"; }
-
-                for model in root.transcribers: ModelRow {
-                    model: model;
-                    activated => { root.model-activated(model.id); }
-                    download => { root.model-download(model.id); }
-                    cancel => { root.model-cancel(model.id); }
-                    remove => { root.model-remove(model.id); }
-                }
-
-                HorizontalLayout {
-                    spacing: 8px;
-
-                    Text {
-                        horizontal-stretch: 1;
-                        text: root.data.disk;
-                        color: Theme.fg-muted;
-                        font-family: Theme.font-technical;
-                        font-size: Theme.fs-sm;
+                    for model in root.transcribers: ModelRow {
+                        model: model;
+                        activated => { root.model-activated(model.id); }
+                        download => { root.model-download(model.id); }
+                        cancel => { root.model-cancel(model.id); }
+                        remove => { root.model-remove(model.id); }
                     }
 
-                    VerticalLayout {
-                        alignment: center;
-                        Icon { glyph: Glyph.check; size: 12px; tint: Theme.green; }
-                    }
+                    HorizontalLayout {
+                        padding-top: 2px;
+                        spacing: 6px;
 
-                    Text {
-                        text: "Runs locally";
-                        color: Theme.green;
-                        font-size: Theme.fs-sm;
-                        vertical-alignment: center;
+                        Text {
+                            horizontal-stretch: 1;
+                            text: root.data.disk;
+                            color: Theme.fg-muted;
+                            font-family: Theme.font-technical;
+                            font-size: Theme.fs-sm;
+                            vertical-alignment: center;
+                        }
+
+                        VerticalLayout {
+                            alignment: center;
+                            Icon { glyph: Glyph.check; size: 12px; tint: Theme.green; }
+                        }
+
+                        Text {
+                            text: "Runs locally";
+                            color: Theme.green;
+                            font-size: Theme.fs-sm;
+                            vertical-alignment: center;
+                        }
                     }
                 }
             }
 
-            if root.data.tab == 2: VerticalLayout {
-                padding: 18px;
-                spacing: 8px;
-
-                DialogHeading { text: "VOICES"; }
+            if root.data.tab == 2: DialogSection {
+                first: true;
+                title: "Voices";
 
                 for model in root.voices: ModelRow {
                     model: model;
@@ -412,11 +456,9 @@ export component SettingsDialog inherits Modal {
                 }
             }
 
-            if root.data.tab == 3: VerticalLayout {
-                padding: 18px;
-                spacing: 10px;
-
-                DialogHeading { text: "ABOUT"; }
+            if root.data.tab == 3: DialogSection {
+                first: true;
+                title: "About";
 
                 Text {
                     text: "WolfCut " + root.data.version;

@@ -12,12 +12,14 @@ import { Glyph, Icon } from "icons.slint";
 
 component MenuLabel inherits Rectangle {
     in property <string> label;
+    /// this label's menu is the one currently open
+    in property <bool> current;
 
     callback clicked();
 
-    width: text.width + 16px;
+    width: text.preferred-width + 16px;
     border-radius: Theme.r-sm;
-    background: touch.has-hover ? Theme.field : Colors.transparent;
+    background: (root.current || touch.has-hover) ? Theme.field : Colors.transparent;
 
     animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
@@ -25,7 +27,7 @@ component MenuLabel inherits Rectangle {
         x: 8px;
         y: (parent.height - self.height) / 2;
         text: root.label;
-        color: touch.has-hover ? Theme.fg : Theme.fg-muted;
+        color: (root.current || touch.has-hover) ? Theme.fg : Theme.fg-muted;
         font-size: Theme.fs;
     }
 
@@ -71,6 +73,11 @@ export component TitleBar inherits Rectangle {
 
     callback begin-drag();
     callback toggle-maximize();
+    /// A menu was asked for: which one, and where its label sits in the strip,
+    /// so the sheet can hang off it.
+    callback menu-opened(index: int, at-x: length);
+    /// Which menu is open, or -1.
+    in property <int> menu: -1;
     callback open-settings();
     callback toggle-theme();
     callback export-clicked();
@@ -132,12 +139,30 @@ export component TitleBar inherits Rectangle {
             }
         }
 
-        // The app menus. Chrome for now: they highlight but open nothing —
-        // a real dropdown needs a popup layer this tree has not grown yet,
-        // and a menu that opens empty would be worse than one that waits.
-        MenuLabel { label: "File"; }
-        MenuLabel { label: "Edit"; }
-        MenuLabel { label: "View"; }
+        // Each label reports its own position rather than a fixed one: they
+        // are sized from their text, so where "View" starts depends on how
+        // long "File" and "Edit" are.
+        file := MenuLabel {
+            label: "File";
+            current: root.menu == 0;
+            clicked => {
+                root.menu-opened(0, file.absolute-position.x - root.absolute-position.x);
+            }
+        }
+        edit := MenuLabel {
+            label: "Edit";
+            current: root.menu == 1;
+            clicked => {
+                root.menu-opened(1, edit.absolute-position.x - root.absolute-position.x);
+            }
+        }
+        view := MenuLabel {
+            label: "View";
+            current: root.menu == 2;
+            clicked => {
+                root.menu-opened(2, view.absolute-position.x - root.absolute-position.x);
+            }
+        }
 
         Rectangle { horizontal-stretch: 1; }
 

@@ -18,7 +18,7 @@ import { Theme } from "theme.slint";
 import { Bezier, Curves, Fmt } from "util.slint";
 import { EffectData } from "demo/effects-panel.slint";
 import { MediaFilter, MediaItemData, MediaKind } from "workspace/media-pane.slint";
-import { MenuItemData, MenuRow } from "primitives/context-menu.slint";
+import { ContextMenu, MenuItemData, MenuRow } from "primitives/context-menu.slint";
 import { ExportData, ExportDialog, ExportPhase } from "dialogs/export.slint";
 import { ModelData, SettingsData, SettingsDialog } from "dialogs/settings.slint";
 import { TitleBar } from "title-bar.slint";
@@ -176,6 +176,15 @@ export component App inherits Window {
     in property <string> project-status: "saved";
     in property <bool> macos;
 
+    /// The File / Edit / View menus. Built in Rust like every other menu here,
+    /// because what belongs on them depends on the project.
+    in property <int> open-menu: -1;
+    in property <[MenuItemData]> app-menu-items;
+    in property <length> app-menu-height;
+    in property <int> app-menu-token;
+    callback menu-opened(index: int);
+    callback app-menu-selected(id: string);
+
     callback titlebar-begin-drag();
     callback titlebar-toggle-maximize();
     // The dialogs. Both are held at the root because Slint has no portal: a
@@ -241,6 +250,14 @@ export component App inherits Window {
             macos: root.macos;
             project-name: root.project-name;
             status: root.project-status;
+
+            menu: root.open-menu;
+            menu-opened(index, at-x) => {
+                appmenu.request-x = at-x;
+                // Under the strip, which is 32px tall.
+                appmenu.request-y = 32px;
+                root.menu-opened(index);
+            }
 
             begin-drag => { root.titlebar-begin-drag(); }
             toggle-maximize => { root.titlebar-toggle-maximize(); }
@@ -394,5 +411,20 @@ export component App inherits Window {
         model-download(id) => { root.model-download(id); }
         model-cancel(id) => { root.model-cancel(id); }
         model-remove(id) => { root.model-remove(id); }
+    }
+
+    // Above the dialogs as well as the workspace. A PopupWindow is its own
+    // layer so the order does not strictly decide the outcome, but the
+    // element that places it still measures against this one's box, and this
+    // one is the whole window.
+    appmenu := ContextMenu {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        items: root.app-menu-items;
+        menu-height: root.app-menu-height;
+        token: root.app-menu-token;
+        selected(id) => { root.app-menu-selected(id); }
     }
 }

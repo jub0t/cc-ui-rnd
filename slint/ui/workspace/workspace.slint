@@ -158,7 +158,11 @@ export component Workspace inherits Rectangle {
     // the other only needs enough not to elide its labels.
     in-out property <float> media-share: 0.31;
     in-out property <float> config-share: 0.22;
-    in-out property <float> top-share: 0.66;
+    // The reference opens with 340px of timeline, which at this window's
+    // preferred 900px is a fraction under 0.6 of the usable track. 0.66 left
+    // the lanes cramped enough that a four-track stack needed scrolling before
+    // anything had been added to it.
+    in-out property <float> top-share: 0.6;
 
     // Usable box: the pane widths and heights, with the margins and gutters
     // already taken out. Four gaps across (two margins, two gutters), three

@@ -37,15 +37,24 @@ component FactRow inherits HorizontalLayout {
         vertical-alignment: center;
     }
 
-    Text {
+    // A read-only TextInput and not a Text, so it can be selected and copied.
+    // Half of what this panel holds is only useful somewhere else — a folder
+    // path pasted into a terminal, an output size quoted to somebody — and a
+    // fact you cannot lift off the screen is a fact you have to retype.
+    TextInput {
         horizontal-stretch: 1;
         text: root.value;
         color: Theme.fg;
         font-family: Theme.font-technical;
         font-size: Theme.fs;
         horizontal-alignment: right;
-        vertical-alignment: center;
+        // Selectable, never editable: this is a readout of the project, and
+        // the Modify button is where changing it lives.
+        read-only: true;
+        single-line: false;
         wrap: word-wrap;
+        selection-background-color: Theme.accent;
+        selection-foreground-color: Theme.on-accent;
     }
 }
 

@@ -237,7 +237,6 @@ component Clip inherits Rectangle {
             height: parent.height;
             text: root.item.name;
             color: #ffffff;
-            font-family: Theme.font-technical;
             font-size: Theme.fs-sm;
             vertical-alignment: center;
             overflow: elide;
@@ -596,7 +595,6 @@ export component Lanes inherits Rectangle {
                     height: parent.height - 7px;
                     text: Fmt.frames-timecode(parent.seconds, root.frame-rate);
                     color: Theme.fg-dim;
-                    font-family: Theme.font-technical;
                     font-size: 10px;
                     vertical-alignment: center;
                 }

@@ -12,6 +12,9 @@ export component Modal inherits Rectangle {
     in property <bool> open;
     in property <string> title;
     in property <Glyph> glyph;
+    /// A fact about what the sheet is acting on, set against the trailing edge
+    /// of its header — web/'s panels carry theirs the same way.
+    in property <string> note;
     /// False while a job is running: a dialog you can dismiss out from under an
     /// export is a dialog that loses the export.
     in property <bool> dismissable: true;
@@ -54,7 +57,7 @@ export component Modal inherits Rectangle {
 
         body := VerticalLayout {
             Rectangle {
-                height: 48px;
+                height: 42px;
 
                 Rectangle {
                     x: 0;
@@ -65,7 +68,7 @@ export component Modal inherits Rectangle {
                 }
 
                 HorizontalLayout {
-                    padding-left: 18px;
+                    padding-left: 14px;
                     padding-right: 12px;
                     spacing: 8px;
 
@@ -79,11 +82,20 @@ export component Modal inherits Rectangle {
                     }
 
                     Text {
-                        horizontal-stretch: 1;
                         text: root.title;
                         color: Theme.fg;
                         font-size: Theme.fs-lg;
                         font-weight: Theme.weight-title;
+                        vertical-alignment: center;
+                    }
+
+                    Rectangle { horizontal-stretch: 1; }
+
+                    if root.note != "": Text {
+                        text: root.note;
+                        color: Theme.fg-dim;
+                        font-family: Theme.font-technical;
+                        font-size: Theme.fs-sm;
                         vertical-alignment: center;
                     }
 
@@ -120,39 +132,60 @@ export component Modal inherits Rectangle {
     }
 }
 
-// The push a dialog is built around. Three weights, because a dialog has one
-// action worth doing, a few worth offering, and sometimes one worth warning
-// about.
+// The push a dialog is built around.
+//
+// Four tones, from web/'s button: `default` is a bordered field, `primary`
+// fills with the accent, `ghost` is bare until hovered, and `danger` keeps its
+// normal ink and turns red only under the pointer — a row of permanently red
+// text is a row of alarms, where the warning belongs at the moment of pressing.
 export component Button inherits Rectangle {
     in property <string> label;
     in property <Glyph> glyph;
     /// the one action the dialog exists for
     in property <bool> primary;
     in property <bool> danger;
+    /// bare until hovered, for a secondary action beside a real one
+    in property <bool> ghost;
     in property <bool> enabled: true;
     /// fill the width it is given, for a footer's single action
     in property <bool> block;
+    /// 34px instead of 28px, for the action a sheet is built around
+    in property <bool> large;
 
     callback clicked();
 
     property <length> gap: root.glyph == Glyph.none ? 0px : 6px;
     property <length> mark: root.glyph == Glyph.none ? 0px : 14px;
+    property <bool> lit: touch.has-hover && root.enabled;
+    /// the red the danger tone hovers into — a dark wash, not a fill
+    property <color> danger-wash: #2a1614;
+    property <color> danger-edge: #5a2b28;
 
-    height: 32px;
+    height: root.large ? 34px : 28px;
     horizontal-stretch: root.block ? 1 : 0;
     // From the label's *preferred* width, never its actual one: the layout
     // below sizes the label from this button's width, so reading back the
     // result is a loop.
-    min-width: root.block ? 0px : text.preferred-width + root.mark + root.gap + 28px;
+    min-width: root.block ? 0px
+        : text.preferred-width + root.mark + root.gap + (root.large ? 32px : 24px);
     border-radius: Theme.r;
-    opacity: root.enabled ? 1.0 : 0.4;
-    background: !root.enabled ? Theme.field
-        : root.primary ? (touch.has-hover ? Theme.accent-hover : Theme.accent)
-        : root.danger ? (touch.has-hover ? Theme.danger-soft : Theme.field)
-        : touch.has-hover ? Theme.field-hover
+    opacity: root.enabled ? 1.0 : 0.45;
+    border-width: root.ghost ? 0px : 1px;
+    border-color: root.primary ? (root.lit ? Theme.accent-hover : Theme.accent)
+        : (root.danger && root.lit) ? root.danger-edge
+        : root.lit ? Theme.line-strong
+        : Theme.line;
+    background: root.primary ? (root.lit ? Theme.accent-hover : Theme.accent)
+        : root.ghost ? (root.lit ? Theme.field : Colors.transparent)
+        : (root.danger && root.lit) ? root.danger-wash
+        : root.lit ? Theme.field-hover
         : Theme.field;
 
-    animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+    animate background, border-color { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+
+    property <brush> ink: root.primary ? Theme.on-accent
+        : root.ghost ? (root.lit ? Theme.fg : Theme.fg-muted)
+        : Theme.fg;
 
     HorizontalLayout {
         alignment: center;
@@ -163,19 +196,15 @@ export component Button inherits Rectangle {
             Icon {
                 glyph: root.glyph;
                 size: 14px;
-                tint: root.primary ? Theme.on-accent
-                    : root.danger ? Theme.danger
-                    : Theme.fg;
+                tint: root.ink;
             }
         }
 
         text := Text {
             text: root.label;
-            color: root.primary ? Theme.on-accent
-                : root.danger ? Theme.danger
-                : Theme.fg;
-            font-size: Theme.fs;
-            font-weight: root.primary ? Theme.weight-title : Theme.weight-body;
+            color: root.ink;
+            font-size: root.large ? Theme.fs-lg : Theme.fs;
+            font-weight: Theme.weight-title;
             vertical-alignment: center;
         }
     }
@@ -191,6 +220,9 @@ export component Button inherits Rectangle {
 // far along it is, and a barber's pole for one that can is a lie.
 export component Progress inherits Rectangle {
     in property <float> value;
+    /// Finished: the bar turns green rather than staying accent, so a glance
+    /// tells you it is over without reading the row above it.
+    in property <bool> done;
 
     height: 4px;
     border-radius: 2px;
@@ -205,16 +237,178 @@ export component Progress inherits Rectangle {
         width: parent.width * Math.clamp(root.value, 0, 1);
         height: parent.height;
         border-radius: 2px;
-        background: Theme.accent;
+        background: root.done ? Theme.green : Theme.accent;
     }
 }
 
-// A dialog's own heading, over a group of rows. Smaller and dimmer than a
-// section header in a panel: a dialog is one screen and does not need its
-// groups shouting at each other.
-export component DialogHeading inherits Text {
-    color: Theme.fg-dim;
-    font-size: Theme.fs-sm;
-    font-weight: Theme.weight-title;
-    letter-spacing: 0.8px;
+// A group of rows inside a sheet, with a hairline above it.
+//
+// The heading is plain 13px in normal ink, not the small dim capitals a panel
+// uses. A dialog is one screen: its groups are landmarks in a short list, and
+// shouting at each other in capitals is exactly what they do not need to do.
+//
+// A collapsible group's header carries a raised tone as well as a chevron, so
+// the colour says "this bar does something" before the mark is even read —
+// which is why a plain group must not have it.
+export component DialogSection inherits VerticalLayout {
+    in property <string> title;
+    in property <bool> collapsible;
+    /// Shown in the header only while folded, so a closed group still reports
+    /// what it is holding.
+    in property <string> summary;
+    in-out property <bool> open: true;
+    /// suppress the leading hairline, for the first group in a sheet
+    in property <bool> first;
+
+    if !root.first: Rectangle {
+        height: 1px;
+        background: Theme.line;
+    }
+
+    Rectangle {
+        height: 36px;
+        background: !root.collapsible ? Colors.transparent
+            : head.has-hover ? Theme.field
+            : Theme.raised;
+
+        animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+
+        head := TouchArea {
+            enabled: root.collapsible;
+            mouse-cursor: pointer;
+            clicked => { root.open = !root.open; }
+        }
+
+        HorizontalLayout {
+            padding-left: 14px;
+            padding-right: 14px;
+            spacing: 6px;
+
+            // web/ rotates one right-chevron through 90 degrees. Slint puts
+            // `rotation-angle` on Image and Path only, and an Icon is neither,
+            // so the two marks are swapped instead — the same two states, just
+            // without the quarter turn between them.
+            if root.collapsible: VerticalLayout {
+                alignment: center;
+                Icon {
+                    glyph: root.open ? Glyph.chevron-down : Glyph.chevron-right;
+                    size: 13px;
+                    tint: Theme.fg-dim;
+                }
+            }
+
+            Text {
+                text: root.title;
+                color: Theme.fg;
+                font-size: Theme.fs-lg;
+                font-weight: Theme.weight-title;
+                vertical-alignment: center;
+            }
+
+            Rectangle { horizontal-stretch: 1; }
+
+            if root.collapsible && !root.open && root.summary != "": Text {
+                text: root.summary;
+                color: Theme.fg-dim;
+                font-family: Theme.font-technical;
+                font-size: Theme.fs-sm;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+        }
+    }
+
+    // Collapsed by height rather than by dropping out of the tree: `@children`
+    // cannot appear inside a conditional, so the body is always built and the
+    // clip is what hides it. It also leaves the height as the thing to animate
+    // the day this grows a transition.
+    Rectangle {
+        height: root.open ? body.preferred-height : 0px;
+        clip: true;
+
+        // An equal 14px inset on every side, matching the sheet's own gutter.
+        body := VerticalLayout {
+            x: 0;
+            y: 0;
+            width: parent.width;
+            height: self.preferred-height;
+            padding: 14px;
+            spacing: 6px;
+            @children
+        }
+    }
+}
+
+// One line of a sheet's form: a fixed label column so every control in the
+// group starts at the same x, whatever its label says.
+export component DialogRow inherits HorizontalLayout {
+    in property <string> label;
+
+    min-height: 28px;
+    spacing: 10px;
+
+    if root.label != "": Text {
+        width: 78px;
+        text: root.label;
+        color: Theme.fg-muted;
+        font-size: Theme.fs;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+
+    HorizontalLayout {
+        spacing: 6px;
+        @children
+    }
+}
+
+// A single-line field. No border: the ground carries it, and the accent ring
+// only appears once it is being typed into.
+export component Field inherits Rectangle {
+    in-out property <string> text;
+    in property <string> placeholder;
+    /// numbers, paths and names read better in the technical face
+    in property <bool> technical;
+
+    callback edited(text: string);
+
+    height: 28px;
+    horizontal-stretch: 1;
+    border-radius: Theme.r;
+    background: input.has-focus ? Theme.field
+        : touch.has-hover ? Theme.field-hover
+        : Theme.field;
+    border-width: 1px;
+    border-color: input.has-focus ? Theme.accent : Colors.transparent;
+    clip: true;
+
+    animate background, border-color { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+
+    touch := TouchArea {
+        mouse-cursor: MouseCursor.text;
+        clicked => { input.focus(); }
+    }
+
+    input := TextInput {
+        x: 10px;
+        y: (parent.height - self.height) / 2;
+        width: parent.width - 20px;
+        text <=> root.text;
+        color: Theme.fg;
+        font-family: root.technical ? Theme.font-technical : Theme.font;
+        font-size: Theme.fs;
+        single-line: true;
+        selection-background-color: Theme.accent;
+        selection-foreground-color: Theme.on-accent;
+
+        edited => { root.edited(self.text); }
+    }
+
+    if root.text == "" && !input.has-focus: Text {
+        x: 10px;
+        y: (parent.height - self.height) / 2;
+        text: root.placeholder;
+        color: Theme.fg-dim;
+        font-size: Theme.fs;
+    }
 }

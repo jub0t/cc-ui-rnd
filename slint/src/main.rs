@@ -601,6 +601,9 @@ struct Studio {
     voices: Vec<ModelState>,
     /// The A/V tray menu, built like the clip menu and shown the same way.
     av_token: i32,
+    /// Which title-bar menu is open, or -1, and the token that shows it.
+    open_menu: i32,
+    menu_bar_token: i32,
     /// The clip the context menu was opened on. Held separately from the
     /// selection because the menu outlives the press that opened it.
     menu_target: Option<String>,
@@ -1060,6 +1063,100 @@ impl Studio {
         ]
     }
 
+    /// The File / Edit / View menus, following the reference's own lists.
+    fn menu_bar(&self) -> Vec<MenuItemData> {
+        let row = |id: &str, label: String, glyph: Glyph, shortcut: &str, enabled: bool| {
+            MenuItemData {
+                id: id.into(),
+                label: label.into(),
+                kind: MenuRow::Action,
+                glyph,
+                shortcut: shortcut.into(),
+                enabled,
+                danger: false,
+                checkable: false,
+                checked: false,
+            }
+        };
+        let rule = || MenuItemData { kind: MenuRow::Separator, ..Default::default() };
+        let selected = self.selection.len();
+        let straddled = self.now().clips.iter().any(|clip| {
+            clip.start + MIN_DURATION < self.playhead && self.playhead < clip.end() - MIN_DURATION
+        });
+
+        match self.open_menu {
+            0 => vec![
+                // Disabled rather than absent: a menu whose rows move between
+                // openings has to be re-read every time.
+                row("add-selected", "Add selected to timeline".into(), Glyph::Plus, "", false),
+                row("save", "Save".into(), Glyph::Import, "⌘S", true),
+                row("export", "Export…".into(), Glyph::Export, "", !self.now().clips.is_empty()),
+                row("template", "Save as template…".into(), Glyph::Slot, "", true),
+                row("speech", "Text to speech…".into(), Glyph::Volume, "", true),
+                rule(),
+                row("settings", "Settings…".into(), Glyph::Settings, "⌘,", true),
+                rule(),
+                row("close-project", "Close project".into(), Glyph::Import, "", true),
+                MenuItemData {
+                    id: "close-window".into(),
+                    label: "Close window".into(),
+                    kind: MenuRow::Action,
+                    glyph: Glyph::Close,
+                    shortcut: "⌘W".into(),
+                    enabled: true,
+                    danger: true,
+                    checkable: false,
+                    checked: false,
+                },
+            ],
+            1 => vec![
+                // Nothing in this tree records what it did, so neither of
+                // these can ever be live. They are here because a menu that
+                // omits Undo is a menu that looks broken.
+                row("undo", "Undo".into(), Glyph::ChevronUp, "⌘Z", false),
+                row("redo", "Redo".into(), Glyph::ChevronDown, "⇧⌘Z", false),
+                rule(),
+                row("split", "Split at playhead".into(), Glyph::Razor, "⌘B", straddled),
+                MenuItemData {
+                    id: "delete".into(),
+                    label: if selected > 1 {
+                        format!("Delete {selected} clips")
+                    } else {
+                        "Delete clip".into()
+                    }
+                    .into(),
+                    kind: MenuRow::Action,
+                    glyph: Glyph::Trash,
+                    shortcut: "⌫".into(),
+                    enabled: selected > 0,
+                    danger: true,
+                    checkable: false,
+                    checked: false,
+                },
+                rule(),
+                MenuItemData {
+                    id: "snap".into(),
+                    label: "Snap to edges".into(),
+                    kind: MenuRow::Action,
+                    glyph: Glyph::None,
+                    shortcut: "N".into(),
+                    enabled: true,
+                    danger: false,
+                    checkable: true,
+                    checked: self.snap,
+                },
+            ],
+            2 => vec![
+                row("zoom-in", "Zoom in".into(), Glyph::Plus, "+", true),
+                row("zoom-out", "Zoom out".into(), Glyph::Minus, "-", true),
+                rule(),
+                row("start", "Go to start".into(), Glyph::SkipBack, "Home", true),
+                row("end", "Go to end".into(), Glyph::SkipForward, "End", true),
+            ],
+            _ => Vec::new(),
+        }
+    }
+
     fn publish(&self, app: &App, models: &TimelineModels) {
         models.tabs.set_vec(
             self.timelines
@@ -1177,6 +1274,12 @@ impl Studio {
         app.set_av_height(Studio::menu_height(&av));
         app.set_av_items(ModelRc::from(Rc::new(VecModel::from(av))));
         app.set_av_token(self.av_token);
+
+        let bar = self.menu_bar();
+        app.set_app_menu_height(Studio::menu_height(&bar));
+        app.set_app_menu_items(ModelRc::from(Rc::new(VecModel::from(bar))));
+        app.set_app_menu_token(self.menu_bar_token);
+        app.set_open_menu(self.open_menu);
 
         app.set_selected_clip(self.selected());
         app.set_timeline_current_tab(self.active as i32);
@@ -1394,6 +1497,8 @@ fn demo_studio() -> Studio {
         transcribers: demo_transcribers(),
         voices: demo_voices(),
         av_token: 0,
+        open_menu: -1,
+        menu_bar_token: 0,
         menu_target: None,
         menu_token: 0,
         gesture: Gesture::None,
@@ -2571,6 +2676,98 @@ fn main() -> Result<(), slint::PlatformError> {
             _ => {}
         }
     }));
+
+
+    // ── the title-bar menus ──
+    app.on_menu_opened(on_timeline!(|state, index: i32| {
+        state.open_menu = index;
+        state.menu_bar_token += 1;
+    }));
+
+    app.on_app_menu_selected({
+        let weak = app.as_weak();
+        let studio = studio.clone();
+        let models = timeline_models.clone();
+        move |action| {
+            let Some(app) = weak.upgrade() else { return };
+            {
+                let mut state = studio.borrow_mut();
+                state.open_menu = -1;
+                match action.as_str() {
+                    "export" => {
+                        state.export.open = true;
+                        state.export.phase = ExportPhase::Idle;
+                        state.export.message = String::new();
+                    }
+                    "settings" => state.settings.open = true,
+                    "snap" => state.snap = !state.snap,
+                    "zoom-in" => {
+                        state.seconds_per_pixel = (state.seconds_per_pixel / 1.4).max(0.000_5);
+                    }
+                    "zoom-out" => {
+                        state.seconds_per_pixel = (state.seconds_per_pixel * 1.4).min(1.5);
+                    }
+                    "start" => {
+                        state.playing = false;
+                        state.playhead = 0.0;
+                    }
+                    "end" => {
+                        state.playing = false;
+                        state.playhead = state.duration();
+                    }
+                    "delete" => {
+                        let doomed = state.selection.clone();
+                        state.now_mut().clips.retain(|clip| !doomed.contains(&clip.id));
+                        state.selection.clear();
+                    }
+                    "split" => {
+                        let at = state.playhead;
+                        let victims: Vec<String> = state
+                            .now()
+                            .clips
+                            .iter()
+                            .filter(|clip| {
+                                clip.start + MIN_DURATION < at
+                                    && at < clip.end() - MIN_DURATION
+                                    && !state.locked(&clip.track)
+                            })
+                            .map(|clip| clip.id.clone())
+                            .collect();
+                        for victim in victims {
+                            let Some(index) =
+                                state.now().clips.iter().position(|c| c.id == victim)
+                            else {
+                                continue;
+                            };
+                            let source = state.now().clips[index].clone();
+                            let new_id = state.mint("c");
+                            let head = at - source.start;
+                            let mut tail = source.clone();
+                            tail.id = new_id;
+                            tail.start = at;
+                            tail.duration = source.duration - head;
+                            tail.source_start = source.source_start + head;
+                            tail.fade_in = 0.0;
+                            tail.transition_in = false;
+                            state.now_mut().clips[index].duration = head;
+                            state.now_mut().clips[index].fade_out = 0.0;
+                            state.now_mut().clips.push(tail);
+                        }
+                    }
+                    // Saving, templates, speech and closing a project all need
+                    // a store this crate does not have. The rows are here so
+                    // the menu is the shape it will be; wiring them is a
+                    // handler each the day one exists.
+                    _ => {}
+                }
+            }
+            if action == "close-window" {
+                app.window().hide().ok();
+                return;
+            }
+            studio.borrow().publish(&app, &models);
+        }
+    });
 
     studio.borrow().publish(&app, &timeline_models);
 
