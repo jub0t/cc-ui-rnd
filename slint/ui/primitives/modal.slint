@@ -161,7 +161,8 @@ export component Button inherits Rectangle {
     property <color> danger-wash: #2a1614;
     property <color> danger-edge: #5a2b28;
 
-    height: root.large ? 34px : 28px;
+    min-height: root.large ? 34px : 28px;
+    max-height: root.large ? 34px : 28px;
     horizontal-stretch: root.block ? 1 : 0;
     // From the label's *preferred* width, never its actual one: the layout
     // below sizes the label from this button's width, so reading back the
@@ -365,14 +366,21 @@ export component DialogRow inherits HorizontalLayout {
 // A single-line field. No border: the ground carries it, and the accent ring
 // only appears once it is being typed into.
 export component Field inherits Rectangle {
-    in-out property <string> text;
+    /// The value the caller owns. One-way: what is typed comes back through
+    /// `edited`, and this is re-seeded from whatever the caller does with it.
+    in property <string> value;
     in property <string> placeholder;
     /// numbers, paths and names read better in the technical face
     in property <bool> technical;
 
     callback edited(text: string);
 
-    height: 28px;
+    // A layout owns its children's size on both axes: it reads min, preferred
+    // and max, and a bare `height` is none of those. Without a max the row
+    // stretches this to whatever the tallest thing beside it made it, which is
+    // exactly what left the field taller than the Browse button next to it.
+    min-height: 28px;
+    max-height: 28px;
     horizontal-stretch: 1;
     border-radius: Theme.r;
     background: input.has-focus ? Theme.field
@@ -384,6 +392,24 @@ export component Field inherits Rectangle {
 
     animate background, border-color { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
+    // The text being edited, held separately from `value`.
+    //
+    // A TextInput writes to whatever property it is two-way bound to, and an
+    // assignment in Slint replaces the binding the caller declared — so
+    // binding it straight to `value` works for exactly one keystroke and then
+    // goes deaf to the model. This is seeded instead, and never while the
+    // field has focus, so a republish mid-sentence cannot yank the caret.
+    property <string> draft;
+    function seed() {
+        root.draft = root.value;
+    }
+    init => { root.seed(); }
+    changed value => {
+        if (!input.has-focus) {
+            root.seed();
+        }
+    }
+
     touch := TouchArea {
         mouse-cursor: MouseCursor.text;
         clicked => { input.focus(); }
@@ -393,7 +419,7 @@ export component Field inherits Rectangle {
         x: 10px;
         y: (parent.height - self.height) / 2;
         width: parent.width - 20px;
-        text <=> root.text;
+        text <=> root.draft;
         color: Theme.fg;
         font-family: root.technical ? Theme.font-technical : Theme.font;
         font-size: Theme.fs;
@@ -404,7 +430,7 @@ export component Field inherits Rectangle {
         edited => { root.edited(self.text); }
     }
 
-    if root.text == "" && !input.has-focus: Text {
+    if root.draft == "" && !input.has-focus: Text {
         x: 10px;
         y: (parent.height - self.height) / 2;
         text: root.placeholder;

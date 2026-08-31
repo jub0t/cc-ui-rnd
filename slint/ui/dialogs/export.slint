@@ -191,7 +191,7 @@ export component ExportDialog inherits Modal {
 
             DialogRow {
                 Field {
-                    text: root.data.name;
+                    value: root.data.name;
                     technical: true;
                     edited(text) => { root.name-edited(text); }
                 }

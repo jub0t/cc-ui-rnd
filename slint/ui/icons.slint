@@ -73,15 +73,30 @@ export enum Glyph {
 component Stroked inherits Path {
     in property <length> size: 14px;
     in property <brush> tint: Theme.fg-muted;
+    /// Stroke width on the 24 grid, held as a ratio at any rendered size.
+    ///
+    /// Two sets, two weights, and they cannot share a constant. The reference
+    /// draws its generic chrome from Heroicons, which is 1.5 on a 24 grid, and
+    /// its editor vocabulary from Lucide, which is 2. Every glyph below says
+    /// which family it came from by what it sets here; the default is Lucide's,
+    /// pulled a hair under 2 because these render at 11-15px where a full 2
+    /// reads heavy.
+    in property <float> weight: 1.9;
+
     width: root.size;
     height: root.size;
     viewbox-width: 24;
     viewbox-height: 24;
     stroke: root.tint;
-    // lucide draws at stroke-width 1.9 on a 24 grid; hold that ratio at any size
-    stroke-width: root.size * 1.9 / 24;
+    stroke-width: root.size * root.weight / 24;
     stroke-line-cap: round;
     stroke-line-join: round;
+}
+
+/// Heroicons' weight, named so a glyph taken from that set says so.
+export global IconWeight {
+    out property <float> heroicon: 1.5;
+    out property <float> lucide: 1.9;
 }
 
 // The alignment glyphs stay on Radix's 15-unit grid. Drawing them on the 24
@@ -197,10 +212,13 @@ export component Icon inherits Rectangle {
     // command, the same construction the eye above uses.
     // Title-bar controls: the lucide gear, sun and moon, and an upload-shaped
     // export arrow.
+    // heroicons/adjustments-horizontal — the reference's settings mark, and
+    // the first glyph here taken verbatim rather than traced.
     if root.glyph == Glyph.settings: Stroked {
-        size: root.size; tint: root.tint;
-        commands: "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
-            + " M 15 12 A 3 3 0 0 1 9 12 A 3 3 0 0 1 15 12 Z";
+        size: root.size; tint: root.tint; weight: IconWeight.heroicon;
+        commands: "M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5"
+            + "m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5"
+            + "m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75";
     }
     if root.glyph == Glyph.sun: Stroked {
         size: root.size; tint: root.tint;

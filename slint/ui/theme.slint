@@ -60,12 +60,18 @@ export global Theme {
     // genuinely sunken — darker than the surface it is cut into, the way the
     // legacy theme has it and the way a sunken thing reads without having to
     // be explained.
-    out property <color> panel: #111111;
-    out property <color> raised: #1a1a1a;
-    out property <color> well: #0a0a0a;
-    out property <color> field: #1f1f1f;       // --cp-field
-    out property <color> field-hover: #272727; // --cp-field-hover
-    out property <color> field-active: #303030;// --cp-field-active
+    // The whole ladder moves together, not just the panel. Each step exists
+    // to be told apart from the one under it — a raised card has to read as
+    // raised, a field has to read as a field on top of that — so lifting the
+    // panel without lifting the rest would close those gaps instead of moving
+    // them. Only `page` stays where it is: it is the ground the panes float
+    // on, and holding it down is what widens the gutters as the panes lighten.
+    out property <color> panel: #171717;
+    out property <color> raised: #202020;
+    out property <color> well: #0e0e0e;
+    out property <color> field: #262626;
+    out property <color> field-hover: #2e2e2e;
+    out property <color> field-active: #383838;
 
     // hairlines — white-alpha like the reference, so they hold on panel,
     // well, and ground alike.
@@ -135,7 +141,7 @@ export global Theme {
     // alternating stripes, which only ever answer "which lane".
     out property <color> lane: #000000;
     out property <color> lane-alt: #000000;
-    out property <color> ruler: #1a1a1a;         // = raised
+    out property <color> ruler: #202020;         // = raised
     /// The vertical rules. Faint on purpose: a grid you notice is a grid that
     /// competes with the clips it is there to place.
     out property <color> grid: #ffffff0f;

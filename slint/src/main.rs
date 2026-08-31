@@ -721,24 +721,24 @@ impl Studio {
     /// why leaves you guessing at the rule.
     fn merge_blocked(&self) -> Option<&'static str> {
         if self.selection.len() != 2 {
-            return Some("Select two clips");
+            return Some("Select two clips to merge");
         }
         let (Some(a), Some(b)) = (self.clip(&self.selection[0]), self.clip(&self.selection[1]))
         else {
-            return Some("Select two clips");
+            return Some("Select two clips to merge");
         };
         let (first, second) = if a.start <= b.start { (a, b) } else { (b, a) };
         if first.track != second.track {
-            return Some("Same track only");
+            return Some("Both clips must be on one track");
         }
         if first.media != second.media || first.media.is_empty() {
-            return Some("Same file only");
+            return Some("Both clips must come from one file");
         }
         if (second.start - first.end()).abs() > MIN_DURATION {
-            return Some("Must be touching");
+            return Some("The two clips must be touching");
         }
         if (second.source_start - (first.source_start + first.duration)).abs() > MIN_DURATION {
-            return Some("Material missing");
+            return Some("The cut has material missing between them");
         }
         None
     }

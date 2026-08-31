@@ -93,7 +93,14 @@ export component TimelineTray inherits Rectangle {
         }
         IconButton {
             glyph: Glyph.merge;
-            label: "Merge selected";
+            // The reason a blocked Merge is blocked rides on the button rather
+            // than being spelled out beside it. The reference keeps it in a
+            // tooltip; this tree has no tooltip yet, so `label` — the
+            // accessible name, and where a tooltip will read from — is the
+            // honest place to park it. A permanent caption in the tray was
+            // answering a question nobody had asked yet.
+            label: root.merge-blocked-because == "" ? "Merge selected"
+                : root.merge-blocked-because;
             enabled: root.merge-blocked-because == "";
             clicked => { root.merge(); }
         }
@@ -114,20 +121,6 @@ export component TimelineTray inherits Rectangle {
             font-size: Theme.fs-sm;
             horizontal-alignment: center;
             vertical-alignment: center;
-        }
-
-        // Where the tooltip's sentence goes, since there is no tooltip. Shown
-        // only while Merge is actually blocked, so it is an explanation of a
-        // dead button and not permanent chrome.
-        if root.merge-blocked-because != "" && root.selected-count > 0: Text {
-            // Fixed, so a longer reason elides rather than pushing every
-            // control after it along the bar.
-            width: 96px;
-            text: root.merge-blocked-because;
-            color: Theme.fg-dim;
-            font-size: 10px;
-            vertical-alignment: center;
-            overflow: elide;
         }
 
         Divider { }
