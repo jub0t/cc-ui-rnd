@@ -1,0 +1,48 @@
+import { Theme, Glyph, IconButton, Select } from "../primitives/primitives.slint";
+import { Pane, PaneBody, PaneHeader } from "pane.slint";
+
+// Scaffold. The stage is a plain 16:9 letterbox for now — the shape a decoded
+// frame will be drawn into, sized so it always fits the pane whichever axis
+// the drag runs out of first.
+export component PreviewPane inherits Rectangle {
+    in property <float> aspect: 16 / 9;
+
+    Pane {
+        PaneHeader {
+            title: "Preview";
+            IconButton { glyph: Glyph.fit; icon-size: 15px; label: "Fit to window"; }
+            VerticalLayout {
+                alignment: center;
+                Select {
+                    width: 84px;
+                    flat: true;
+                    current: 3;
+                    options: ["25%", "50%", "72%", "100%", "200%", "400%"];
+                }
+            }
+        }
+
+        PaneBody {
+            Rectangle {
+                Rectangle {
+                    width: Math.min(parent.width, parent.height * root.aspect);
+                    height: self.width / root.aspect;
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                    background: #000000;
+                    border-radius: Theme.r-sm;
+                    border-width: 1px;
+                    border-color: Theme.line;
+                }
+
+                Text {
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                    text: "No clip loaded";
+                    color: Theme.fg-dim;
+                    font-size: Theme.fs;
+                }
+            }
+        }
+    }
+}

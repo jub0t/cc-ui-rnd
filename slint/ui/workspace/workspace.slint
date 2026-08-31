@@ -1,0 +1,161 @@
+import { Theme } from "../theme.slint";
+import { EffectData } from "../demo/effects-panel.slint";
+import { ColSplitter, RowSplitter } from "splitter.slint";
+import { ConfigPane } from "config-pane.slint";
+import { MediaPane } from "media-pane.slint";
+import { PreviewPane } from "preview-pane.slint";
+import { TimelinePane } from "timeline-pane.slint";
+
+// The editor shell: Media | Preview | Config across the top, Timeline across
+// the full width below, every edge draggable.
+//
+// Positioned by hand rather than with nested layouts. A layout would give the
+// same picture, but the splitters need the one thing a layout hides — the
+// pixel the boundary is currently at — and a HorizontalLayout inside a
+// VerticalLayout has no name for "the edge between the second and third
+// child". Four rectangles and two divisions are cheaper than fighting that.
+//
+// Sizes are stored as shares of the usable box, not pixels, so a window resize
+// keeps the proportions the user dragged instead of dumping every pixel into
+// one pane.
+export component Workspace inherits Rectangle {
+    // forwarded to the inspector column
+    in property <[EffectData]> video-effects;
+    in property <[EffectData]> audio-effects;
+    in property <float> level;
+    in property <float> peak;
+    out property <bool> muted: config.muted;
+    out property <bool> meter-hovered: config.meter-hovered;
+    callback add-effect(audio: bool);
+    callback remove-effect(id: int);
+
+    // One value for the margin and the gutters, so the border around the
+    // workspace and the space between any two panes read as the same gap.
+    in property <length> gap: 12px;
+    /// smallest a column may be dragged to
+    in property <length> min-col: 220px;
+    /// Config is the exception: its rows stop giving width back once the
+    /// bezier editor is at its own 200px minimum, and below that they clip
+    /// rather than reflow. Drop this once the pane holds something that does.
+    in property <length> min-config: 320px;
+    /// smallest a row may be dragged to
+    in property <length> min-row: 140px;
+
+    // Shares of the usable box. The middle column and the bottom row are the
+    // remainder, so the three columns always sum to the width exactly — no
+    // rounding crumb left over at the right edge.
+    in-out property <float> media-share: 0.22;
+    in-out property <float> config-share: 0.27;
+    in-out property <float> top-share: 0.66;
+
+    // Usable box: the pane widths and heights, with the margins and gutters
+    // already taken out. Four gaps across (two margins, two gutters), three
+    // down (two margins, one gutter).
+    property <length> track-w: Math.max(1px, root.width - 4 * root.gap);
+    property <length> track-h: Math.max(1px, root.height - 3 * root.gap);
+
+    // The minimums are enforced here and not only on the drag, because a share
+    // is a share: shrink the window far enough and a column that was legal
+    // when it was dragged is not any more. Preview and Timeline take the
+    // remainder, so they are the ones that give — which is the right way
+    // round, they are the two that stay useful at any size.
+    property <length> media-w: Math.max(root.min-col, root.track-w * root.media-share);
+    property <length> config-w: Math.max(root.min-config, root.track-w * root.config-share);
+    property <length> preview-w: Math.max(0px, root.track-w - root.media-w - root.config-w);
+    property <length> top-h: Math.min(Math.max(root.min-row, root.track-h * root.top-share),
+        Math.max(root.min-row, root.track-h - root.min-row));
+    property <length> timeline-h: root.track-h - root.top-h;
+
+    // A drag is one pointer, so one slot holds whichever share went down.
+    property <float> press-share;
+
+    // Math.clamp with the range guarded: on a window too small to honour the
+    // minimums the range inverts, and an unguarded clamp would snap the pane
+    // to the wrong end of it.
+    pure function fit(value: float, low: float, high: float) -> float {
+        return Math.min(Math.max(value, low), Math.max(low, high));
+    }
+
+    background: Theme.page;
+
+    MediaPane {
+        x: root.gap;
+        y: root.gap;
+        width: root.media-w;
+        height: root.top-h;
+    }
+
+    PreviewPane {
+        x: 2 * root.gap + root.media-w;
+        y: root.gap;
+        width: root.preview-w;
+        height: root.top-h;
+    }
+
+    config := ConfigPane {
+        x: 3 * root.gap + root.media-w + root.preview-w;
+        y: root.gap;
+        width: root.config-w;
+        height: root.top-h;
+
+        video-effects: root.video-effects;
+        audio-effects: root.audio-effects;
+        level: root.level;
+        peak: root.peak;
+        add-effect(audio) => { root.add-effect(audio); }
+        remove-effect(id) => { root.remove-effect(id); }
+    }
+
+    TimelinePane {
+        x: root.gap;
+        y: 2 * root.gap + root.top-h;
+        width: root.width - 2 * root.gap;
+        height: root.timeline-h;
+    }
+
+    // Media | Preview: the drag moves Media's edge, Preview absorbs it.
+    ColSplitter {
+        x: root.gap + root.media-w;
+        y: root.gap;
+        width: root.gap;
+        height: root.top-h;
+
+        pressed => { root.press-share = root.media-share; }
+        moved(delta) => {
+            root.media-share = root.fit(root.press-share + delta / root.track-w,
+                root.min-col / root.track-w,
+                1 - (root.config-w + root.min-col) / root.track-w);
+        }
+    }
+
+    // Preview | Config: the same drag the other way round, since it is
+    // Config's leading edge that moves.
+    ColSplitter {
+        x: 2 * root.gap + root.media-w + root.preview-w;
+        y: root.gap;
+        width: root.gap;
+        height: root.top-h;
+
+        pressed => { root.press-share = root.config-share; }
+        moved(delta) => {
+            root.config-share = root.fit(root.press-share - delta / root.track-w,
+                root.min-config / root.track-w,
+                1 - (root.media-w + root.min-col) / root.track-w);
+        }
+    }
+
+    // Top row | Timeline.
+    RowSplitter {
+        x: root.gap;
+        y: root.gap + root.top-h;
+        width: root.width - 2 * root.gap;
+        height: root.gap;
+
+        pressed => { root.press-share = root.top-share; }
+        moved(delta) => {
+            root.top-share = root.fit(root.press-share + delta / root.track-h,
+                root.min-row / root.track-h,
+                1 - root.min-row / root.track-h);
+        }
+    }
+}

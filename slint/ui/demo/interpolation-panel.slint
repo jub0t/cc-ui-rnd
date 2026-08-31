@@ -1,5 +1,5 @@
 import {
-    Theme, Bezier, Curves, Fmt, BezierEditor, NumberField, Panel, Row,
+    Theme, Bezier, Curves, Fmt, BezierEditor, NumberField, Row,
     Section, SectionBody, SectionHeader, SegmentedControl, Select, Stepper, FocusRing,
 } from "../primitives/primitives.slint";
 import { AlignToolbar, EditorHeader } from "editor-chrome.slint";
@@ -169,81 +169,79 @@ export component InterpolationPanel inherits VerticalLayout {
 
     alignment: start;
 
-    Panel {
-        EditorHeader { }
-        AlignToolbar { }
+    EditorHeader { }
+    AlignToolbar { }
 
-        Section {
-            SectionHeader { title: "Interpolation"; }
-            SectionBody {
-                Row {
-                    SegmentedControl {
-                        options: ["Hold", "Ease", "Spring"];
-                        current <=> root.mode;
-                    }
+    Section {
+        SectionHeader { title: "Interpolation"; }
+        SectionBody {
+            Row {
+                SegmentedControl {
+                    options: ["Hold", "Ease", "Spring"];
+                    current <=> root.mode;
                 }
+            }
 
-                if root.mode == 0: Row {
-                    Text {
-                        horizontal-stretch: 1;
-                        text: "The value snaps at the keyframe and holds until the next one.";
-                        color: Theme.fg-dim;
-                        font-size: Theme.fs;
-                        wrap: word-wrap;
-                    }
+            if root.mode == 0: Row {
+                Text {
+                    horizontal-stretch: 1;
+                    text: "The value snaps at the keyframe and holds until the next one.";
+                    color: Theme.fg-dim;
+                    font-size: Theme.fs;
+                    wrap: word-wrap;
                 }
+            }
 
-                if root.mode == 1: Row {
-                    BezierEditor {
-                        x1 <=> root.x1;
-                        y1 <=> root.y1;
-                        x2 <=> root.x2;
-                        y2 <=> root.y2;
+            if root.mode == 1: Row {
+                BezierEditor {
+                    x1 <=> root.x1;
+                    y1 <=> root.y1;
+                    x2 <=> root.x2;
+                    y2 <=> root.y2;
+                }
+            }
+            if root.mode == 1: Row {
+                label: "Ease";
+                Select {
+                    options: ["Linear", "Ease In", "Ease Out", "Ease In & Out", "Back Out", "Custom"];
+                    current: root.preset;
+                    changed(index) => {
+                        if (index < 5) { root.set-curve(root.presets[index]); }
                     }
                 }
-                if root.mode == 1: Row {
-                    label: "Ease";
-                    Select {
-                        options: ["Linear", "Ease In", "Ease Out", "Ease In & Out", "Back Out", "Custom"];
-                        current: root.preset;
-                        changed(index) => {
-                            if (index < 5) { root.set-curve(root.presets[index]); }
-                        }
-                    }
+            }
+            if root.mode == 1: Row {
+                label: "Bezier";
+                BezierField {
+                    value: root.curve-text;
+                    committed(text) => { root.set-curve(Curves.parse(text, root.curve)); }
                 }
-                if root.mode == 1: Row {
-                    label: "Bezier";
-                    BezierField {
-                        value: root.curve-text;
-                        committed(text) => { root.set-curve(Curves.parse(text, root.curve)); }
-                    }
-                }
+            }
 
-                if root.mode == 2: Row {
-                    label: "Stiffness";
-                    NumberField { value <=> root.stiffness; minimum: 1; maximum: 1000; }
-                    Stepper {
-                        stepped(direction, shift, alt) => {
-                            root.stiffness = Math.max(1, root.stiffness + direction * 10);
-                        }
+            if root.mode == 2: Row {
+                label: "Stiffness";
+                NumberField { value <=> root.stiffness; minimum: 1; maximum: 1000; }
+                Stepper {
+                    stepped(direction, shift, alt) => {
+                        root.stiffness = Math.max(1, root.stiffness + direction * 10);
                     }
                 }
-                if root.mode == 2: Row {
-                    label: "Damping";
-                    NumberField { value <=> root.damping; minimum: 1; maximum: 100; }
-                    Stepper {
-                        stepped(direction, shift, alt) => {
-                            root.damping = Math.max(1, root.damping + direction);
-                        }
+            }
+            if root.mode == 2: Row {
+                label: "Damping";
+                NumberField { value <=> root.damping; minimum: 1; maximum: 100; }
+                Stepper {
+                    stepped(direction, shift, alt) => {
+                        root.damping = Math.max(1, root.damping + direction);
                     }
                 }
+            }
 
-                Row {
-                    label: "Preview";
-                    EasePreview {
-                        curve: root.curve;
-                        enabled: root.mode == 1;
-                    }
+            Row {
+                label: "Preview";
+                EasePreview {
+                    curve: root.curve;
+                    enabled: root.mode == 1;
                 }
             }
         }

@@ -8,9 +8,8 @@ import "fonts/Inter-SemiBold.ttf";
 
 import { Theme } from "theme.slint";
 import { Bezier, Curves, Fmt } from "util.slint";
-import { EffectData, EffectsPanel } from "demo/effects-panel.slint";
-import { TransformPanel } from "demo/transform-panel.slint";
-import { InterpolationPanel } from "demo/interpolation-panel.slint";
+import { EffectData } from "demo/effects-panel.slint";
+import { Workspace } from "workspace/workspace.slint";
 
 // Re-exported so main.rs can reach the globals and the struct.
 export { Curves, Fmt, Theme, Bezier, EffectData }
@@ -23,15 +22,19 @@ export component App inherits Window {
     // One line rather than a weight on every Text: everything inherits the
     // compensated body weight, and only titles override it. See theme.slint.
     default-font-weight: Theme.weight-body;
-    preferred-width: 1120px;
+    preferred-width: 1400px;
     preferred-height: 900px;
+    // Below this the three columns cannot all hold their minimum and the panes
+    // start eating each other.
+    min-width: 900px;
+    min-height: 560px;
 
     in property <[EffectData]> video-effects;
     in property <[EffectData]> audio-effects;
     in property <float> level;
     in property <float> peak;
 
-    out property <bool> muted: effects.muted;
+    out property <bool> muted: shell.muted;
 
     callback add-effect(audio: bool);
     callback remove-effect(id: int);
@@ -44,7 +47,7 @@ export component App inherits Window {
     changed meter-watched => {
         root.meter-watched-changed(root.meter-watched);
     }
-    out property <bool> meter-watched: effects.meter-hovered;
+    out property <bool> meter-watched: shell.meter-hovered;
 
     // Clicking anything that is not a control blurs the one that had focus,
     // the way a browser does. Slint holds focus until something else takes it,
@@ -61,53 +64,12 @@ export component App inherits Window {
         }
     }
 
-    VerticalLayout {
-        padding-top: 44px;
-        padding-bottom: 44px;
-        padding-left: 24px;
-        padding-right: 24px;
-        spacing: 32px;
-        alignment: start;
-
-        VerticalLayout {
-            spacing: 8px;
-
-            Text {
-                text: "custom-primitives";
-                color: Theme.fg;
-                font-size: 22px;
-                font-weight: 600;
-                letter-spacing: -0.33px;   // the -0.015em the web heading uses
-                horizontal-alignment: center;
-            }
-            Text {
-                text: "Editor primitives reproduced from the reference inspector. Drag any number "
-                    + "field sideways to scrub, click to type. Shift coarsens, Alt refines.";
-                color: Theme.page-fg-muted;
-                font-size: Theme.fs-lg;
-                horizontal-alignment: center;
-                wrap: word-wrap;
-                max-width: 620px;
-                x: (parent.width - self.width) / 2;
-            }
-        }
-
-        HorizontalLayout {
-            spacing: 24px;
-            alignment: center;
-
-            effects := EffectsPanel {
-                video-effects: root.video-effects;
-                audio-effects: root.audio-effects;
-                level: root.level;
-                peak: root.peak;
-                add-effect(audio) => { root.add-effect(audio); }
-                remove-effect(id) => { root.remove-effect(id); }
-            }
-
-            TransformPanel { }
-
-            InterpolationPanel { }
-        }
+    shell := Workspace {
+        video-effects: root.video-effects;
+        audio-effects: root.audio-effects;
+        level: root.level;
+        peak: root.peak;
+        add-effect(audio) => { root.add-effect(audio); }
+        remove-effect(id) => { root.remove-effect(id); }
     }
 }

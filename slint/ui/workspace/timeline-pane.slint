@@ -1,0 +1,44 @@
+import { Theme, Glyph, IconButton } from "../primitives/primitives.slint";
+import { Pane, PaneBody, PaneHeader } from "pane.slint";
+
+// Scaffold. A ruler and three empty lanes, enough to show the pane taking the
+// height a drag gives it. The real tracks, clips and playhead land here.
+export component TimelinePane inherits Rectangle {
+    in property <length> tick-spacing: 72px;
+    in property <int> lanes: 3;
+
+    Pane {
+        PaneHeader {
+            title: "Timeline";
+            IconButton { glyph: Glyph.minus; label: "Zoom out"; }
+            IconButton { glyph: Glyph.plus; label: "Zoom in"; }
+        }
+
+        PaneBody {
+            Rectangle {
+                height: 22px;
+                background: Theme.well;
+                border-radius: Theme.r-sm;
+                clip: true;
+
+                // Fixed count, clipped to the pane: a ruler that recomputed its
+                // tick count from the width would re-instantiate the whole row
+                // on every frame of a drag.
+                for tick in 48: Rectangle {
+                    x: tick * root.tick-spacing;
+                    width: 1px;
+                    background: Theme.line-strong;
+                }
+            }
+
+            for lane in root.lanes: Rectangle {
+                height: 46px;
+                background: Theme.well;
+                border-radius: Theme.r-sm;
+            }
+
+            // Soaks up the rest of the pane so the lanes stay at the top.
+            Rectangle { }
+        }
+    }
+}

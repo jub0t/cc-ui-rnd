@@ -1,0 +1,91 @@
+import { Theme, SegmentedControl } from "../primitives/primitives.slint";
+import { Pane, PaneBody, PaneScroll } from "pane.slint";
+import { EffectData, EffectsPanel } from "../demo/effects-panel.slint";
+import { TransformPanel } from "../demo/transform-panel.slint";
+import { InterpolationPanel } from "../demo/interpolation-panel.slint";
+
+// The inspector column: one of three inspectors at a time, picked from a tab
+// strip, drawn straight onto the pane. The inspectors used to be cards stacked
+// down the column — the card border and its padding were the panel's own
+// chrome, which is right for a floating inspector and redundant inside a pane
+// that already has a border.
+//
+// The inactive tabs are unmounted rather than hidden. The interpolation panel
+// runs a Timer to drive its ease preview, and FemtoVG has no partial
+// rendering, so an animation in a pane nobody is looking at repaints the whole
+// window at 60fps. `if` is what turns it off.
+export component ConfigPane inherits Rectangle {
+    in property <[EffectData]> video-effects;
+    in property <[EffectData]> audio-effects;
+    in property <float> level;
+    in property <float> peak;
+
+    // Held here rather than in the effects panel, which is unmounted whenever
+    // another tab is showing. Rust reads both for the life of the process.
+    out property <bool> muted;
+    out property <bool> meter-hovered;
+
+    callback add-effect(audio: bool);
+    callback remove-effect(id: int);
+
+    Pane {
+        // A tab strip instead of a title bar: the tabs name what the pane is
+        // showing better than the word "Config" does.
+        Rectangle {
+            height: 40px;
+
+            Rectangle {
+                y: parent.height - 1px;
+                height: 1px;
+                background: Theme.line;
+            }
+
+            HorizontalLayout {
+                padding-left: 8px;
+                padding-right: 8px;
+
+                VerticalLayout {
+                    alignment: center;
+                    tabs := SegmentedControl {
+                        options: ["Effects", "Transform", "Interpolation"];
+                        changed(index) => {
+                            // The meter goes down with its tab and never gets
+                            // to report the pointer leaving, so the feed is
+                            // disarmed here instead — otherwise Rust keeps
+                            // sampling 30 times a second into a panel that no
+                            // longer exists.
+                            if (index != 0) {
+                                root.meter-hovered = false;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        PaneBody {
+            // No padding: the inspector rows carry their own 14px inset, and
+            // sections are meant to run edge to edge so their hairlines reach
+            // both sides of the pane.
+            padding: 0px;
+
+            PaneScroll {
+                if tabs.current == 0: EffectsPanel {
+                    video-effects: root.video-effects;
+                    audio-effects: root.audio-effects;
+                    level: root.level;
+                    peak: root.peak;
+                    muted: root.muted;
+                    add-effect(audio) => { root.add-effect(audio); }
+                    remove-effect(id) => { root.remove-effect(id); }
+                    toggle-mute => { root.muted = !root.muted; }
+                    meter-hovered-changed(hovered) => { root.meter-hovered = hovered; }
+                }
+
+                if tabs.current == 1: TransformPanel { }
+
+                if tabs.current == 2: InterpolationPanel { }
+            }
+        }
+    }
+}

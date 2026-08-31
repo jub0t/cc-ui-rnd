@@ -1,0 +1,44 @@
+import { Theme, Glyph, Icon, IconButton } from "../primitives/primitives.slint";
+import { Pane, PaneBody, PaneHeader } from "pane.slint";
+
+// Scaffold. The bin — imported clips, audio, stills — goes here; for now it is
+// the empty state that bin will fall back to.
+export component MediaPane inherits Rectangle {
+    Pane {
+        PaneHeader {
+            title: "Media";
+            IconButton { glyph: Glyph.plus; label: "Import media"; }
+        }
+
+        PaneBody {
+            VerticalLayout {
+                alignment: center;
+                spacing: 10px;
+
+                HorizontalLayout {
+                    alignment: center;
+                    Icon {
+                        glyph: Glyph.frame;
+                        size: 24px;
+                        tint: Theme.fg-dim;
+                    }
+                }
+
+                Text {
+                    text: "No media";
+                    color: Theme.fg-muted;
+                    font-size: Theme.fs-lg;
+                    horizontal-alignment: center;
+                }
+
+                Text {
+                    text: "Drop files here to import";
+                    color: Theme.fg-dim;
+                    font-size: Theme.fs;
+                    horizontal-alignment: center;
+                    wrap: word-wrap;
+                }
+            }
+        }
+    }
+}

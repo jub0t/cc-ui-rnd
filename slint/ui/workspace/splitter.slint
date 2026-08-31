@@ -1,0 +1,88 @@
+import { Theme } from "../theme.slint";
+
+// The drag handles between panes.
+//
+// Both report a delta in pixels from where the pointer went down and leave the
+// arithmetic to the workspace, because a handle cannot know what its
+// neighbours are allowed to give up.
+//
+// The delta is measured in window coordinates — `absolute-position + mouse-x`
+// — not as `mouse-x - pressed-x`. A handle moves as it is dragged, and a
+// local delta is measured against the handle's own moving origin, so it
+// cancels itself out and the drag stalls. The absolute position moves with the
+// handle too, but adding the local pointer offset back cancels that exactly.
+
+export component ColSplitter inherits Rectangle {
+    callback pressed();
+    callback moved(delta: length);
+
+    property <length> origin;
+
+    Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        width: 3px;
+        height: Math.max(0px, Math.min(parent.height - 24px, 44px));
+        border-radius: 1.5px;
+        background: touch.pressed ? Theme.accent
+            : touch.has-hover ? Theme.line-strong
+            : Colors.transparent;
+
+        animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+    }
+
+    // Wider than the gap it sits in: a 12px target is a miss waiting to
+    // happen, and the extra 3px on each side overlap the pane corners, which
+    // are rounded away there anyway.
+    touch := TouchArea {
+        x: -3px;
+        width: root.width + 6px;
+        mouse-cursor: ew-resize;
+
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) {
+                root.origin = self.absolute-position.x + self.mouse-x;
+                root.pressed();
+            }
+        }
+        moved => {
+            root.moved(self.absolute-position.x + self.mouse-x - root.origin);
+        }
+    }
+}
+
+export component RowSplitter inherits Rectangle {
+    callback pressed();
+    callback moved(delta: length);
+
+    property <length> origin;
+
+    Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        width: Math.max(0px, Math.min(parent.width - 24px, 44px));
+        height: 3px;
+        border-radius: 1.5px;
+        background: touch.pressed ? Theme.accent
+            : touch.has-hover ? Theme.line-strong
+            : Colors.transparent;
+
+        animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+    }
+
+    touch := TouchArea {
+        y: -3px;
+        height: root.height + 6px;
+        mouse-cursor: ns-resize;
+
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) {
+                root.origin = self.absolute-position.y + self.mouse-y;
+                root.pressed();
+            }
+        }
+        moved => {
+            root.moved(self.absolute-position.y + self.mouse-y - root.origin);
+        }
+    }
+}
