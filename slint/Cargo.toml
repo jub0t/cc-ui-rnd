@@ -9,7 +9,7 @@ publish = false
 # underneath: Metal on macOS, D3D12 on Windows, Vulkan on Linux — instead of
 # OpenGL, which Apple deprecated and now emulates on top of Metal anyway.
 # Still pure Rust, so cross-compiling needs nothing beyond `rustup target add`.
-# Slint's Skia renderer was evaluated and rejected; slint/README.md records why.
+# See the [features] block below for the Skia alternative under evaluation.
 #
 # default-features is off because `renderer-femtovg` (the OpenGL path) is a
 # default. Enabling both compiles glutin and the whole GL renderer for nothing:
@@ -22,19 +22,39 @@ publish = false
 slint = { version = "1.17", default-features = false, features = [
     "std",
     "backend-default",
-    "renderer-femtovg-wgpu",
     "renderer-software",
     "accessibility",
     "compat-1-2",
     "system-tray",
 ] }
 
+# The renderer is picked by a feature here rather than by editing the
+# dependency, so both variants build from one tree and can be compared:
+#
+#   cargo build --release                                        # wgpu
+#   cargo build --release --no-default-features --features skia   # skia
+#
+# Skia is under evaluation for CPU/power, not adopted. It has partial
+# rendering machinery that FemtoVG lacks entirely — but Surface's
+# use_partial_rendering() defaults to false and is overridden only by
+# software_surface.rs, so it is OFF on Metal/D3D/Vulkan/GL. Measure before
+# believing any CPU or power claim about it.
+#
+# Switching to skia also means resetting Theme.weight-body/weight-title to
+# 400/500: Skia is gamma-correct, and the compensation those carry is for
+# FemtoVG's uncorrected glyph compositing.
+[features]
+default = ["wgpu"]
+wgpu = ["slint/renderer-femtovg-wgpu"]
+skia = ["slint/renderer-skia"]
+
 [build-dependencies]
 slint-build = "1.17"
 
 [profile.release]
 # Every knob here is set for the fastest possible binary, and each one costs
-# build time. The measured cost on this machine is recorded in slint/README.md.
+# build time. Measured on an M5: clean build 74.5s -> 105.4s, binary 21.1MB
+# -> 12.6MB. No runtime win was ever demonstrated; the UI is vsync-locked.
 opt-level = 3
 # Fat LTO: re-optimise the whole dependency graph — slint, femtovg, winit and
 # this crate — as one unit, so calls across crate boundaries inline. Thin LTO

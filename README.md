@@ -22,4 +22,5 @@ npm --prefix web run typecheck
 ```sh
 cargo run --manifest-path slint/Cargo.toml            # debug
 cargo run --release --manifest-path slint/Cargo.toml  # release
+cargo build --release --no-default-features --features skia  # skia
 ```
