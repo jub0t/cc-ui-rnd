@@ -69,37 +69,107 @@ export function Frame({ hue, seed, t = 0.42 }: { hue: number; seed: number; t?: 
 }
 
 /* ------------------------------------------------------------------ */
-/* Waveform                                                            */
+/* Waveform — two card designs                                         */
 /* ------------------------------------------------------------------ */
 
-export function Waveform({ hue, seed }: { hue: number; seed: number }) {
-  const bars = useMemo(() => {
+export type WaveShape = 'centred' | 'floored'
+
+/** Deterministic samples. Density belongs to each design, so it is a param. */
+function useSamples(seed: number, count: number) {
+  return useMemo(() => {
     const random = seeded(seed)
-    return Array.from({ length: 46 }, (_, index) => {
-      const envelope = Math.sin((index / 45) * Math.PI) * 0.55 + 0.45
-      return Math.max(0.09, random() * envelope)
+    return Array.from({ length: count }, (_, index) => {
+      // a speech-shaped envelope: quiet at the head and tail, busy through
+      // the middle, so the two designs are drawing something plausible
+      const envelope = Math.sin((index / (count - 1)) * Math.PI) * 0.55 + 0.45
+      return Math.max(0.08, random() * envelope)
     })
-  }, [seed])
+  }, [seed, count])
+}
+
+/**
+ * The old audio card was a dark plate under a light trace, which put the
+ * loudest part of the clip on the darkest pixels and made a bin full of audio
+ * look like a power cut. Both designs below invert that: a saturated plate
+ * carries the clip's identity, and the signal is cut into it in a deep ink of
+ * the same hue, the way a printed waveform reads.
+ */
+export function Waveform({ hue, seed, shape }: { hue: number; seed: number; shape: WaveShape }) {
+  return shape === 'centred' ? <WaveCentred hue={hue} seed={seed} /> : <WaveFloored hue={hue} seed={seed} />
+}
+
+/** Design one: a single filled envelope mirrored about the midline. It is
+ *  continuous, which is what makes it read as a signal rather than a chart. */
+function WaveCentred({ hue, seed }: { hue: number; seed: number }) {
+  const samples = useSamples(seed, 64)
+  const ink = `hsl(${hue} 92% 18%)`
+
+  const path = useMemo(() => {
+    const last = samples.length - 1
+    const stepX = 100 / last
+    const top = samples.map((height, index) => `${(index * stepX).toFixed(2)} ${(20 - height * 16.5).toFixed(2)}`)
+    const bottom: string[] = []
+    for (let index = last; index >= 0; index -= 1) {
+      bottom.push(`${(index * stepX).toFixed(2)} ${(20 + (samples[index] ?? 0) * 16.5).toFixed(2)}`)
+    }
+    return `M ${top.join(' L ')} L ${bottom.join(' L ')} Z`
+  }, [samples])
 
   return (
     <>
       <span
         className="absolute inset-0"
-        style={{ background: `linear-gradient(180deg, hsl(${hue} 46% 19%), hsl(${hue} 40% 12%))` }}
+        style={{
+          background: `linear-gradient(145deg, hsl(${hue} 96% 64%), hsl(${hue + 10} 90% 53%) 58%, hsl(${hue + 16} 86% 46%))`,
+        }}
+      />
+      {/* a sheen off the top edge, so the plate reads as lit rather than flat */}
+      <span
+        className="absolute inset-0"
+        style={{ background: 'linear-gradient(180deg, rgb(255 255 255 / 0.22), transparent 42%)' }}
       />
       <svg className="absolute inset-0 size-full" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden>
-        {/* the zero line is what tells you the bars are a signal and not a bar chart */}
-        <line x1="0" y1="20" x2="100" y2="20" stroke={`hsl(${hue} 70% 58% / 0.3)`} strokeWidth="0.5" />
-        {bars.map((height, index) => (
-          <rect
-            key={index}
-            x={index * 2.17 + 0.5}
-            y={20 - height * 18}
-            width={1.4}
-            height={height * 36}
-            fill={`hsl(${hue} 88% 62%)`}
-          />
-        ))}
+        {/* edge to edge, so a quiet head and tail still show a line */}
+        <line x1="0" y1="20" x2="100" y2="20" stroke={ink} strokeOpacity="0.45" strokeWidth="0.5" />
+        <path d={path} fill={ink} fillOpacity="0.88" />
+      </svg>
+    </>
+  )
+}
+
+/** Design two: discrete pillars standing on a floor. Every bar starts from the
+ *  same line, which makes levels easier to compare across clips. */
+function WaveFloored({ hue, seed }: { hue: number; seed: number }) {
+  const samples = useSamples(seed, 28)
+  const ink = `hsl(${hue} 94% 16%)`
+  const slot = 100 / samples.length
+  const width = slot * 0.56
+  const floor = 36.5
+
+  return (
+    <>
+      <span
+        className="absolute inset-0"
+        style={{ background: `linear-gradient(180deg, hsl(${hue} 97% 67%), hsl(${hue + 8} 89% 49%))` }}
+      />
+      <svg className="absolute inset-0 size-full" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden>
+        {samples.map((height, index) => {
+          const tall = Math.max(1.6, height * 31)
+          return (
+            <rect
+              key={index}
+              x={index * slot + (slot - width) / 2}
+              y={floor - tall}
+              width={width}
+              height={tall}
+              rx="0.4"
+              fill={ink}
+              fillOpacity="0.86"
+            />
+          )
+        })}
+        {/* the floor they stand on: without it the pillars just hang there */}
+        <line x1="0" y1={floor + 0.7} x2="100" y2={floor + 0.7} stroke={ink} strokeOpacity="0.5" strokeWidth="0.9" />
       </svg>
     </>
   )
