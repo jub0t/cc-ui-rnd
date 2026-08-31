@@ -1,0 +1,371 @@
+/* Timeline. Every horizontal measurement in here comes from one number —
+   pixels per frame — so zooming is a single state change and nothing has to
+   be kept in sync by hand. */
+
+.root {
+  max-width: 1120px;
+  margin: 0 auto;
+  font-family: var(--cp-font);
+  color: var(--cp-fg);
+}
+
+.head {
+  max-width: 660px;
+  margin: 0 auto 28px;
+  text-align: center;
+}
+
+.head h2 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.head p {
+  margin: 0;
+  color: #9a9aa2;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* The listbox in the toolbar opens downward out of the panel, and Panel clips
+   its children to hold its corners. Nothing here needs that clip — the body
+   does its own — so it is lifted. Doubled to beat Panel.module.css whichever
+   order the two land in. */
+.panel.panel { overflow: visible; }
+
+/* --- sequence tabs -------------------------------------------------------- */
+
+.tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--cp-line);
+}
+
+.tab {
+  position: relative;
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--cp-r-sm) var(--cp-r-sm) 0 0;
+  background: none;
+  color: var(--cp-fg-muted);
+  font: inherit;
+  font-size: var(--cp-fs);
+  cursor: pointer;
+  transition: background 100ms var(--cp-ease), color 100ms var(--cp-ease);
+}
+
+.tab:hover { color: var(--cp-fg); }
+.tab:focus-visible { outline: none; box-shadow: var(--cp-focus); }
+
+.tabOn {
+  background: var(--cp-raised);
+  color: var(--cp-fg);
+}
+
+/* The bar sits on the tab's top edge, away from the content it opens onto,
+   so it reads as a label on the tab rather than an underline on the panel. */
+.tabOn::before {
+  content: '';
+  position: absolute;
+  inset: 0 6px auto;
+  height: 2px;
+  border-radius: 0 0 2px 2px;
+  background: var(--cp-accent);
+}
+
+.tabAdd {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-bottom: 3px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--cp-r-xs);
+  background: none;
+  color: var(--cp-fg-dim);
+  cursor: pointer;
+}
+
+.tabAdd:hover { background: var(--cp-field); color: var(--cp-fg); }
+.tabAdd:focus-visible { outline: none; box-shadow: var(--cp-focus); }
+
+/* --- toolbar -------------------------------------------------------------- */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 40px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--cp-line);
+}
+
+.divider {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--cp-line);
+}
+
+.spacer { flex: 1 1 auto; }
+
+.readout {
+  padding: 0 8px;
+  color: var(--cp-fg-muted);
+  font-size: var(--cp-fs);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.wavePicker { width: 132px; }
+
+/* --- scroller and grid ---------------------------------------------------- */
+
+.body {
+  position: relative;
+  height: 268px;
+  overflow: auto;
+  background: var(--cp-well);
+  overscroll-behavior-x: contain;
+}
+
+.grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: 164px max-content;
+  min-width: 100%;
+}
+
+/* Sticky in both axes: the headers hold their ground while time scrolls past,
+   and the ruler stays put while the tracks scroll under it. */
+.corner {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 4;
+  height: 28px;
+  border-right: 1px solid var(--cp-line);
+  border-bottom: 1px solid var(--cp-line);
+  background: var(--cp-panel);
+}
+
+.ruler {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  height: 28px;
+  border-bottom: 1px solid var(--cp-line);
+  background: var(--cp-panel);
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+.tick {
+  position: absolute;
+  bottom: 0;
+  width: 1px;
+  background: var(--cp-line-strong);
+}
+
+.tickLabel {
+  position: absolute;
+  top: 5px;
+  padding-left: 5px;
+  color: var(--cp-fg-dim);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.trackHead {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px 0 12px;
+  border-right: 1px solid var(--cp-line);
+  border-bottom: 1px solid var(--cp-line);
+  background: var(--cp-panel);
+}
+
+.trackName {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--cp-fg);
+  font-size: var(--cp-fs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trackOff .trackName { color: var(--cp-fg-dim); }
+
+.trackButton { width: 22px; height: 22px; }
+
+.lane {
+  position: relative;
+  border-bottom: 1px solid var(--cp-line);
+}
+
+.laneOn { background: rgb(203 245 63 / 0.04); }
+
+/* One repeating paint rather than a div per line: at a second per column and
+   a two-minute sequence that is a hundred elements nobody can see. */
+.gridlines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* --- clips ---------------------------------------------------------------- */
+
+.clip {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  overflow: hidden;
+  border-radius: var(--cp-r-sm);
+  background: #0a0a0c;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.5);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.clipSelected {
+  box-shadow: 0 0 0 2px var(--cp-accent), 0 2px 8px rgb(0 0 0 / 0.5);
+  z-index: 1;
+}
+
+.clipDragging { cursor: grabbing; opacity: 0.85; }
+
+.clipMuted { opacity: 0.4; }
+
+.clipLabel {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 2;
+  height: 16px;
+  /* The label sits over a dark filmstrip on one track and a bright waveform
+     plate on the next, so it brings its own contrast rather than trusting
+     whatever is underneath. */
+  background: linear-gradient(180deg, rgb(0 0 0 / 0.62), rgb(0 0 0 / 0));
+  padding: 0 6px;
+  overflow: hidden;
+  color: #fff;
+  font-size: 10px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.clipBody {
+  position: absolute;
+  inset: 16px 0 0;
+  overflow: hidden;
+}
+
+.strip {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+
+.frame {
+  position: relative;
+  flex: none;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Wide enough to hit without magnifying the pointer, narrow enough that the
+   middle of a short clip is still grabbable for a move. */
+.handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 3;
+  width: 7px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.handleLeft { left: 0; }
+.handleRight { right: 0; }
+
+.handle::after {
+  content: '';
+  position: absolute;
+  inset: 4px 2px;
+  border-radius: 2px;
+  background: rgb(255 255 255 / 0);
+  transition: background 100ms var(--cp-ease);
+}
+
+.clip:hover .handle::after { background: rgb(255 255 255 / 0.35); }
+.handle:hover::after { background: #fff; }
+
+/* --- playhead ------------------------------------------------------------- */
+
+.playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 5;
+  width: 1px;
+  background: var(--cp-meter-high);
+  pointer-events: none;
+}
+
+.playheadGrip {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 11px;
+  height: 9px;
+  margin-left: -5.5px;
+  clip-path: polygon(0 0, 100% 0, 100% 55%, 50% 100%, 0 55%);
+  background: var(--cp-meter-high);
+}
+
+/* A snap that lands silently is indistinguishable from a coincidence. */
+.snapline {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 4;
+  width: 1px;
+  background: var(--cp-accent);
+  pointer-events: none;
+}
+
+.empty {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--cp-fg-dim);
+  font-size: var(--cp-fs);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab,
+  .handle::after {
+    transition: none;
+  }
+}
+
+.danger:hover:not(:disabled) {
+  background: rgb(255 69 58 / 0.14);
+  color: var(--cp-meter-high);
+}

@@ -1,0 +1,402 @@
+/* Text to speech. The reference is a text box, a picker and a button; what a
+   voice actually needs is the room to be chosen and tuned, so this is built
+   around the voice list and the three settings that change the read. */
+
+.root {
+  max-width: 1120px;
+  margin: 0 auto;
+  font-family: var(--cp-font);
+  color: var(--cp-fg);
+}
+
+.head {
+  max-width: 660px;
+  margin: 0 auto 28px;
+  text-align: center;
+}
+
+.head h2 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.head p {
+  margin: 0;
+  color: #9a9aa2;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.centre {
+  display: flex;
+  justify-content: safe center;
+}
+
+/* --- trigger panel -------------------------------------------------------- */
+
+.blurb {
+  margin: 0;
+  padding: 0 var(--cp-pad) 4px;
+  color: var(--cp-fg-dim);
+  font-size: var(--cp-fs);
+  line-height: 1.55;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: var(--cp-h);
+  padding: 0 14px;
+  border: 1px solid var(--cp-line);
+  border-radius: var(--cp-r);
+  background: var(--cp-field);
+  color: var(--cp-fg);
+  font: inherit;
+  font-size: var(--cp-fs);
+  cursor: pointer;
+  transition: background 100ms var(--cp-ease), border-color 100ms var(--cp-ease);
+}
+
+.button:hover:not(:disabled) { border-color: var(--cp-line-strong); background: var(--cp-field-hover); }
+.button:focus-visible { outline: none; box-shadow: var(--cp-focus); }
+.button:disabled { opacity: 0.45; cursor: default; }
+
+.primary {
+  border-color: var(--cp-accent);
+  background: var(--cp-accent);
+  color: var(--cp-on-accent);
+  font-weight: 500;
+}
+
+.primary:hover:not(:disabled) { border-color: var(--cp-accent-hover); background: var(--cp-accent-hover); }
+
+.block { width: 100%; }
+
+/* --- modal sections ------------------------------------------------------- */
+
+/* What to say on the left, who says it and how on the right. Stretching the
+   row makes both columns the height of the taller one, and the script box
+   takes up whatever slack that leaves — so the dialog is as wide as it needs
+   and no taller than its fullest side. */
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 20px;
+  align-items: stretch;
+  margin-top: 4px;
+}
+
+@media (max-width: 780px) {
+  .columns { grid-template-columns: minmax(0, 1fr); }
+  .grow .textarea { min-height: 110px; }
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.grow {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.grow .textarea {
+  flex: 1 1 auto;
+  min-height: 130px;
+}
+
+.control { margin-top: 6px; }
+
+.group { margin-top: 14px; }
+.col > .group:first-child { margin-top: 0; }
+
+.groupHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.legend {
+  color: var(--cp-fg-muted);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.counter {
+  color: var(--cp-fg-dim);
+  font-size: var(--cp-fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.counterWarn { color: var(--cp-meter-mid); }
+.counterOver { color: var(--cp-meter-high); }
+
+.textarea {
+  width: 100%;
+  min-height: 96px;
+  padding: 10px 12px;
+  border: 1px solid var(--cp-line);
+  border-radius: var(--cp-r);
+  background: var(--cp-well);
+  color: var(--cp-fg);
+  font: inherit;
+  font-size: var(--cp-fs-lg);
+  line-height: 1.55;
+  resize: vertical;
+  outline: none;
+}
+
+.textarea::placeholder { color: var(--cp-fg-dim); }
+.textarea:hover { border-color: var(--cp-line-strong); }
+.textarea:focus { box-shadow: var(--cp-focus); }
+
+/* --- voices --------------------------------------------------------------- */
+
+/* Capped and scrollable: a voice list grows without limit in real use, and a
+   dialog that grows with it stops fitting on a laptop. */
+.voices {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 186px;
+  padding: 3px;
+  overflow-y: auto;
+  border: 1px solid var(--cp-line);
+  border-radius: var(--cp-r);
+  background: var(--cp-well);
+}
+
+.voice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--cp-r-sm);
+  background: none;
+  color: var(--cp-fg);
+  font: inherit;
+  font-size: var(--cp-fs);
+  text-align: left;
+  cursor: pointer;
+  transition: background 100ms var(--cp-ease);
+}
+
+.voice:hover { background: var(--cp-field); }
+.voice:focus-visible { outline: none; box-shadow: var(--cp-focus); }
+
+.voiceOn {
+  border-color: var(--cp-accent);
+  background: rgb(203 245 63 / 0.08);
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: #10160a;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.voiceText {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.voiceName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.voiceTags {
+  overflow: hidden;
+  color: var(--cp-fg-dim);
+  font-size: var(--cp-fs-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A voice's own shape, so two names are told apart by more than their text. */
+.signature {
+  display: flex;
+  align-items: center;
+  gap: 1.5px;
+  flex: none;
+  width: 42px;
+  height: 18px;
+}
+
+.bar {
+  flex: 1 1 0;
+  border-radius: 1px;
+  background: currentColor;
+  opacity: 0.55;
+}
+
+.playing .bar {
+  animation: bounce 620ms ease-in-out infinite alternate;
+}
+
+@keyframes bounce {
+  from { transform: scaleY(0.45); }
+  to { transform: scaleY(1); }
+}
+
+.preview {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--cp-line);
+  border-radius: 50%;
+  background: var(--cp-field);
+  color: var(--cp-fg-muted);
+  cursor: pointer;
+  transition: color 100ms var(--cp-ease), border-color 100ms var(--cp-ease);
+}
+
+.preview:hover { border-color: var(--cp-accent); color: var(--cp-accent); }
+.preview:focus-visible { outline: none; box-shadow: var(--cp-focus); }
+
+/* --- settings ------------------------------------------------------------- */
+
+.setting { margin-top: 9px; }
+
+.settingHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 5px;
+}
+
+.settingLabel { color: var(--cp-fg); font-size: var(--cp-fs); }
+
+.settingValue {
+  color: var(--cp-fg-dim);
+  font-size: var(--cp-fs);
+  font-variant-numeric: tabular-nums;
+}
+
+.note {
+  margin: 6px 0 0;
+  color: var(--cp-fg-dim);
+  font-size: var(--cp-fs);
+  line-height: 1.5;
+}
+
+.footRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.estimate {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--cp-fg-dim);
+  font-size: var(--cp-fs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- rendering and result -------------------------------------------------- */
+
+.track {
+  position: relative;
+  height: 5px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--cp-well);
+  box-shadow: inset 0 0 0 1px var(--cp-line);
+}
+
+.sweep {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 34%;
+  border-radius: 999px;
+  background: var(--cp-accent);
+  animation: sweep 1.15s var(--cp-ease) infinite;
+}
+
+@keyframes sweep {
+  from { left: -34%; }
+  to { left: 100%; }
+}
+
+.rendering {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 4px;
+  color: var(--cp-fg);
+}
+
+.spinner {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--cp-line-strong);
+  border-top-color: var(--cp-accent);
+  border-radius: 50%;
+  animation: spin 680ms linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.elapsed {
+  margin-left: auto;
+  color: var(--cp-fg-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.result {
+  position: relative;
+  height: 56px;
+  margin-top: 10px;
+  overflow: hidden;
+  border-radius: var(--cp-r);
+}
+
+.resultMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 9px;
+  color: var(--cp-fg-muted);
+  font-size: var(--cp-fs);
+}
+
+.tick { color: var(--cp-green); }
+
+@media (prefers-reduced-motion: reduce) {
+  .playing .bar { animation: none; }
+}

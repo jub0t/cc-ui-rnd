@@ -8,6 +8,8 @@ import { InspectorSection } from './demo/inspector/InspectorSection'
 import { ContextMenuSection } from './demo/menu/ContextMenuDemo'
 import { PreviewSection } from './demo/preview/PreviewPanel'
 import { TaskModalSection } from './demo/task/TaskModalDemo'
+import { TimelineSection } from './demo/timeline/TimelinePanel'
+import { TextToSpeechSection } from './demo/tts/TextToSpeechModal'
 import './App.css'
 
 export function App() {
@@ -46,6 +48,12 @@ export function App() {
 
       <hr className="divider" />
       <TaskModalSection />
+
+      <hr className="divider" />
+      <TextToSpeechSection />
+
+      <hr className="divider" />
+      <TimelineSection />
     </main>
   )
 }
