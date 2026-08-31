@@ -1519,6 +1519,24 @@ fn main() -> Result<(), slint::PlatformError> {
             .select()?;
     }
 
+    // Windows renders on the CPU unless Direct3D is asked for by name. Skia
+    // picks its surface from a cfg chain in i-slint-renderer-skia — vulkan ->
+    // opengl -> metal -> softbuffer — that has no Direct3D arm at all, and
+    // whose opengl arm is `not(any(target_vendor = "apple", target_family =
+    // "windows", ...))`, i.e. explicitly not Windows. So with plain
+    // renderer-skia every arm but the last fails here and DefaultSurface
+    // resolves to software_surface: Skia's CPU rasteriser, even though
+    // d3d_surface.rs is compiled in and SkiaRenderer::default_direct3d exists.
+    // require_d3d() is the only thing that reaches it.
+    //
+    // macOS lands on metal_surface and Linux on opengl_surface from that same
+    // chain, so both are already on the GPU and neither needs this.
+    #[cfg(target_family = "windows")]
+    slint::BackendSelector::new()
+        .backend_name("winit".into())
+        .require_d3d()
+        .select()?;
+
     let app = App::new()?;
     app.set_macos(cfg!(target_os = "macos"));
 
