@@ -5,14 +5,32 @@ edition = "2021"
 publish = false
 
 [dependencies]
-# Default features give the winit backend and the FemtoVG renderer, which is
-# GPU-accelerated over OpenGL and pure Rust — so cross-compiling needs nothing
-# beyond `rustup target add`. Slint's Skia renderer was evaluated and rejected;
-# slint/README.md records why.
-slint = "1.14"
+# FemtoVG over wgpu rather than over OpenGL. Same renderer, native graphics API
+# underneath: Metal on macOS, D3D12 on Windows, Vulkan on Linux — instead of
+# OpenGL, which Apple deprecated and now emulates on top of Metal anyway.
+# Still pure Rust, so cross-compiling needs nothing beyond `rustup target add`.
+# Slint's Skia renderer was evaluated and rejected; slint/README.md records why.
+#
+# default-features is off because `renderer-femtovg` (the OpenGL path) is a
+# default. Enabling both compiles glutin and the whole GL renderer for nothing:
+# i-slint-backend-winit picks wgpu over GL in default_renderer_factory, and
+# cfg's the GL path out of the fallback list entirely. The rest of this list is
+# slint's default set, reproduced verbatim minus that one renderer.
+#
+# 1.17, not 1.14: renderer-femtovg-wgpu does not exist in 1.14. Cargo.lock
+# already resolved 1.17.1, so this only makes the requirement honest.
+slint = { version = "1.17", default-features = false, features = [
+    "std",
+    "backend-default",
+    "renderer-femtovg-wgpu",
+    "renderer-software",
+    "accessibility",
+    "compat-1-2",
+    "system-tray",
+] }
 
 [build-dependencies]
-slint-build = "1.14"
+slint-build = "1.17"
 
 [profile.release]
 # Every knob here is set for the fastest possible binary, and each one costs
