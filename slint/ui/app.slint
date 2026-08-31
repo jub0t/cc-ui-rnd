@@ -236,47 +236,6 @@ export component App inherits Window {
         }
     }
 
-    ExportDialog {
-        x: 0;
-        y: 0;
-        width: root.width;
-        height: root.height;
-        data: root.export;
-
-        closed => { root.export-closed(); }
-        name-edited(name) => { root.export-name-edited(name); }
-        browse => { root.export-browse(); }
-        resolution-changed(index) => { root.export-resolution-changed(index); }
-        rate-changed(index) => { root.export-rate-changed(index); }
-        quality-changed(index) => { root.export-quality-changed(index); }
-        begin => { root.export-start(); }
-        cancel => { root.export-cancel(); }
-        reveal => { root.export-reveal(); }
-        again => { root.export-again(); }
-    }
-
-    SettingsDialog {
-        x: 0;
-        y: 0;
-        width: root.width;
-        height: root.height;
-        data: root.settings;
-        transcribers: root.transcribers;
-        voices: root.voices;
-        languages: root.languages;
-
-        closed => { root.settings-closed(); }
-        page-changed(index) => { root.settings-page-changed(index); }
-        language-changed(index) => { root.settings-language-changed(index); }
-        transcribe-language-changed(index) => {
-            root.settings-transcribe-language-changed(index);
-        }
-        model-activated(id) => { root.model-activated(id); }
-        model-download(id) => { root.model-download(id); }
-        model-cancel(id) => { root.model-cancel(id); }
-        model-remove(id) => { root.model-remove(id); }
-    }
-
     VerticalLayout {
         TitleBar {
             macos: root.macos;
@@ -391,5 +350,49 @@ export component App inherits Window {
             library-apply-filter(id) => { root.library-apply-filter(id); }
             library-save-template => { root.library-save-template(); }
         }
+    }
+
+    // Declared last, and that is load-bearing: Slint paints siblings in
+    // declaration order, so a modal placed above the workspace in the file is
+    // painted *under* it on screen — open, correct, and completely hidden.
+    ExportDialog {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        data: root.export;
+
+        closed => { root.export-closed(); }
+        name-edited(name) => { root.export-name-edited(name); }
+        browse => { root.export-browse(); }
+        resolution-changed(index) => { root.export-resolution-changed(index); }
+        rate-changed(index) => { root.export-rate-changed(index); }
+        quality-changed(index) => { root.export-quality-changed(index); }
+        begin => { root.export-start(); }
+        cancel => { root.export-cancel(); }
+        reveal => { root.export-reveal(); }
+        again => { root.export-again(); }
+    }
+
+    SettingsDialog {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        data: root.settings;
+        transcribers: root.transcribers;
+        voices: root.voices;
+        languages: root.languages;
+
+        closed => { root.settings-closed(); }
+        page-changed(index) => { root.settings-page-changed(index); }
+        language-changed(index) => { root.settings-language-changed(index); }
+        transcribe-language-changed(index) => {
+            root.settings-transcribe-language-changed(index);
+        }
+        model-activated(id) => { root.model-activated(id); }
+        model-download(id) => { root.model-download(id); }
+        model-cancel(id) => { root.model-cancel(id); }
+        model-remove(id) => { root.model-remove(id); }
     }
 }
