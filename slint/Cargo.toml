@@ -26,25 +26,31 @@ slint = { version = "1.17", default-features = false, features = [
     "accessibility",
     "compat-1-2",
     "system-tray",
+    # The custom title bar: main.rs needs the winit window to hide the native
+    # title bar (macOS traffic-light overlay) and to start window drags from
+    # the strip's drag region.
+    "unstable-winit-030",
 ] }
 
 # The renderer is picked by a feature here rather than by editing the
 # dependency, so both variants build from one tree and can be compared:
 #
-#   cargo build --release                                        # wgpu
-#   cargo build --release --no-default-features --features skia   # skia
+#   cargo build --release                                        # skia
+#   cargo build --release --no-default-features --features wgpu   # femtovg/wgpu
 #
-# Skia is under evaluation for CPU/power, not adopted. It has partial
-# rendering machinery that FemtoVG lacks entirely — but Surface's
-# use_partial_rendering() defaults to false and is overridden only by
-# software_surface.rs, so it is OFF on Metal/D3D/Vulkan/GL. Measure before
-# believing any CPU or power claim about it.
+# Skia is the default. It has partial rendering machinery that FemtoVG lacks
+# entirely — but Surface's use_partial_rendering() defaults to false and is
+# overridden only by software_surface.rs, so it is OFF on Metal/D3D/Vulkan/GL.
+# Measure before believing any CPU or power claim about it; the reason it is
+# the default here is that its text rendering is gamma-correct, not that it is
+# known to be cheaper.
 #
-# Switching to skia also means resetting Theme.weight-body/weight-title to
-# 400/500: Skia is gamma-correct, and the compensation those carry is for
-# FemtoVG's uncorrected glyph compositing.
+# Theme.weight-body/weight-title are 400/500 to match: the 500/600 they used to
+# carry compensated for FemtoVG compositing glyph coverage without gamma
+# correction. Put them back if you build --features wgpu, or the text will be
+# too light there.
 [features]
-default = ["wgpu"]
+default = ["skia"]
 wgpu = ["slint/renderer-femtovg-wgpu"]
 skia = ["slint/renderer-skia"]
 

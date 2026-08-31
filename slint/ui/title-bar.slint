@@ -1,0 +1,225 @@
+import { Theme } from "theme.slint";
+import { Glyph, Icon } from "icons.slint";
+
+// The custom title bar, ported from the reference's TitleBar.tsx.
+//
+// On macOS the native traffic lights are overlaid: main.rs hides the real
+// title bar (titlebar_transparent + title_hidden + fullsize_content_view, the
+// winit spelling of Tauri's titleBarStyle: Overlay) and this strip leaves
+// room for the lights on the left. Everything that is not a control is a drag
+// region — the TouchArea at the bottom of the tree starts a native window
+// drag on press, and controls declared after it take their own presses.
+
+component MenuLabel inherits Rectangle {
+    in property <string> label;
+
+    callback clicked();
+
+    width: text.width + 16px;
+    border-radius: Theme.r-sm;
+    background: touch.has-hover ? Theme.field : Colors.transparent;
+
+    animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+
+    text := Text {
+        x: 8px;
+        y: (parent.height - self.height) / 2;
+        text: root.label;
+        color: touch.has-hover ? Theme.fg : Theme.fg-muted;
+        font-size: Theme.fs;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+component HeaderIconButton inherits Rectangle {
+    in property <Glyph> glyph;
+
+    callback clicked();
+
+    width: 24px;
+    height: 24px;
+    border-radius: Theme.r-sm;
+    background: touch.has-hover ? Theme.field : Colors.transparent;
+
+    animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+
+    Icon {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        glyph: root.glyph;
+        size: 14px;
+        tint: touch.has-hover ? Theme.fg : Theme.fg-muted;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component TitleBar inherits Rectangle {
+    in property <string> project-name: "Untitled project";
+    /// "saved", "saving…" — the little truth beside the name. Empty hides it.
+    in property <string> status: "saved";
+    /// Leaves room for the traffic lights and drops nothing else; on other
+    /// platforms the strip starts at the left edge.
+    in property <bool> macos: true;
+
+    callback begin-drag();
+    callback toggle-maximize();
+    callback open-settings();
+    callback toggle-theme();
+    callback export-clicked();
+
+    height: 32px;
+    background: Theme.panel;
+
+    // Whatever is not a control drags the window. Declared first so every
+    // control sits above it and takes its own presses; Texts and plain
+    // Rectangles are not hit targets, so presses on them fall through here.
+    drag := TouchArea {
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down
+                && event.button == PointerEventButton.left) {
+                root.begin-drag();
+            }
+        }
+        double-clicked => {
+            root.toggle-maximize();
+        }
+    }
+
+    Rectangle {
+        x: 0;
+        y: parent.height - 1px;
+        width: parent.width;
+        height: 1px;
+        background: Theme.line;
+    }
+
+    HorizontalLayout {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        padding-left: root.macos ? 80px : 8px;
+        padding-right: 8px;
+        spacing: 2px;
+
+        // mark + wordmark
+        VerticalLayout {
+            alignment: center;
+            Image {
+                width: 16px;
+                height: 16px;
+                source: @image-url("assets/concat-logo.png");
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            padding-left: 6px;
+            padding-right: 6px;
+            Text {
+                text: "WolfCut";
+                color: Theme.fg;
+                font-size: Theme.fs-lg;
+                font-weight: 600;
+            }
+        }
+
+        // The app menus. Chrome for now: they highlight but open nothing —
+        // a real dropdown needs a popup layer this tree has not grown yet,
+        // and a menu that opens empty would be worse than one that waits.
+        MenuLabel { label: "File"; }
+        MenuLabel { label: "Edit"; }
+        MenuLabel { label: "View"; }
+
+        Rectangle { horizontal-stretch: 1; }
+
+        VerticalLayout {
+            alignment: center;
+            HeaderIconButton {
+                glyph: Glyph.settings;
+                clicked => { root.open-settings(); }
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            HeaderIconButton {
+                glyph: Glyph.sun;
+                clicked => { root.toggle-theme(); }
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            padding-left: 4px;
+
+            export-button := Rectangle {
+                width: label.width + icon.width + 26px;
+                height: 24px;
+                border-radius: Theme.r-sm;
+                background: export-touch.has-hover ? Theme.accent-hover : Theme.accent;
+
+                animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+
+                icon := Icon {
+                    x: 9px;
+                    y: (parent.height - self.height) / 2;
+                    glyph: Glyph.export;
+                    size: 12px;
+                    tint: Theme.on-accent;
+                }
+
+                label := Text {
+                    x: icon.x + icon.width + 5px;
+                    y: (parent.height - self.height) / 2;
+                    text: "Export";
+                    color: Theme.on-accent;
+                    font-size: Theme.fs;
+                    font-weight: Theme.weight-title;
+                }
+
+                export-touch := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { root.export-clicked(); }
+                }
+            }
+        }
+    }
+
+    // Centre: the project name, placed against the whole strip rather than
+    // laid out, so it stays centred in the window and not in whatever space
+    // the menus leave over.
+    centre := HorizontalLayout {
+        x: (parent.width - self.preferred-width) / 2;
+        y: 0;
+        width: self.preferred-width;
+        height: parent.height;
+        spacing: 6px;
+
+        VerticalLayout {
+            alignment: center;
+            Text {
+                text: root.project-name;
+                color: Theme.fg-muted;
+                font-size: Theme.fs;
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            Text {
+                text: root.status;
+                color: Theme.fg-dim;
+                font-size: 10px;
+            }
+        }
+    }
+}

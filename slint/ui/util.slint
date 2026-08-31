@@ -28,6 +28,14 @@ export global Fmt {
             + ":" + Fmt.pad2(Math.mod(Math.floor(seconds), 60));
     }
 
+    // "m:ss" — the compact duration a bin thumbnail carries, where the hours
+    // field of a full timecode would be three characters of nothing. Minutes
+    // are not wrapped at 60: a two-hour clip should read 120:00, not 0:00.
+    public pure function short-duration(seconds: float) -> string {
+        return "\{Math.floor(Math.max(0, seconds) / 60)}"
+            + ":" + Fmt.pad2(Math.mod(Math.floor(Math.max(0, seconds)), 60));
+    }
+
     public pure function decibels(v: float) -> string {
         return (v > 0 ? "+" : "") + "\{Fmt.round-to(v, 1)} dB";
     }

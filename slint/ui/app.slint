@@ -9,13 +9,15 @@ import "fonts/Inter-SemiBold.ttf";
 import { Theme } from "theme.slint";
 import { Bezier, Curves, Fmt } from "util.slint";
 import { EffectData } from "demo/effects-panel.slint";
+import { MediaFilter, MediaItemData, MediaKind } from "workspace/media-pane.slint";
+import { TitleBar } from "title-bar.slint";
 import { Workspace } from "workspace/workspace.slint";
 
 // Re-exported so main.rs can reach the globals and the struct.
-export { Curves, Fmt, Theme, Bezier, EffectData }
+export { Curves, Fmt, Theme, Bezier, EffectData, MediaFilter, MediaItemData, MediaKind }
 
 export component App inherits Window {
-    title: "custom-primitives — Slint";
+    title: "WolfCut";
     background: Theme.page;
     default-font-family: Theme.font;
     default-font-size: Theme.fs;
@@ -34,10 +36,50 @@ export component App inherits Window {
     in property <float> level;
     in property <float> peak;
 
+    // The bin. `media` is the filtered view Rust publishes; the counts are of
+    // the whole library, because the sidebar has to say how many Video items
+    // exist while it is showing only the Audio ones.
+    in property <[MediaItemData]> media;
+    in property <int> media-count-all;
+    in property <int> media-count-video;
+    in property <int> media-count-audio;
+    in property <int> media-count-images;
+    in property <int> media-selected-count;
+    in property <bool> importing;
+
     out property <bool> muted: shell.muted;
 
     callback add-effect(audio: bool);
     callback remove-effect(id: int);
+
+    callback import-media();
+    callback media-filter-changed(filter: MediaFilter);
+    callback media-select(id: int, additive: bool);
+    callback media-clear-selection();
+    callback media-remove(id: int);
+    callback media-remove-selected();
+    callback media-activate(id: int);
+
+    // Library catalogue actions. Nothing consumes them in Rust yet — an
+    // unconnected callback is a no-op — but the seam is the same one the
+    // media callbacks use, so wiring them is adding handlers in main.rs.
+    callback library-add-text();
+    callback library-apply-effect(effect-id: string);
+    callback library-apply-transition(transition-id: string);
+    callback library-save-template();
+
+    // Title bar. The drag/maximize pair must be handled in main.rs — a window
+    // cannot drag itself from inside the scene graph; the rest are seams like
+    // the library callbacks above.
+    in property <string> project-name: "Untitled project";
+    in property <string> project-status: "saved";
+    in property <bool> macos;
+
+    callback titlebar-begin-drag();
+    callback titlebar-toggle-maximize();
+    callback open-settings();
+    callback toggle-theme();
+    callback export-clicked();
 
     // The level feed is a Rust timer, and a property cannot reach across to
     // stop it, so the hover edge is forwarded as a callback: Rust arms the
@@ -64,12 +106,48 @@ export component App inherits Window {
         }
     }
 
-    shell := Workspace {
-        video-effects: root.video-effects;
-        audio-effects: root.audio-effects;
-        level: root.level;
-        peak: root.peak;
-        add-effect(audio) => { root.add-effect(audio); }
-        remove-effect(id) => { root.remove-effect(id); }
+    VerticalLayout {
+        TitleBar {
+            macos: root.macos;
+            project-name: root.project-name;
+            status: root.project-status;
+
+            begin-drag => { root.titlebar-begin-drag(); }
+            toggle-maximize => { root.titlebar-toggle-maximize(); }
+            open-settings => { root.open-settings(); }
+            toggle-theme => { root.toggle-theme(); }
+            export-clicked => { root.export-clicked(); }
+        }
+
+        shell := Workspace {
+            vertical-stretch: 1;
+            video-effects: root.video-effects;
+            audio-effects: root.audio-effects;
+            level: root.level;
+            peak: root.peak;
+            add-effect(audio) => { root.add-effect(audio); }
+            remove-effect(id) => { root.remove-effect(id); }
+
+            media: root.media;
+            media-count-all: root.media-count-all;
+            media-count-video: root.media-count-video;
+            media-count-audio: root.media-count-audio;
+            media-count-images: root.media-count-images;
+            media-selected-count: root.media-selected-count;
+            importing: root.importing;
+
+            import-media => { root.import-media(); }
+            media-filter-changed(filter) => { root.media-filter-changed(filter); }
+            media-select(id, additive) => { root.media-select(id, additive); }
+            media-clear-selection => { root.media-clear-selection(); }
+            media-remove(id) => { root.media-remove(id); }
+            media-remove-selected => { root.media-remove-selected(); }
+            media-activate(id) => { root.media-activate(id); }
+
+            library-add-text => { root.library-add-text(); }
+            library-apply-effect(id) => { root.library-apply-effect(id); }
+            library-apply-transition(id) => { root.library-apply-transition(id); }
+            library-save-template => { root.library-save-template(); }
+        }
     }
 }

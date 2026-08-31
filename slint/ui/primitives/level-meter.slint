@@ -54,9 +54,8 @@ export component LevelMeter inherits Rectangle {
             // rate, so animating only interpolates between samples that are
             // smooth already — and because it re-arms on every sample it is
             // permanently in flight, which pins Slint's render loop to the
-            // monitor refresh rate rather than the feed rate. FemtoVG has no
-            // partial rendering, so each of those frames repaints the whole
-            // window. A real programme meter is sample-stepped anyway.
+            // monitor refresh rate rather than the feed rate, and each of those
+            // frames repaints the whole window — see the note below. A real programme meter is sample-stepped anyway.
 
             // full-length ramp, offset back so its stops stay anchored to the track
             Rectangle {
@@ -90,8 +89,8 @@ export component LevelMeter inherits Rectangle {
     // Rust and only Rust can stop producing them.
     //
     // A level that changes 30 times a second is an animation whatever drives
-    // it: every sample dirties a property, and FemtoVG has no partial
-    // rendering, so each one repaints the whole window. Ungated that is a
+    // it: every sample dirties a property, and neither renderer this builds
+    // against draws partially, so each one repaints the whole window. Ungated that is a
     // permanent 30fps redraw of a 1120x900 window to wiggle one bar — the app
     // never goes idle. Gating it here rather than on the enclosing Section is
     // the cheaper of the two: the section also covers the volume and trim

@@ -2,7 +2,7 @@ import { Theme } from "../theme.slint";
 import { EffectData } from "../demo/effects-panel.slint";
 import { ColSplitter, RowSplitter } from "splitter.slint";
 import { ConfigPane } from "config-pane.slint";
-import { MediaPane } from "media-pane.slint";
+import { MediaFilter, MediaItemData, MediaPane } from "media-pane.slint";
 import { PreviewPane } from "preview-pane.slint";
 import { TimelinePane } from "timeline-pane.slint";
 
@@ -19,6 +19,29 @@ import { TimelinePane } from "timeline-pane.slint";
 // keeps the proportions the user dragged instead of dumping every pixel into
 // one pane.
 export component Workspace inherits Rectangle {
+    // forwarded to the library column
+    in property <[MediaItemData]> media;
+    in property <int> media-count-all;
+    in property <int> media-count-video;
+    in property <int> media-count-audio;
+    in property <int> media-count-images;
+    in property <int> media-selected-count;
+    in property <bool> importing;
+
+    callback import-media();
+    callback media-filter-changed(filter: MediaFilter);
+    callback media-select(id: int, additive: bool);
+    callback media-clear-selection();
+    callback media-remove(id: int);
+    callback media-remove-selected();
+    callback media-activate(id: int);
+
+    // library catalogue pages
+    callback library-add-text();
+    callback library-apply-effect(effect-id: string);
+    callback library-apply-transition(transition-id: string);
+    callback library-save-template();
+
     // forwarded to the inspector column
     in property <[EffectData]> video-effects;
     in property <[EffectData]> audio-effects;
@@ -83,6 +106,27 @@ export component Workspace inherits Rectangle {
         y: root.gap;
         width: root.media-w;
         height: root.top-h;
+
+        items: root.media;
+        count-all: root.media-count-all;
+        count-video: root.media-count-video;
+        count-audio: root.media-count-audio;
+        count-images: root.media-count-images;
+        selected-count: root.media-selected-count;
+        importing: root.importing;
+
+        import-media => { root.import-media(); }
+        filter-changed(filter) => { root.media-filter-changed(filter); }
+        select(id, additive) => { root.media-select(id, additive); }
+        clear-selection => { root.media-clear-selection(); }
+        remove(id) => { root.media-remove(id); }
+        remove-selected => { root.media-remove-selected(); }
+        activate(id) => { root.media-activate(id); }
+
+        add-text => { root.library-add-text(); }
+        apply-effect(id) => { root.library-apply-effect(id); }
+        apply-transition(id) => { root.library-apply-transition(id); }
+        save-template => { root.library-save-template(); }
     }
 
     PreviewPane {

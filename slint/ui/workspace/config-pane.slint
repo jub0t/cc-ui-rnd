@@ -1,41 +1,210 @@
 import { Theme, SegmentedControl } from "../primitives/primitives.slint";
 import { Pane, PaneBody, PaneScroll } from "pane.slint";
-import { EffectData, EffectsPanel } from "../demo/effects-panel.slint";
-import { TransformPanel } from "../demo/transform-panel.slint";
-import { InterpolationPanel } from "../demo/interpolation-panel.slint";
+import { EffectData } from "../demo/effects-panel.slint";
+import {
+    AdjustPanel, AppliedPresetData, PresetCatalog, PresetStack,
+} from "../inspector/clip-inspector.slint";
 
-// The inspector column: one of three inspectors at a time, picked from a tab
-// strip, drawn straight onto the pane. The inspectors used to be cards stacked
-// down the column — the card border and its padding were the panel's own
-// chrome, which is right for a floating inspector and redundant inside a pane
-// that already has a border.
+// The inspector column, in the legacy app's two states:
 //
-// The inactive tabs are unmounted rather than hidden. The interpolation panel
-// runs a Timer to drive its ease preview, and FemtoVG has no partial
-// rendering, so an animation in a pane nobody is looking at repaints the whole
-// window at 60fps. `if` is what turns it off.
+// - Nothing selected: the Details panel — the project's facts, read-only,
+//   with Modify pinned to the foot.
+// - Something selected: the clip inspector — Adjust, Filters, Effects —
+//   ported from web/src/demo/inspector. The custom-primitives demo panels
+//   that used to live here were design inspiration, not something the legacy
+//   app carried, so they are gone from the pane (the primitives they proved
+//   out live on underneath these controls).
+
+// One fact: muted label left, value right. The value wraps rather than
+// elides — a folder path you cannot read is a path you have to go find.
+component FactRow inherits HorizontalLayout {
+    in property <string> label;
+    in property <string> value;
+
+    padding-left: Theme.pad;
+    padding-right: Theme.pad;
+    spacing: 12px;
+    min-height: 26px;
+
+    Text {
+        text: root.label;
+        color: Theme.fg-muted;
+        font-size: Theme.fs;
+        vertical-alignment: center;
+    }
+
+    Text {
+        horizontal-stretch: 1;
+        text: root.value;
+        color: Theme.fg;
+        font-size: Theme.fs;
+        horizontal-alignment: right;
+        vertical-alignment: center;
+        wrap: word-wrap;
+    }
+}
+
+// "PROJECT", "CONTENTS" — the muted caps that break the facts into groups.
+component FactHeading inherits HorizontalLayout {
+    in property <string> title;
+
+    padding-left: Theme.pad;
+    padding-right: Theme.pad;
+    padding-top: 10px;
+    padding-bottom: 4px;
+
+    Text {
+        text: root.title;
+        color: Theme.fg-dim;
+        font-size: Theme.fs-sm;
+        font-weight: Theme.weight-title;
+        letter-spacing: 1px;
+    }
+}
+
 export component ConfigPane inherits Rectangle {
+    // ── the demo-era seams, kept so main.rs keeps compiling ──────────────
+    // The meter/mute machinery has nothing to drive since the demo effects
+    // panel left the pane; the properties stay declared because app.slint
+    // and main.rs read them for the life of the process. Strip the whole
+    // group when the Rust side sheds its demo plumbing.
     in property <[EffectData]> video-effects;
     in property <[EffectData]> audio-effects;
     in property <float> level;
     in property <float> peak;
-
-    // Held here rather than in the effects panel, which is unmounted whenever
-    // another tab is showing. Rust reads both for the life of the process.
     out property <bool> muted;
     out property <bool> meter-hovered;
-
     callback add-effect(audio: bool);
     callback remove-effect(id: int);
 
+    // ── details ──────────────────────────────────────────────────────────
+    /// Which of the two states the pane is in.
+    in property <bool> has-selection;
+    in property <string> project-name: "Untitled project";
+    in property <string> project-folder: "—";
+    in property <string> project-output: "1080 x 1920";
+    in property <string> project-rate: "30.00 fps";
+    in property <string> project-duration: "00:00:00:00";
+    in property <int> count-media;
+    in property <int> count-tracks;
+    in property <int> count-clips;
+
+    callback modify-project();
+
+    // ── the clip inspector's chains, owned by Rust ───────────────────────
+    in property <[AppliedPresetData]> filters-applied;
+    in property <[AppliedPresetData]> effects-applied;
+
+    callback filters-add(preset: AppliedPresetData);
+    callback filters-toggle(index: int);
+    callback filters-move-by(index: int, delta: int);
+    callback filters-remove(index: int);
+    callback filters-set-param(index: int, second: bool, value: float);
+
+    callback effects-add(preset: AppliedPresetData);
+    callback effects-toggle(index: int);
+    callback effects-move-by(index: int, delta: int);
+    callback effects-remove(index: int);
+    callback effects-set-param(index: int, second: bool, value: float);
+
+    property <int> tab;
+
     Pane {
-        // A tab strip instead of a title bar: the tabs name what the pane is
-        // showing better than the word "Config" does.
-        Rectangle {
-            height: 40px;
+        // ── details ──────────────────────────────────────────────────────
+        if !root.has-selection: Rectangle {
+            height: 48px;
 
             Rectangle {
+                x: 0;
                 y: parent.height - 1px;
+                width: parent.width;
+                height: 1px;
+                background: Theme.line;
+            }
+
+            HorizontalLayout {
+                padding-left: Theme.pad;
+
+                Text {
+                    text: "DETAILS";
+                    color: Theme.fg-muted;
+                    font-size: Theme.fs;
+                    font-weight: Theme.weight-title;
+                    letter-spacing: 1.5px;
+                    vertical-alignment: center;
+                }
+            }
+        }
+
+        if !root.has-selection: PaneBody {
+            padding: 0px;
+            spacing: 0px;
+
+            PaneScroll {
+                VerticalLayout {
+                    padding-top: 4px;
+                    spacing: 2px;
+
+                    FactHeading { title: "PROJECT"; }
+                    FactRow { label: "Name"; value: root.project-name; }
+                    FactRow { label: "Folder"; value: root.project-folder; }
+                    FactRow { label: "Output"; value: root.project-output; }
+                    FactRow { label: "Rate"; value: root.project-rate; }
+                    FactRow { label: "Duration"; value: root.project-duration; }
+
+                    FactHeading { title: "CONTENTS"; }
+                    FactRow { label: "Media"; value: "\{root.count-media}"; }
+                    FactRow { label: "Tracks"; value: "\{root.count-tracks}"; }
+                    FactRow { label: "Clips"; value: "\{root.count-clips}"; }
+                }
+            }
+        }
+
+        if !root.has-selection: Rectangle {
+            height: 49px;
+
+            Rectangle {
+                x: 0;
+                y: 0;
+                width: parent.width;
+                height: 1px;
+                background: Theme.line;
+            }
+
+            modify := Rectangle {
+                x: parent.width - self.width - 10px;
+                y: (parent.height - self.height) / 2;
+                width: modify-label.width + 28px;
+                height: 30px;
+                border-radius: Theme.r-sm;
+                background: modify-touch.has-hover ? Theme.field-hover : Theme.field;
+
+                animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+
+                modify-label := Text {
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                    text: "Modify";
+                    color: Theme.fg;
+                    font-size: Theme.fs;
+                    font-weight: Theme.weight-title;
+                }
+
+                modify-touch := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { root.modify-project(); }
+                }
+            }
+        }
+
+        // ── the clip inspector ───────────────────────────────────────────
+        if root.has-selection: Rectangle {
+            height: 48px;
+
+            Rectangle {
+                x: 0;
+                y: parent.height - 1px;
+                width: parent.width;
                 height: 1px;
                 background: Theme.line;
             }
@@ -46,45 +215,53 @@ export component ConfigPane inherits Rectangle {
 
                 VerticalLayout {
                     alignment: center;
-                    tabs := SegmentedControl {
-                        options: ["Effects", "Transform", "Interpolation"];
-                        changed(index) => {
-                            // The meter goes down with its tab and never gets
-                            // to report the pointer leaving, so the feed is
-                            // disarmed here instead — otherwise Rust keeps
-                            // sampling 30 times a second into a panel that no
-                            // longer exists.
-                            if (index != 0) {
-                                root.meter-hovered = false;
-                            }
-                        }
+                    SegmentedControl {
+                        options: ["Adjust", "Filters", "Effects"];
+                        current <=> root.tab;
                     }
                 }
             }
         }
 
-        PaneBody {
+        if root.has-selection: PaneBody {
             // No padding: the inspector rows carry their own 14px inset, and
-            // sections are meant to run edge to edge so their hairlines reach
-            // both sides of the pane.
+            // sections run edge to edge so their hairlines reach both sides.
             padding: 0px;
 
             PaneScroll {
-                if tabs.current == 0: EffectsPanel {
-                    video-effects: root.video-effects;
-                    audio-effects: root.audio-effects;
-                    level: root.level;
-                    peak: root.peak;
-                    muted: root.muted;
-                    add-effect(audio) => { root.add-effect(audio); }
-                    remove-effect(id) => { root.remove-effect(id); }
-                    toggle-mute => { root.muted = !root.muted; }
-                    meter-hovered-changed(hovered) => { root.meter-hovered = hovered; }
+                if root.tab == 0: AdjustPanel { }
+
+                if root.tab == 1: PresetStack {
+                    noun: "filter";
+                    library-title: "Filter library";
+                    group-labels: PresetCatalog.filter-groups;
+                    catalogue: PresetCatalog.filters;
+                    applied: root.filters-applied;
+
+                    add(preset) => { root.filters-add(preset); }
+                    toggle(index) => { root.filters-toggle(index); }
+                    move-by(index, delta) => { root.filters-move-by(index, delta); }
+                    remove(index) => { root.filters-remove(index); }
+                    set-param(index, second, value) => {
+                        root.filters-set-param(index, second, value);
+                    }
                 }
 
-                if tabs.current == 1: TransformPanel { }
+                if root.tab == 2: PresetStack {
+                    noun: "effect";
+                    library-title: "Effect library";
+                    group-labels: PresetCatalog.effect-groups;
+                    catalogue: PresetCatalog.effects;
+                    applied: root.effects-applied;
 
-                if tabs.current == 2: InterpolationPanel { }
+                    add(preset) => { root.effects-add(preset); }
+                    toggle(index) => { root.effects-toggle(index); }
+                    move-by(index, delta) => { root.effects-move-by(index, delta); }
+                    remove(index) => { root.effects-remove(index); }
+                    set-param(index, second, value) => {
+                        root.effects-set-param(index, second, value);
+                    }
+                }
             }
         }
     }

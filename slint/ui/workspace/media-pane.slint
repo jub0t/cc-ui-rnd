@@ -1,42 +1,1212 @@
-import { Theme, Glyph, Icon, IconButton } from "../primitives/primitives.slint";
-import { Pane, PaneBody, PaneHeader } from "pane.slint";
+import { Theme, Fmt, Glyph, Icon } from "../primitives/primitives.slint";
+import { Pane, PaneScroll } from "pane.slint";
 
-// Scaffold. The bin — imported clips, audio, stills — goes here; for now it is
-// the empty state that bin will fall back to.
-export component MediaPane inherits Rectangle {
-    Pane {
-        PaneHeader {
-            title: "Media";
-            IconButton { glyph: Glyph.plus; label: "Import media"; }
+// The library pane: a strip of pages across the top, then a narrow category
+// sidebar and the browsing area beside it. Ported from the reference editor's
+// MediaBin, which is one 1100-line React file; this is the Media page of it.
+//
+// The other four pages (Text, Transitions, Effects, Templates) are chrome
+// here and nothing else — each browses a catalogue that has no counterpart in
+// this tree yet, so the tab exists, switches, and says so. Porting one of them
+// is porting its catalogue, which is a separate panel's worth of work.
+
+export enum MediaKind { video, audio, image }
+
+/// What the sidebar has narrowed the bin to. `all` is not "no filter": it is
+/// the row that is highlighted when every kind is on, which is why it is a
+/// value here and not the absence of one.
+export enum MediaFilter { all, video, audio, images }
+
+export struct MediaItemData {
+    id: int,
+    name: string,
+    kind: MediaKind,
+    /// seconds; ignored for a still, which shows "still" where a time would go
+    duration: float,
+    /// The artwork, once something has produced it — the first frame of a
+    /// filmstrip for footage, a drawn waveform for audio. Empty until then,
+    /// which is what the tinted fallback below is for. Nothing decodes yet, so
+    /// today it is always empty; the seam is here so the card does not have to
+    /// be rewritten the day it isn't.
+    thumbnail: image,
+    selected: bool,
+}
+
+// ── the page strip ───────────────────────────────────────────────────────────
+
+component LibraryTab inherits Rectangle {
+    in property <string> label;
+    in property <bool> current;
+
+    callback clicked();
+
+    // flex-auto, not flex-1: the label is the basis and only the surplus is
+    // shared, so "Transitions" is never crammed to make room for padding
+    // around "Text". A Slint layout distributes spare width on top of each
+    // child's own preferred width, which is the same rule.
+    horizontal-stretch: 1;
+    border-radius: Theme.r-sm;
+    background: root.current ? Theme.field-hover : Colors.transparent;
+
+    animate background { duration: 120ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+
+    HorizontalLayout {
+        padding-left: 6px;
+        padding-right: 6px;
+
+        Text {
+            text: root.label;
+            color: (root.current || touch.has-hover) ? Theme.fg : Theme.fg-muted;
+            font-size: Theme.fs-sm;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            overflow: elide;
+
+            animate color { duration: 140ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+// ── the category sidebar ─────────────────────────────────────────────────────
+
+// The heading over a list of category rows, and the control that collapses
+// them. The rows are not its children: whoever places it also places them,
+// under an `if` on the open state — the same split `Section`/`SectionHeader`
+// uses in primitives/panel.slint, because dropping a body out of the layout is
+// what collapsing means and an `if` is what does it.
+component CategoryHeading inherits Rectangle {
+    in property <string> title;
+    in property <bool> open: true;
+
+    callback toggled();
+
+    height: 26px;
+    border-radius: Theme.r-sm;
+    background: heading.has-hover ? Theme.field : Colors.transparent;
+
+    animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+
+    HorizontalLayout {
+        padding-left: 6px;
+        padding-right: 6px;
+        spacing: 4px;
+
+        VerticalLayout {
+            alignment: center;
+            Icon {
+                glyph: root.open ? Glyph.chevron-down : Glyph.chevron-right;
+                size: 10px;
+                tint: heading.has-hover ? Theme.fg : Theme.fg-muted;
+            }
         }
 
-        PaneBody {
-            VerticalLayout {
-                alignment: center;
-                spacing: 10px;
+        Text {
+            horizontal-stretch: 1;
+            text: root.title;
+            color: heading.has-hover ? Theme.fg : Theme.fg-muted;
+            font-size: Theme.fs-sm;
+            font-weight: Theme.weight-title;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
 
-                HorizontalLayout {
-                    alignment: center;
-                    Icon {
-                        glyph: Glyph.frame;
-                        size: 24px;
-                        tint: Theme.fg-dim;
+    heading := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.toggled();
+        }
+    }
+}
+
+component CategoryRow inherits Rectangle {
+    in property <string> label;
+    /// -1 hides the count entirely, which is what an undefined count means in
+    /// the reference; 0 shows nothing either, since an empty bin needs no
+    /// zero beside every row to say so.
+    in property <int> count: -1;
+    in property <bool> current;
+
+    callback clicked();
+
+    height: 24px;
+    border-radius: Theme.r-sm;
+    background: root.current ? Theme.field-active
+        : touch.has-hover ? Theme.field
+        : Colors.transparent;
+
+    animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+
+    HorizontalLayout {
+        // Indented past the group heading's chevron, so the rows read as
+        // hanging off it rather than sitting beside it.
+        padding-left: 18px;
+        padding-right: 6px;
+        spacing: 4px;
+
+        Text {
+            horizontal-stretch: 1;
+            text: root.label;
+            color: root.current ? Theme.fg : Theme.fg-muted;
+            font-size: Theme.fs-sm;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+
+        if root.count > 0: Text {
+            text: "\{root.count}";
+            color: Theme.fg-dim;
+            font-size: 10px;
+            vertical-alignment: center;
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+// ── the drop zone ────────────────────────────────────────────────────────────
+
+// The import button, whose dashed border says "you may also drop files here".
+//
+// Slint's Path has no stroke-dash-array and a Rectangle border is solid, so
+// the dashes are subtracted rather than drawn: a solid rounded border, then
+// short rectangles in the button's own ground colour laid over it. That keeps
+// the corner radii exactly round — a hand-drawn dashed rounded rect has to
+// approximate the arcs — and leaves one place to change the border colour.
+//
+// The dash counts are fixed and their pitch follows the width, rather than the
+// other way round. A count derived from the width would tear down and rebuild
+// every rectangle on every frame of a splitter drag; a pitch that drifts a
+// pixel between panel sizes is not visible.
+component ImportButton inherits Rectangle {
+    in property <bool> busy;
+    // Reused by the templates page as "save as template", so the words and
+    // the mark are parameters with the import ones as defaults.
+    in property <string> label: "Import media";
+    in property <string> busy-label: "Importing…";
+    in property <Glyph> glyph: Glyph.import;
+
+    callback clicked();
+
+    property <int> dashes-h: 14;
+    property <int> dashes-v: 3;
+    /// where the straight runs start, i.e. clear of the rounded corners
+    property <length> inset: Theme.r;
+    property <length> pitch-h: (root.width - 2 * root.inset) / root.dashes-h;
+    property <length> pitch-v: (root.height - 2 * root.inset) / root.dashes-v;
+    // Half the pitch at most: dragged narrow enough, a fixed 4px bite would
+    // meet the next one and erase the border rather than dash it.
+    property <length> bite-h: Math.min(4px, root.pitch-h / 2);
+    property <length> bite-v: Math.min(4px, root.pitch-v / 2);
+    property <brush> ground: (touch.has-hover && !root.busy) ? Theme.field : Theme.panel;
+
+    height: 36px;
+    border-width: 1px;
+    border-radius: Theme.r;
+    border-color: (touch.has-hover && !root.busy) ? Theme.accent : Theme.line-strong;
+    background: root.ground;
+    opacity: root.busy ? 0.4 : 1.0;
+
+    animate background, border-color { duration: 120ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+
+    HorizontalLayout {
+        alignment: center;
+        spacing: 8px;
+
+        VerticalLayout {
+            alignment: center;
+            Icon {
+                glyph: root.glyph;
+                size: 14px;
+                tint: touch.has-hover ? Theme.fg : Theme.fg-muted;
+            }
+        }
+
+        Text {
+            text: root.busy ? root.busy-label : root.label;
+            color: touch.has-hover ? Theme.fg : Theme.fg-muted;
+            font-size: Theme.fs;
+            vertical-alignment: center;
+        }
+    }
+
+    // The bites. Two runs across, two down; each run is divided into equal
+    // pitches and one bite is centred in each.
+    // Both axes pinned on every bite: an element given only one coordinate is
+    // centred on the other axis by default, which drew the top run's dashes
+    // across the middle of the button.
+    for step in root.dashes-h: Rectangle {
+        x: root.inset + (step + 0.5) * root.pitch-h - root.bite-h / 2;
+        y: 0;
+        width: root.bite-h;
+        height: 1px;
+        background: root.ground;
+    }
+    for step in root.dashes-h: Rectangle {
+        x: root.inset + (step + 0.5) * root.pitch-h - root.bite-h / 2;
+        y: root.height - 1px;
+        width: root.bite-h;
+        height: 1px;
+        background: root.ground;
+    }
+    for step in root.dashes-v: Rectangle {
+        x: 0;
+        y: root.inset + (step + 0.5) * root.pitch-v - root.bite-v / 2;
+        width: 1px;
+        height: root.bite-v;
+        background: root.ground;
+    }
+    for step in root.dashes-v: Rectangle {
+        x: root.width - 1px;
+        y: root.inset + (step + 0.5) * root.pitch-v - root.bite-v / 2;
+        width: 1px;
+        height: root.bite-v;
+        background: root.ground;
+    }
+
+    touch := TouchArea {
+        enabled: !root.busy;
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+// ── one card ─────────────────────────────────────────────────────────────────
+
+component MediaCard inherits Rectangle {
+    in property <MediaItemData> item;
+
+    /// modifier-held click: add to or remove from the selection
+    callback clicked(additive: bool);
+    /// double click: put it on the timeline at the playhead
+    callback activated();
+    callback removed();
+
+    property <color> mark: root.item.kind == MediaKind.audio ? Theme.kind-audio
+        : root.item.kind == MediaKind.image ? Theme.kind-image
+        : Theme.kind-video;
+    property <color> well: root.item.kind == MediaKind.audio ? Theme.kind-audio-well
+        : root.item.kind == MediaKind.image ? Theme.kind-image-well
+        : Theme.kind-video-well;
+    property <Glyph> badge: root.item.kind == MediaKind.audio ? Glyph.music
+        : root.item.kind == MediaKind.image ? Glyph.image
+        : Glyph.film;
+
+    /// modifier state at the moment of the press — `clicked` does not carry it
+    property <bool> additive;
+
+    // Everything is *inside* the card's TouchArea rather than beside it. A
+    // sibling would lose its hover the moment the pointer crossed onto the
+    // remove button — the button is the topmost hit, so nothing behind it is
+    // told the pointer is there any more, and a control revealed on hover
+    // would blink itself out of existence. An ancestor TouchArea is marked
+    // hovered on the way down to its children, before any of them can take
+    // the event, so it keeps the hover the whole time; a descendant that
+    // grabs a press still stops the press from reaching it.
+    card := TouchArea {
+        // The whole card is the drag handle in the reference — dragging one
+        // onto the timeline is how material gets into an edit. There is no
+        // timeline to drop onto yet, so that gesture is not wired here.
+        mouse-cursor: pointer;
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) {
+                root.additive = event.modifiers.shift || event.modifiers.control
+                    || event.modifiers.meta;
+            }
+        }
+        clicked => {
+            root.clicked(root.additive);
+        }
+        double-clicked => {
+            root.activated();
+        }
+
+        thumb := Rectangle {
+            // aspect-video, and the card's height is derived from the same
+            // ratio, so the label lands exactly under it. y pinned: with only
+            // a height set, the default would centre the tile over the label.
+            y: 0;
+            height: root.width * 9 / 16;
+            border-radius: Theme.r;
+            // The kind's darker hue as the ground, so a card whose artwork has
+            // not arrived is already colour-coded rather than a black hole.
+            background: root.well;
+            border-width: root.item.selected ? 2px : 1px;
+            border-color: root.item.selected ? Theme.accent
+                : card.has-hover ? Theme.line-strong
+                : Theme.line;
+            clip: true;
+
+            if root.item.thumbnail.width > 0: Image {
+                // Sized by hand for the same reason the sidebar is: a
+                // conditional element gets no default fill from its parent.
+                width: parent.width;
+                height: parent.height;
+                source: root.item.thumbnail;
+                // Cover, not contain: letterboxing an 88px thumbnail spends
+                // most of it on bars, and a crop reads better at this size.
+                image-fit: cover;
+            }
+
+            // What a card shows before its artwork exists. Large and faint
+            // on purpose: at the badge's own size and colour it read as the
+            // corner mark duplicated into the middle of the tile rather than
+            // as a placeholder.
+            if root.item.thumbnail.width == 0: Icon {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                glyph: root.badge;
+                size: 26px;
+                tint: root.mark.with-alpha(0.32);
+            }
+
+            // No corner kind badge, on purpose: web/'s bin relies on what the
+            // artwork already says — footage carries a duration stamp, audio
+            // is a waveform, a still says "still" — so a badge would repeat
+            // information the card gives away at a glance.
+
+            // Duration, bottom right, on its own scrim because what is behind
+            // it is a video frame and cannot be relied on for contrast.
+            Rectangle {
+                x: parent.width - self.width - 4px;
+                y: parent.height - self.height - 4px;
+                width: stamp.width + 7px;
+                height: stamp.height + 2px;
+                border-radius: Theme.r-xs;
+                background: Theme.scrim;
+
+                stamp := Text {
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                    text: root.item.kind == MediaKind.image
+                        ? "still"
+                        : Fmt.short-duration(root.item.duration);
+                    color: Theme.on-scrim;
+                    font-size: 10px;
+                }
+            }
+
+            // Hover-only, like the reference: a permanent delete button on
+            // every card in a full bin is one bin's worth of invitations to
+            // lose work.
+            if card.has-hover: Rectangle {
+                x: parent.width - self.width - 4px;
+                y: 4px;
+                width: 18px;
+                height: 18px;
+                border-radius: Theme.r-xs;
+                background: remove.has-hover ? Theme.danger : Theme.scrim;
+
+                Icon {
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                    glyph: Glyph.close;
+                    size: 10px;
+                    tint: Theme.on-scrim;
+                }
+
+                remove := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => {
+                        root.removed();
+                    }
+                }
+            }
+        }
+
+        Text {
+            y: thumb.height + 4px;
+            width: root.width;
+            height: 14px;
+            text: root.item.name;
+            color: root.item.selected ? Theme.fg : Theme.fg-muted;
+            font-size: Theme.fs-sm;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+}
+
+// ── the card grid ────────────────────────────────────────────────────────────
+
+// `grid-cols-[repeat(auto-fill,minmax(88px,1fr))]`, arithmetic instead of a
+// layout: Slint has no auto-fill grid, and a GridLayout wants its cells named
+// at compile time, which a model cannot do.
+component MediaGrid inherits Rectangle {
+    in property <[MediaItemData]> items;
+
+    callback clicked(id: int, additive: bool);
+    callback activated(id: int);
+    callback removed(id: int);
+    callback cleared();
+
+    property <length> gap: 8px;
+    property <length> min-card: 88px;
+
+    property <int> cols: Math.max(1,
+        Math.floor((root.width + root.gap) / (root.min-card + root.gap)));
+    property <length> card-w: (root.width - (root.cols - 1) * root.gap) / root.cols;
+    /// thumbnail + the 4px gap + one line of label
+    property <length> card-h: root.card-w * 9 / 16 + 4px + 14px;
+    property <int> rows: Math.ceil(root.items.length / root.cols);
+
+    height: root.rows > 0 ? root.rows * (root.card-h + root.gap) - root.gap : 0px;
+
+    // Pressing the background drops the selection, the way pressing empty
+    // space in the reference's grid does. The band that gesture also drags
+    // there is not ported: a marquee wants a pointer grab over the whole
+    // window, and there is nothing yet for a multiple selection to be dragged
+    // onto. Declared first, so the cards take their own presses.
+    TouchArea {
+        clicked => {
+            root.cleared();
+        }
+    }
+
+    for entry[index] in root.items: MediaCard {
+        x: Math.mod(index, root.cols) * (root.card-w + root.gap);
+        y: Math.floor(index / root.cols) * (root.card-h + root.gap);
+        width: root.card-w;
+        height: root.card-h;
+        item: entry;
+
+        clicked(additive) => {
+            root.clicked(entry.id, additive);
+        }
+        activated => {
+            root.activated(entry.id);
+        }
+        removed => {
+            root.removed(entry.id);
+        }
+    }
+}
+
+// ── the catalogue pages ──────────────────────────────────────────────────────
+
+// One entry of the transitions or effects catalogue. Display data only: the
+// id is what Rust is handed when a card is applied, mirroring lib/effects.ts
+// in the reference, where ids are forever because project files store them.
+struct CatalogueItemData {
+    id: string,
+    label: string,
+    /// False keeps the card browsable with a "Soon" badge — the reference's
+    /// honest version of a disabled control, used by the motion transitions
+    /// the engine cannot animate yet.
+    enabled: bool,
+    /// The rendered preview, for effects; empty for transitions, whose tile
+    /// is the transition mark on a sunken ground instead.
+    art: image,
+}
+
+// A catalogue card: preview tile, label under it, and the apply affordance —
+// a plus on hover when it works, a "Soon" badge when it does not.
+component CatalogueCard inherits Rectangle {
+    in property <CatalogueItemData> item;
+
+    callback applied();
+
+    card := TouchArea {
+        enabled: root.item.enabled;
+        mouse-cursor: root.item.enabled ? pointer : default;
+        clicked => { root.applied(); }
+
+        tile := Rectangle {
+            y: 0;
+            height: root.width * 9 / 16;
+            border-radius: Theme.r;
+            background: Theme.well;
+            border-width: 1px;
+            border-color: (card.has-hover && root.item.enabled)
+                ? Theme.line-strong : Theme.line;
+            clip: true;
+
+            if root.item.art.width > 0: Image {
+                x: 0;
+                y: 0;
+                width: parent.width;
+                height: parent.height;
+                source: root.item.art;
+                image-fit: cover;
+            }
+
+            if root.item.art.width == 0: Icon {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                glyph: Glyph.transition;
+                size: 22px;
+                tint: Theme.fg-dim;
+            }
+
+            if !root.item.enabled: Rectangle {
+                x: parent.width - self.width - 4px;
+                y: parent.height - self.height - 4px;
+                width: soon.width + 8px;
+                height: soon.height + 2px;
+                border-radius: Theme.r-xs;
+                background: Theme.scrim;
+
+                soon := Text {
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                    text: "Soon";
+                    color: Theme.on-scrim;
+                    font-size: 10px;
+                }
+            }
+
+            if root.item.enabled && card.has-hover: Rectangle {
+                x: parent.width - self.width - 4px;
+                y: parent.height - self.height - 4px;
+                width: 20px;
+                height: 20px;
+                border-radius: Theme.r-xs;
+                background: Theme.scrim;
+
+                Icon {
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                    glyph: Glyph.plus;
+                    size: 11px;
+                    tint: Theme.on-scrim;
+                }
+            }
+        }
+
+        Text {
+            x: 0;
+            y: tile.height + 4px;
+            width: root.width;
+            height: 14px;
+            text: root.item.label;
+            color: Theme.fg-muted;
+            font-size: Theme.fs-sm;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+}
+
+// The same auto-fill arithmetic as MediaGrid, over catalogue entries.
+component CatalogueGrid inherits Rectangle {
+    in property <[CatalogueItemData]> items;
+
+    callback applied(id: string);
+
+    property <length> gap: 8px;
+    property <length> min-card: 88px;
+
+    property <int> cols: Math.max(1,
+        Math.floor((root.width + root.gap) / (root.min-card + root.gap)));
+    property <length> card-w: (root.width - (root.cols - 1) * root.gap) / root.cols;
+    property <length> card-h: root.card-w * 9 / 16 + 4px + 14px;
+    property <int> rows: Math.ceil(root.items.length / root.cols);
+
+    height: root.rows > 0 ? root.rows * (root.card-h + root.gap) - root.gap : 0px;
+
+    for entry[index] in root.items: CatalogueCard {
+        x: Math.mod(index, root.cols) * (root.card-w + root.gap);
+        y: Math.floor(index / root.cols) * (root.card-h + root.gap);
+        width: root.card-w;
+        height: root.card-h;
+        item: entry;
+
+        applied => { root.applied(entry.id); }
+    }
+}
+
+// The text page: the one title style that exists, as a card. Clicking adds a
+// title at the playhead. Sized like one grid cell so the card matches its
+// neighbours on the other pages.
+component TextPage inherits Rectangle {
+    callback add-text();
+
+    property <length> gap: 8px;
+    property <length> min-card: 88px;
+    property <int> cols: Math.max(1,
+        Math.floor((root.width + root.gap) / (root.min-card + root.gap)));
+    property <length> card-w: (root.width - (root.cols - 1) * root.gap) / root.cols;
+
+    height: root.card-w * 9 / 16 + 4px + 14px;
+
+    touch := TouchArea {
+        x: 0;
+        y: 0;
+        width: root.card-w;
+        height: root.height;
+        mouse-cursor: pointer;
+        clicked => { root.add-text(); }
+        double-clicked => { root.add-text(); }
+
+        tile := Rectangle {
+            y: 0;
+            height: root.card-w * 9 / 16;
+            border-radius: Theme.r;
+            // Titles wear the rose the timeline gives them.
+            background: Theme.kind-text-well;
+            border-width: 1px;
+            border-color: touch.has-hover ? Theme.line-strong : Theme.line;
+
+            Text {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                text: "Aa";
+                color: Theme.kind-text;
+                font-size: 20px;
+                font-weight: 600;
+            }
+        }
+
+        Text {
+            x: 0;
+            y: tile.height + 4px;
+            width: root.card-w;
+            height: 14px;
+            text: "Default title";
+            color: Theme.fg-muted;
+            font-size: Theme.fs-sm;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+}
+
+// ── the pane ─────────────────────────────────────────────────────────────────
+
+// Centred placeholder for a page with nothing on it.
+component Empty inherits VerticalLayout {
+    in property <Glyph> glyph;
+    in property <string> text;
+
+    padding: 16px;
+    padding-top: 32px;
+    spacing: 8px;
+
+    HorizontalLayout {
+        alignment: center;
+        Icon {
+            glyph: root.glyph;
+            size: 28px;
+            tint: Theme.fg-dim;
+        }
+    }
+
+    Text {
+        text: root.text;
+        color: Theme.fg-dim;
+        font-size: Theme.fs;
+        horizontal-alignment: center;
+        wrap: word-wrap;
+    }
+}
+
+export component MediaPane inherits Rectangle {
+    /// The bin, already narrowed to `filter`. Filtering happens on the Rust
+    /// side because a Slint model cannot be filtered in the language, and
+    /// filtering inside the `for` would leave holes in the grid's indices.
+    in property <[MediaItemData]> items;
+    in property <int> count-all;
+    in property <int> count-video;
+    in property <int> count-audio;
+    in property <int> count-images;
+    /// how many of the whole bin are selected, not how many of `items` are
+    in property <int> selected-count;
+    in property <bool> importing;
+
+    out property <MediaFilter> filter: MediaFilter.all;
+
+    callback import-media();
+    callback filter-changed(filter: MediaFilter);
+    callback select(id: int, additive: bool);
+    callback clear-selection();
+    callback remove(id: int);
+    callback remove-selected();
+    /// double-clicked: place it on the timeline at the playhead
+    callback activate(id: int);
+
+    /// Text page: add a title at the playhead.
+    callback add-text();
+    /// Catalogue pages: apply to the selected clip; Rust validates & explains.
+    callback apply-effect(effect-id: string);
+    callback apply-transition(transition-id: string);
+    /// Templates page: open the save-as-template flow for this project.
+    callback save-template();
+
+    property <int> tab;
+    property <bool> categories-open: true;
+    property <bool> text-open: true;
+    property <bool> transitions-open: true;
+    property <bool> effects-open: true;
+    property <bool> templates-open: true;
+    /// 0 = Basic, 1 = Motion
+    property <int> transition-category;
+    /// 0 = Basic, 1 = Blur, 2 = Color, 3 = Stylize, 4 = Distort
+    property <int> effect-category;
+    property <length> sidebar-w: 104px;
+
+    // The catalogues, mirrored from lib/effects.ts in the reference: same ids
+    // (they are written into project files there — pick them like you mean
+    // them), same labels, same category split. The effect artwork is the
+    // reference's own rendered previews, each effect's real FFmpeg chain run
+    // over one source still.
+    property <[CatalogueItemData]> transitions-basic: [
+        { id: "cross-fade", label: "Cross Fade", enabled: true },
+        { id: "fade-black", label: "Fade to Black", enabled: true },
+        { id: "fade-white", label: "Fade to White", enabled: true },
+    ];
+    property <[CatalogueItemData]> transitions-motion: [
+        { id: "wipe-left", label: "Wipe Left", enabled: false },
+        { id: "wipe-right", label: "Wipe Right", enabled: false },
+        { id: "push", label: "Push", enabled: false },
+        { id: "zoom", label: "Zoom", enabled: false },
+    ];
+    property <[CatalogueItemData]> effects-basic: [
+        { id: "black-white", label: "Black & White", enabled: true,
+          art: @image-url("../assets/effect-previews/black-white.jpg") },
+        { id: "sepia", label: "Sepia", enabled: true,
+          art: @image-url("../assets/effect-previews/sepia.jpg") },
+        { id: "invert", label: "Invert", enabled: true,
+          art: @image-url("../assets/effect-previews/invert.jpg") },
+        { id: "sharpen", label: "Sharpen", enabled: true,
+          art: @image-url("../assets/effect-previews/sharpen.jpg") },
+    ];
+    property <[CatalogueItemData]> effects-blur: [
+        { id: "gaussian-blur", label: "Gaussian Blur", enabled: true,
+          art: @image-url("../assets/effect-previews/gaussian-blur.jpg") },
+        { id: "box-blur", label: "Box Blur", enabled: true,
+          art: @image-url("../assets/effect-previews/box-blur.jpg") },
+        { id: "motion-blur", label: "Motion Blur", enabled: true,
+          art: @image-url("../assets/effect-previews/motion-blur.jpg") },
+    ];
+    property <[CatalogueItemData]> effects-color: [
+        { id: "warm", label: "Warm", enabled: true,
+          art: @image-url("../assets/effect-previews/warm.jpg") },
+        { id: "cool", label: "Cool", enabled: true,
+          art: @image-url("../assets/effect-previews/cool.jpg") },
+        { id: "vibrance", label: "Vibrance", enabled: true,
+          art: @image-url("../assets/effect-previews/vibrance.jpg") },
+        { id: "contrast-pop", label: "Contrast Pop", enabled: true,
+          art: @image-url("../assets/effect-previews/contrast-pop.jpg") },
+    ];
+    property <[CatalogueItemData]> effects-stylize: [
+        { id: "vignette", label: "Vignette", enabled: true,
+          art: @image-url("../assets/effect-previews/vignette.jpg") },
+        { id: "film-grain", label: "Film Grain", enabled: true,
+          art: @image-url("../assets/effect-previews/film-grain.jpg") },
+        { id: "glow", label: "Glow", enabled: true,
+          art: @image-url("../assets/effect-previews/glow.jpg") },
+        { id: "posterize", label: "Posterize", enabled: true,
+          art: @image-url("../assets/effect-previews/posterize.jpg") },
+    ];
+    property <[CatalogueItemData]> effects-distort: [
+        { id: "pixelate", label: "Pixelate", enabled: true,
+          art: @image-url("../assets/effect-previews/pixelate.jpg") },
+        { id: "mirror", label: "Mirror", enabled: true,
+          art: @image-url("../assets/effect-previews/mirror.jpg") },
+        { id: "fisheye", label: "Fisheye", enabled: true,
+          art: @image-url("../assets/effect-previews/fisheye.jpg") },
+        { id: "shake", label: "Shake", enabled: true,
+          art: @image-url("../assets/effect-previews/shake.jpg") },
+    ];
+
+    function narrow(to: MediaFilter) {
+        root.filter = to;
+        root.filter-changed(to);
+    }
+
+    Pane {
+        // The page strip. Its bottom edge is the pane's full-width divider,
+        // which is why the hairline is a child of this row and not a border on
+        // the pill below it.
+        Rectangle {
+            height: 44px;
+
+            Rectangle {
+                y: parent.height - 1px;
+                height: 1px;
+                background: Theme.line;
+            }
+
+            HorizontalLayout {
+                padding: 8px;
+
+                Rectangle {
+                    background: Theme.well;
+                    border-width: 1px;
+                    border-color: Theme.line;
+                    border-radius: Theme.r;
+
+                    HorizontalLayout {
+                        padding: 2px;
+                        spacing: 2px;
+
+                        LibraryTab {
+                            label: "Media";
+                            current: root.tab == 0;
+                            clicked => { root.tab = 0; }
+                        }
+                        LibraryTab {
+                            label: "Text";
+                            current: root.tab == 1;
+                            clicked => { root.tab = 1; }
+                        }
+                        LibraryTab {
+                            label: "Transitions";
+                            current: root.tab == 2;
+                            clicked => { root.tab = 2; }
+                        }
+                        LibraryTab {
+                            label: "Effects";
+                            current: root.tab == 3;
+                            clicked => { root.tab = 3; }
+                        }
+                        LibraryTab {
+                            label: "Templates";
+                            current: root.tab == 4;
+                            clicked => { root.tab = 4; }
+                        }
+                    }
+                }
+            }
+        }
+
+        // The page: category sidebar, hairline, browsing area. Positioned by
+        // hand for the reason the workspace is — the sidebar is a fixed column
+        // and the rest is the remainder, and saying that directly is shorter
+        // than a layout plus the stretch factors that would express it.
+        body := Rectangle {
+            vertical-stretch: 1;
+
+            Rectangle {
+                x: root.sidebar-w;
+                width: 1px;
+                background: Theme.line;
+            }
+
+            Rectangle {
+                // Pinned: an element with an explicit width but no x is
+                // CENTRED in its parent by Slint's default geometry, and this
+                // column spent two rounds of debugging drifting into the card
+                // grid because of exactly that. Every element in this file
+                // that sets one dimension must pin the other axis too.
+                x: 0;
+                width: root.sidebar-w;
+                clip: true;
+
+                // Plain children with a `visible` toggle rather than `if`
+                // conditionals: a hidden row zeroes its own height, so
+                // collapsing still collapses, and nothing here re-derives its
+                // geometry when a tab switches.
+                VerticalLayout {
+                    x: 0;
+                    y: 0;
+                    width: parent.width;
+                    // Fixed-height rows in a column far taller than they need:
+                    // pack them at the top rather than leave the layout to
+                    // decide what to do with the slack.
+                    alignment: start;
+                    padding: 4px;
+                    spacing: 1px;
+
+                    // Only the Media page has categories in this tree; the
+                    // others browse catalogues that have not been ported, so
+                    // their sidebar is empty rather than stocked with rows
+                    // that filter nothing.
+                    CategoryHeading {
+                        visible: root.tab == 0;
+                        height: self.visible ? 26px : 0;
+                        title: "Media";
+                        open: root.categories-open;
+                        toggled => { root.categories-open = !root.categories-open; }
+                    }
+
+                    CategoryRow {
+                        visible: root.tab == 0 && root.categories-open;
+                        height: self.visible ? 24px : 0;
+                        label: "All media";
+                        count: root.count-all;
+                        current: root.filter == MediaFilter.all;
+                        clicked => { root.narrow(MediaFilter.all); }
+                    }
+                    CategoryRow {
+                        visible: root.tab == 0 && root.categories-open;
+                        height: self.visible ? 24px : 0;
+                        label: "Video";
+                        count: root.count-video;
+                        current: root.filter == MediaFilter.video;
+                        clicked => { root.narrow(MediaFilter.video); }
+                    }
+                    CategoryRow {
+                        visible: root.tab == 0 && root.categories-open;
+                        height: self.visible ? 24px : 0;
+                        label: "Audio";
+                        count: root.count-audio;
+                        current: root.filter == MediaFilter.audio;
+                        clicked => { root.narrow(MediaFilter.audio); }
+                    }
+                    CategoryRow {
+                        visible: root.tab == 0 && root.categories-open;
+                        height: self.visible ? 24px : 0;
+                        label: "Images";
+                        count: root.count-images;
+                        current: root.filter == MediaFilter.images;
+                        clicked => { root.narrow(MediaFilter.images); }
+                    }
+
+                    // Text
+                    CategoryHeading {
+                        visible: root.tab == 1;
+                        height: self.visible ? 26px : 0;
+                        title: "Text";
+                        open: root.text-open;
+                        toggled => { root.text-open = !root.text-open; }
+                    }
+                    CategoryRow {
+                        visible: root.tab == 1 && root.text-open;
+                        height: self.visible ? 24px : 0;
+                        label: "Titles";
+                        current: true;
+                    }
+
+                    // Transitions
+                    CategoryHeading {
+                        visible: root.tab == 2;
+                        height: self.visible ? 26px : 0;
+                        title: "Transitions";
+                        open: root.transitions-open;
+                        toggled => { root.transitions-open = !root.transitions-open; }
+                    }
+                    CategoryRow {
+                        visible: root.tab == 2 && root.transitions-open;
+                        height: self.visible ? 24px : 0;
+                        label: "Basic";
+                        current: root.transition-category == 0;
+                        clicked => { root.transition-category = 0; }
+                    }
+                    CategoryRow {
+                        visible: root.tab == 2 && root.transitions-open;
+                        height: self.visible ? 24px : 0;
+                        label: "Motion";
+                        current: root.transition-category == 1;
+                        clicked => { root.transition-category = 1; }
+                    }
+
+                    // Effects
+                    CategoryHeading {
+                        visible: root.tab == 3;
+                        height: self.visible ? 26px : 0;
+                        title: "Video Effects";
+                        open: root.effects-open;
+                        toggled => { root.effects-open = !root.effects-open; }
+                    }
+                    CategoryRow {
+                        visible: root.tab == 3 && root.effects-open;
+                        height: self.visible ? 24px : 0;
+                        label: "Basic";
+                        current: root.effect-category == 0;
+                        clicked => { root.effect-category = 0; }
+                    }
+                    CategoryRow {
+                        visible: root.tab == 3 && root.effects-open;
+                        height: self.visible ? 24px : 0;
+                        label: "Blur";
+                        current: root.effect-category == 1;
+                        clicked => { root.effect-category = 1; }
+                    }
+                    CategoryRow {
+                        visible: root.tab == 3 && root.effects-open;
+                        height: self.visible ? 24px : 0;
+                        label: "Color";
+                        current: root.effect-category == 2;
+                        clicked => { root.effect-category = 2; }
+                    }
+                    CategoryRow {
+                        visible: root.tab == 3 && root.effects-open;
+                        height: self.visible ? 24px : 0;
+                        label: "Stylize";
+                        current: root.effect-category == 3;
+                        clicked => { root.effect-category = 3; }
+                    }
+                    CategoryRow {
+                        visible: root.tab == 3 && root.effects-open;
+                        height: self.visible ? 24px : 0;
+                        label: "Distort";
+                        current: root.effect-category == 4;
+                        clicked => { root.effect-category = 4; }
+                    }
+
+                    // Templates
+                    CategoryHeading {
+                        visible: root.tab == 4;
+                        height: self.visible ? 26px : 0;
+                        title: "Templates";
+                        open: root.templates-open;
+                        toggled => { root.templates-open = !root.templates-open; }
+                    }
+                    CategoryRow {
+                        visible: root.tab == 4 && root.templates-open;
+                        height: self.visible ? 24px : 0;
+                        label: "My templates";
+                        current: true;
+                    }
+                }
+            }
+
+            PaneScroll {
+                x: root.sidebar-w + 1px;
+                width: parent.width - root.sidebar-w - 1px;
+                height: parent.height;
+
+                if root.tab == 0: HorizontalLayout {
+                    padding: 8px;
+                    ImportButton {
+                        busy: root.importing;
+                        clicked => { root.import-media(); }
                     }
                 }
 
-                Text {
-                    text: "No media";
-                    color: Theme.fg-muted;
-                    font-size: Theme.fs-lg;
-                    horizontal-alignment: center;
+                // Only worth a row when a multiple selection exists — one
+                // selected card is deleted from the card itself.
+                if root.tab == 0 && root.selected-count > 1: HorizontalLayout {
+                    padding-left: 8px;
+                    padding-right: 8px;
+                    padding-bottom: 8px;
+
+                    Rectangle {
+                        height: 28px;
+                        background: Theme.well;
+                        border-radius: Theme.r;
+
+                        HorizontalLayout {
+                            padding-left: 10px;
+                            padding-right: 4px;
+                            spacing: 8px;
+
+                            Text {
+                                horizontal-stretch: 1;
+                                text: "\{root.selected-count} selected";
+                                color: Theme.fg-muted;
+                                font-size: Theme.fs-sm;
+                                vertical-alignment: center;
+                                overflow: elide;
+                            }
+
+                            VerticalLayout {
+                                alignment: center;
+                                Rectangle {
+                                    width: wipe.width + 16px;
+                                    height: 20px;
+                                    border-radius: Theme.r-xs;
+                                    background: bin.has-hover ? Theme.danger-soft
+                                        : Colors.transparent;
+
+                                    wipe := Text {
+                                        x: (parent.width - self.width) / 2;
+                                        y: (parent.height - self.height) / 2;
+                                        text: "Delete";
+                                        color: Theme.danger;
+                                        font-size: Theme.fs-sm;
+                                    }
+
+                                    bin := TouchArea {
+                                        mouse-cursor: pointer;
+                                        clicked => { root.remove-selected(); }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
-                Text {
-                    text: "Drop files here to import";
-                    color: Theme.fg-dim;
-                    font-size: Theme.fs;
-                    horizontal-alignment: center;
-                    wrap: word-wrap;
+                if root.tab == 0 && root.items.length == 0: Empty {
+                    glyph: Glyph.import;
+                    text: root.count-all > 0
+                        ? "Nothing of that kind in this project."
+                        : "Drop video and audio files anywhere in the window to import them.";
+                }
+
+                if root.tab == 0 && root.items.length > 0: HorizontalLayout {
+                    padding-left: 8px;
+                    padding-right: 8px;
+                    padding-bottom: 8px;
+
+                    MediaGrid {
+                        horizontal-stretch: 1;
+                        items: root.items;
+
+                        clicked(id, additive) => { root.select(id, additive); }
+                        activated(id) => { root.activate(id); }
+                        removed(id) => { root.remove(id); }
+                        cleared => { root.clear-selection(); }
+                    }
+                }
+
+                if root.tab == 1: HorizontalLayout {
+                    padding: 8px;
+
+                    TextPage {
+                        horizontal-stretch: 1;
+                        add-text => { root.add-text(); }
+                    }
+                }
+
+                if root.tab == 2: HorizontalLayout {
+                    padding: 8px;
+
+                    CatalogueGrid {
+                        horizontal-stretch: 1;
+                        items: root.transition-category == 0
+                            ? root.transitions-basic
+                            : root.transitions-motion;
+                        applied(id) => { root.apply-transition(id); }
+                    }
+                }
+
+                if root.tab == 3: HorizontalLayout {
+                    padding: 8px;
+
+                    CatalogueGrid {
+                        horizontal-stretch: 1;
+                        items: root.effect-category == 0 ? root.effects-basic
+                            : root.effect-category == 1 ? root.effects-blur
+                            : root.effect-category == 2 ? root.effects-color
+                            : root.effect-category == 3 ? root.effects-stylize
+                            : root.effects-distort;
+                        applied(id) => { root.apply-effect(id); }
+                    }
+                }
+
+                // Templates: the save affordance, then the gallery — which is
+                // engine-backed in the reference (templateList), and nothing
+                // in this tree persists projects yet, so the gallery is its
+                // empty state until that seam exists.
+                if root.tab == 4: HorizontalLayout {
+                    padding: 8px;
+
+                    ImportButton {
+                        label: "Save this project as a template";
+                        glyph: Glyph.slot;
+                        clicked => { root.save-template(); }
+                    }
+                }
+
+                if root.tab == 4: Empty {
+                    glyph: Glyph.slot;
+                    text: "No templates yet. Mark media as slots, then save this project as a template.";
                 }
             }
         }

@@ -1,7 +1,7 @@
 // Hide the console window on Windows in release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use slint::{Model, ModelRc, SharedString, Timer, TimerMode, VecModel};
@@ -90,6 +90,101 @@ fn parse_bezier(text: &str, fallback: Bezier) -> Bezier {
     }
 }
 
+/// The bin, held here rather than in Slint.
+///
+/// Slint's expression language cannot filter a model, and filtering inside the
+/// panel's `for` would leave holes in the grid's indices — the cards are
+/// placed by arithmetic on the row number, so row 4 being invisible would
+/// leave a gap where a card should be. So the whole library lives here and the
+/// panel is handed exactly the rows it should draw, plus the counts of the
+/// rows it should not.
+struct Library {
+    items: RefCell<Vec<MediaItemData>>,
+    filter: Cell<MediaFilter>,
+}
+
+impl Library {
+    fn new(items: Vec<MediaItemData>) -> Self {
+        Self { items: RefCell::new(items), filter: Cell::new(MediaFilter::All) }
+    }
+
+    fn shows(filter: MediaFilter, kind: MediaKind) -> bool {
+        match filter {
+            MediaFilter::All => true,
+            MediaFilter::Video => kind == MediaKind::Video,
+            MediaFilter::Audio => kind == MediaKind::Audio,
+            MediaFilter::Images => kind == MediaKind::Image,
+        }
+    }
+
+    fn count(&self, kind: MediaKind) -> i32 {
+        self.items.borrow().iter().filter(|item| item.kind == kind).count() as i32
+    }
+
+    /// Republishes the filtered view and every count the sidebar reads. Called
+    /// after anything at all changes: the bin is tens of rows, not thousands,
+    /// and one path that always produces a consistent panel is worth more than
+    /// the row-level updates it could be split into.
+    fn publish(&self, app: &App, view: &VecModel<MediaItemData>) {
+        let filter = self.filter.get();
+        let items = self.items.borrow();
+
+        view.set_vec(
+            items
+                .iter()
+                .filter(|item| Self::shows(filter, item.kind))
+                .cloned()
+                .collect::<Vec<_>>(),
+        );
+
+        app.set_media_count_all(items.len() as i32);
+        app.set_media_count_video(self.count(MediaKind::Video));
+        app.set_media_count_audio(self.count(MediaKind::Audio));
+        app.set_media_count_images(self.count(MediaKind::Image));
+        app.set_media_selected_count(
+            items.iter().filter(|item| item.selected).count() as i32
+        );
+    }
+}
+
+fn media(id: i32, name: &str, kind: MediaKind, duration: f32) -> MediaItemData {
+    MediaItemData {
+        id,
+        name: SharedString::from(name),
+        kind,
+        duration,
+        // No decoder in this tree yet, so no artwork: the card falls back to
+        // the kind's tint and mark, which is what it does in the reference
+        // until the filmstrip or the peaks arrive.
+        ..Default::default()
+    }
+}
+
+/// A bin the size of a real one, so the grid is exercised at the widths a
+/// splitter drag actually produces.
+fn demo_library() -> Vec<MediaItemData> {
+    use MediaKind::{Audio, Video};
+    vec![
+        media(1, "ElevenLabs_2026-08-16T09-12-04_intro.mp3", Audio, 3.4),
+        media(2, "0001-0036.mp4", Video, 1.2),
+        media(3, "0036-0072.mp4", Video, 1.2),
+        media(4, "0072-0134.mp4", Video, 2.1),
+        media(5, "0134-0182.mp4", Video, 1.6),
+        media(6, "0232-0322.mp4", Video, 3.0),
+        media(7, "0326-0452.mp4", Video, 4.2),
+        media(8, "0456-0524.mp4", Video, 2.3),
+        media(9, "0528-0604.mp4", Video, 2.5),
+        media(10, "0604-0642.mp4", Video, 1.3),
+        media(11, "0654-0725.mp4", Video, 2.4),
+        media(12, "0730-0781.mp4", Video, 1.7),
+        media(13, "ElevenLabs_2026-08-16T09-14-22_line-02.mp3", Audio, 1.9),
+        media(14, "ElevenLabs_2026-08-16T09-15-40_line-03.mp3", Audio, 2.6),
+        media(15, "ElevenLabs_2026-08-16T09-17-01_line-04.mp3", Audio, 7.8),
+        media(16, "ElevenLabs_2026-08-16T09-18-33_line-05.mp3", Audio, 4.5),
+        media(17, "ElevenLabs_2026-08-16T09-20-09_outro.mp3", Audio, 5.2),
+    ]
+}
+
 /// Programme level for the meter: fast attack, slow release, with a peak hold
 /// that decays after 900ms — the behaviour the web demo fakes in a rAF loop.
 struct LevelSim {
@@ -151,7 +246,53 @@ impl LevelSim {
 }
 
 fn main() -> Result<(), slint::PlatformError> {
+    // The custom title bar. On macOS the native bar is hidden and the traffic
+    // lights are overlaid on the strip the UI draws — the winit spelling of
+    // the Tauri build's `titleBarStyle: "Overlay"`. Other platforms keep
+    // their decorations for now; the reference goes undecorated with its own
+    // window buttons on Windows, which is a separate port.
+    #[cfg(target_os = "macos")]
+    {
+        use slint::winit_030::winit::platform::macos::WindowAttributesExtMacOS;
+        slint::BackendSelector::new()
+            .backend_name("winit".into())
+            .with_winit_window_attributes_hook(|attributes| {
+                attributes
+                    .with_titlebar_transparent(true)
+                    .with_title_hidden(true)
+                    .with_fullsize_content_view(true)
+            })
+            .select()?;
+    }
+
     let app = App::new()?;
+    app.set_macos(cfg!(target_os = "macos"));
+
+    // The strip's drag region and double-click. Only the winit window can do
+    // either; the scene graph forwards the gestures here.
+    app.on_titlebar_begin_drag({
+        let weak = app.as_weak();
+        move || {
+            use slint::winit_030::WinitWindowAccessor;
+            if let Some(app) = weak.upgrade() {
+                app.window().with_winit_window(|window| {
+                    let _ = window.drag_window();
+                });
+            }
+        }
+    });
+
+    app.on_titlebar_toggle_maximize({
+        let weak = app.as_weak();
+        move || {
+            use slint::winit_030::WinitWindowAccessor;
+            if let Some(app) = weak.upgrade() {
+                app.window().with_winit_window(|window| {
+                    window.set_maximized(!window.is_maximized());
+                });
+            }
+        }
+    });
 
     // --- effect lists ----------------------------------------------------
     let video = Rc::new(VecModel::from(vec![
@@ -199,6 +340,87 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     });
 
+    // --- the bin ---------------------------------------------------------
+    let library = Rc::new(Library::new(demo_library()));
+    let view = Rc::new(VecModel::<MediaItemData>::default());
+    app.set_media(ModelRc::from(view.clone()));
+    library.publish(&app, &view);
+
+    // Every one of these ends in the same republish, so there is one place
+    // where the panel's idea of the bin can go wrong.
+    app.on_media_filter_changed({
+        let weak = app.as_weak();
+        let library = library.clone();
+        let view = view.clone();
+        move |filter| {
+            let Some(app) = weak.upgrade() else { return };
+            library.filter.set(filter);
+            library.publish(&app, &view);
+        }
+    });
+
+    app.on_media_select({
+        let weak = app.as_weak();
+        let library = library.clone();
+        let view = view.clone();
+        move |id, additive| {
+            let Some(app) = weak.upgrade() else { return };
+            for item in library.items.borrow_mut().iter_mut() {
+                if item.id == id {
+                    // A modifier toggles this one and leaves the rest alone; a
+                    // plain click makes it the whole selection.
+                    item.selected = !additive || !item.selected;
+                } else if !additive {
+                    item.selected = false;
+                }
+            }
+            library.publish(&app, &view);
+        }
+    });
+
+    app.on_media_clear_selection({
+        let weak = app.as_weak();
+        let library = library.clone();
+        let view = view.clone();
+        move || {
+            let Some(app) = weak.upgrade() else { return };
+            for item in library.items.borrow_mut().iter_mut() {
+                item.selected = false;
+            }
+            library.publish(&app, &view);
+        }
+    });
+
+    app.on_media_remove({
+        let weak = app.as_weak();
+        let library = library.clone();
+        let view = view.clone();
+        move |id| {
+            let Some(app) = weak.upgrade() else { return };
+            library.items.borrow_mut().retain(|item| item.id != id);
+            library.publish(&app, &view);
+        }
+    });
+
+    app.on_media_remove_selected({
+        let weak = app.as_weak();
+        let library = library.clone();
+        let view = view.clone();
+        move || {
+            let Some(app) = weak.upgrade() else { return };
+            library.items.borrow_mut().retain(|item| !item.selected);
+            library.publish(&app, &view);
+        }
+    });
+
+    // Both ends of these are unbuilt: there is no timeline to place a clip on
+    // and no file picker in this crate — the reference opens Tauri's, and
+    // reaching for a native dialog here is a dependency decision, not a
+    // detail of the panel. The callbacks exist so the panel is wired to
+    // something the day either lands.
+    app.on_media_activate(|_id| {});
+    app.on_import_media(|| {});
+
     // --- the pieces Slint cannot express ---------------------------------
     app.global::<Curves>()
         .on_ease(|x1, y1, x2, y2, at| bezier_y_at_x(x1, y1, x2, y2, at));
@@ -212,8 +434,9 @@ fn main() -> Result<(), slint::PlatformError> {
     // Armed by hover rather than left running for the life of the process.
     //
     // Thirty samples a second is an animation however it is produced: each one
-    // writes `level` and `peak`, and FemtoVG redraws the whole window for every
-    // dirty property because it has no partial rendering. Left running, the
+    // writes `level` and `peak`, and the whole window is redrawn for every dirty
+    // property — Skia has partial-rendering machinery but it is off on every
+    // GPU surface, and FemtoVG has none at all. Left running, the
     // feed alone held the app at ~10% of a core doing nothing but re-drawing a
     // bar nobody was looking at. The meter reports hover (see the TouchArea in
     // level-meter.slint) and the timer follows it, so an unattended window
