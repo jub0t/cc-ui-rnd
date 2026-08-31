@@ -15,16 +15,29 @@ slint = "1.14"
 slint-build = "1.14"
 
 [profile.release]
-# 3, not "s". "s" optimises for binary size and gives up inlining and
-# vectorisation to get it, which is the wrong trade for an editor UI that
-# redraws continuously — size is not a constraint on desktop.
+# Every knob here is set for the fastest possible binary, and each one costs
+# build time. The measured cost on this machine is recorded in slint/README.md.
 opt-level = 3
-# "thin" rather than `true` (which is fat LTO). Fat LTO re-optimises the whole
-# dependency graph in one serial link step — that is where the 13-minute
-# release build went. Thin LTO keeps most of the win, runs in parallel across
-# codegen units, and cuts the link to a fraction of it.
-#
-# codegen-units is left at the default (16). Forcing it to 1 would buy a little
-# more optimisation at the cost of serialising codegen, and build time already
-# hurts enough.
-lto = "thin"
+# Fat LTO: re-optimise the whole dependency graph — slint, femtovg, winit and
+# this crate — as one unit, so calls across crate boundaries inline. Thin LTO
+# gets most of this in parallel; fat gets the rest in one serial link step.
+lto = "fat"
+# One codegen unit. Fat LTO already serialises the link, so the parallelism
+# given up here is smaller than it looks, and it removes the last barrier to
+# cross-function optimisation inside each crate.
+codegen-units = 1
+# No unwind tables and no landing pads: every call site loses its unwind edge,
+# which frees the optimiser and shrinks the binary. This is a GUI binary with
+# no tests and no catch_unwind, and unwinding through the ObjC frames of the
+# macOS event loop was never well-defined anyway — winit only catches panics
+# to avoid exactly that. `cargo test --release` cannot work under this.
+panic = "abort"
+# Symbols are worth nothing in a release binary that is not being profiled.
+# Drop this line before running Instruments or perf against it.
+strip = "symbols"
+
+[profile.dev.package."*"]
+# Dependencies at -O2, this crate at -O0. Slint's renderer is unusably slow
+# when compiled unoptimised, but it is also compiled exactly once — while
+# src/main.rs is what actually gets rebuilt, and stays fast to rebuild.
+opt-level = 2
