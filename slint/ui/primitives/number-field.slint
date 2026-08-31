@@ -101,6 +101,9 @@ export component NumberField inherits Rectangle {
             horizontal-stretch: 1;
             text: root.display;
             color: Theme.fg;
+            // A number, so the technical face — this is the control the rest
+            // of the app reaches for whenever it needs a dimension typed.
+            font-family: Theme.font-technical;
             font-size: Theme.fs;
             single-line: true;
             enabled: root.enabled;

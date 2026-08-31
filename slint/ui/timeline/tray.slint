@@ -1,0 +1,204 @@
+import { Theme } from "../theme.slint";
+import { Glyph, Icon } from "../icons.slint";
+import { IconButton } from "../primitives/panel.slint";
+import { TimelineTool } from "model.slint";
+
+// The timeline's tool tray.
+//
+// The tool set is the reference's (TimelinePanel.tsx): pointer and razor, then
+// the three edit actions, then snapping and the A/V tools, then add-track, and
+// the view controls pushed to the far end behind the timecode readout. The
+// metrics are web/'s bar — 40px tall, 4px between buttons, an 18px hairline
+// with 4px of air on each side between groups — which reads tighter than the
+// reference's 44px without crowding a 26px button.
+//
+// Two of the reference's affordances are missing and worth naming. A disabled
+// Merge there carries the reason in its tooltip, because a button that greys
+// out without saying why leaves you guessing at the rule; this tree has no
+// tooltip primitive, so `merge-blocked-because` is accepted and shown as a
+// line beside the button instead of on hover. And the A/V tools open a menu
+// there; here the button reports a press and the popup is the caller's to
+// grow.
+
+component Divider inherits Rectangle {
+    width: 9px;
+
+    Rectangle {
+        x: 4px;
+        y: (parent.height - self.height) / 2;
+        width: 1px;
+        height: 18px;
+        background: Theme.line;
+    }
+}
+
+export component TimelineTray inherits Rectangle {
+    in property <TimelineTool> tool: TimelineTool.select;
+    in property <bool> snap: true;
+    in property <int> selected-count;
+    /// Empty when the selection can be merged; otherwise why it cannot.
+    in property <string> merge-blocked-because;
+    /// The selected clip has sound to detach or words to speak.
+    in property <bool> has-av-tools;
+    /// hh:mm:ss:ff at the playhead, formatted by the caller
+    in property <string> readout;
+
+    callback tool-changed(tool: TimelineTool);
+    callback snap-changed(snap: bool);
+    callback split();
+    callback merge();
+    callback delete-selected();
+    callback av-tools();
+    callback add-track();
+    callback fit();
+    callback zoom(factor: float);
+
+    height: 40px;
+    background: Theme.panel;
+
+    Rectangle {
+        x: 0;
+        y: parent.height - 1px;
+        width: parent.width;
+        height: 1px;
+        background: Theme.line;
+    }
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        padding-top: 7px;
+        padding-bottom: 7px;
+        spacing: 4px;
+
+        IconButton {
+            glyph: Glyph.pointer;
+            label: "Select (V)";
+            checked: root.tool == TimelineTool.select;
+            clicked => { root.tool-changed(TimelineTool.select); }
+        }
+        IconButton {
+            glyph: Glyph.razor;
+            label: "Razor (B)";
+            checked: root.tool == TimelineTool.razor;
+            clicked => { root.tool-changed(TimelineTool.razor); }
+        }
+
+        Divider { }
+
+        IconButton {
+            glyph: Glyph.split;
+            label: "Split at playhead (S)";
+            clicked => { root.split(); }
+        }
+        IconButton {
+            glyph: Glyph.merge;
+            label: "Merge selected";
+            enabled: root.merge-blocked-because == "";
+            clicked => { root.merge(); }
+        }
+        IconButton {
+            glyph: Glyph.trash;
+            label: "Delete selected";
+            danger: true;
+            enabled: root.selected-count > 0;
+            clicked => { root.delete-selected(); }
+        }
+
+        // The count of a multiple selection, in the accent so it reads as a
+        // fact about the selection rather than another control.
+        if root.selected-count > 1: Text {
+            width: 16px;
+            text: "\{root.selected-count}";
+            color: Theme.accent;
+            font-family: Theme.font-technical;
+            font-size: Theme.fs-sm;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+
+        // Where the tooltip's sentence goes, since there is no tooltip. Shown
+        // only while Merge is actually blocked, so it is an explanation of a
+        // dead button and not permanent chrome.
+        if root.merge-blocked-because != "" && root.selected-count > 0: Text {
+            // Fixed, so a longer reason elides rather than pushing every
+            // control after it along the bar.
+            width: 96px;
+            text: root.merge-blocked-because;
+            color: Theme.fg-dim;
+            font-size: 10px;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+
+        Divider { }
+
+        IconButton {
+            glyph: Glyph.magnet;
+            label: "Snap to edges";
+            checked: root.snap;
+            clicked => { root.snap-changed(!root.snap); }
+        }
+
+        // Only while the selected clip has tools to offer — sound to detach or
+        // transcribe, or a title's words to speak. A menu of grey rows teaches
+        // nothing, so the button is absent rather than disabled.
+        if root.has-av-tools: HorizontalLayout {
+            spacing: 0px;
+            Divider { }
+            IconButton {
+                glyph: Glyph.waveform;
+                label: "Audio and video tools";
+                wide: true;
+                clicked => { root.av-tools(); }
+            }
+        }
+
+        Divider { }
+
+        IconButton {
+            glyph: Glyph.plus;
+            label: "Add track";
+            icon-size: 12px;
+            clicked => { root.add-track(); }
+        }
+
+        Rectangle { horizontal-stretch: 1; }
+
+        // Fixed width, right-aligned: without it every control to its right
+        // shuffles sideways each time the frame digits change.
+        Text {
+            width: 92px;
+            text: root.readout;
+            color: Theme.fg-dim;
+            font-family: Theme.font-technical;
+            font-size: Theme.fs-sm;
+            letter-spacing: 0.24px;
+            horizontal-alignment: right;
+            vertical-alignment: center;
+        }
+
+        Divider { }
+
+        IconButton {
+            glyph: Glyph.fit;
+            label: "Zoom to fit";
+            icon-size: 13px;
+            clicked => { root.fit(); }
+        }
+        IconButton {
+            glyph: Glyph.minus;
+            label: "Zoom out";
+            icon-size: 12px;
+            // Above 1 is out: the factor multiplies seconds-per-pixel, so a
+            // bigger number is more seconds in the same pixel.
+            clicked => { root.zoom(1.4); }
+        }
+        IconButton {
+            glyph: Glyph.plus;
+            label: "Zoom in";
+            icon-size: 12px;
+            clicked => { root.zoom(1 / 1.4); }
+        }
+    }
+}

@@ -1,10 +1,31 @@
-// Design tokens, mirrored 1:1 from the reference editor's dark theme —
-// WolfCut desktop/src/styles.css, the `:root[data-theme="dark"]` block — so
-// both implementations describe the same product rather than drifting apart.
-// Retheming is a matter of overriding this block.
+// Design tokens.
+//
+// The surfaces are the web prototype's neutral grey scale (web/src/styles/
+// tokens.css), not the legacy editor's. The legacy panels were a blue-cast
+// near-black; the prototype's are flat neutral and a stop darker, which lets
+// the accent and the clip hues carry all of the colour in the window instead
+// of competing with a tinted ground.
+//
+// Everything else — the clip and media-kind hues, the meter ramp — still
+// mirrors the legacy editor (desktop/src/styles.css, the
+// `:root[data-theme="dark"]` block), because those name things the engine and
+// the project format also name. Retheming is a matter of overriding this
+// block.
 export global Theme {
-    // type
-    out property <string> font: "Inter";
+    // type — two roles, not one, following the reference's own split.
+    //
+    // Synonym carries the interface. It is a text face, drawn for paragraph
+    // sizes, and it stays readable at the 10 and 11px this app is full of.
+    //
+    // Inter is the technical face: timecode, the ruler, clip labels, paths,
+    // dimensions, counts — anything you read as a *value* rather than as
+    // language. Its even, mechanical figures suit numbers, and keeping it off
+    // the prose is what stops the whole interface reading like a spec sheet.
+    //
+    // The reference spends a third face (Cabinet Grotesk) on display headings.
+    // There is nothing here big enough to need one yet.
+    out property <string> font: "Synonym";
+    out property <string> font-technical: "Inter";
     out property <length> fs-sm: 11px;
     out property <length> fs: 12px;
     out property <length> fs-lg: 13px;
@@ -18,31 +39,33 @@ export global Theme {
     // back if you build --features wgpu; leave them alone otherwise, or the
     // text is over-corrected and reads as too heavy.
     //
-    // The colours here are mirrored from the reference styles.css and must
-    // stay that way — editing those to chase the look would fork the design
-    // from the reference silently, which is the one thing this repo exists to
-    // avoid. Weight is the one axis that can absorb a renderer difference
-    // without touching a shared token, and every face is bundled, so it costs
-    // nothing at runtime.
+    // Weight is the one axis that can absorb a renderer difference without
+    // touching a colour token, and every face is bundled, so it costs nothing
+    // at runtime. Reach for it rather than nudging a surface to compensate.
     out property <int> weight-body: 400;    // 500 under --features wgpu
     out property <int> weight-title: 500;   // 600 under --features wgpu
 
-    // surfaces
+    // surfaces — web/src/styles/tokens.css
     //
     // Panels are a grey that visibly floats on the near-black ground — never
     // the ground colour itself, or the panes melt into the window and their
-    // grab-able gutters vanish. `well` sits between the two for the same
-    // reason: a sunken surface equal to the ground reads as a hole punched
-    // through the panel.
-    out property <color> panel: #18181b;      // --color-panel
-    out property <color> raised: #1f1f22;     // --color-elevated
-    out property <color> well: #0e0e11;       // --color-sunken
-    // The reference states controls with white overlays (--color-hover 7%,
-    // --color-active 12%); these are those overlays pre-composited onto panel,
-    // since a field paints a solid rectangle rather than stacking a layer.
-    out property <color> field: #1f1f22;
-    out property <color> field-hover: #28282b;
-    out property <color> field-active: #343436;
+    // grab-able gutters vanish.
+    //
+    // The panel sits at the prototype's #111111 — the tone its preview
+    // viewport uses, which is the one surface in that design big enough to
+    // judge a ground by. Its #0d0d0d panel was a stop too dark once whole
+    // panes were painted in it rather than narrow strips.
+    //
+    // Moving the panel up makes room underneath, so `well` goes back to being
+    // genuinely sunken — darker than the surface it is cut into, the way the
+    // legacy theme has it and the way a sunken thing reads without having to
+    // be explained.
+    out property <color> panel: #111111;
+    out property <color> raised: #1a1a1a;
+    out property <color> well: #0a0a0a;
+    out property <color> field: #1f1f1f;       // --cp-field
+    out property <color> field-hover: #272727; // --cp-field-hover
+    out property <color> field-active: #303030;// --cp-field-active
 
     // hairlines — white-alpha like the reference, so they hold on panel,
     // well, and ground alike.
@@ -55,11 +78,25 @@ export global Theme {
     out property <color> fg-dim: #6e6e73;     // --color-tertiary
 
     // accents
-    out property <color> accent: #0a84ff;
-    out property <color> accent-hover: #3d9bff;
-    out property <color> accent-soft: #0a84ff2e;  // rgb(10 132 255 / 0.18)
+    //
+    // Lime, not blue. Both codebases land here from different directions: the
+    // prototype makes it the accent outright (--cp-accent), and the legacy
+    // editor keeps a blue --color-accent but spends the lime on the two places
+    // that carry the look — the selection highlight and every activated tool
+    // (--color-selection / --color-tool-active, both #c6f432). Taking it as
+    // the one accent says the same thing with one token instead of three.
+    //
+    // It is legible against near-black and near-white alike, which is what a
+    // selection has to be: it lands on whatever happens to be underneath it.
+    // What sits *on* it therefore has to be dark ink, and fixed — see
+    // `on-accent` below.
+    out property <color> accent: #cbf53f;          // --cp-accent
+    out property <color> accent-hover: #d9ff63;    // --cp-accent-hover
+    out property <color> accent-soft: #cbf53f33;   // rgb(203 245 63 / 0.2)
     out property <color> green: #30d158;
-    out property <color> on-accent: #ffffff;
+    // Ink for text and glyphs sitting ON the accent. A bright accent needs a
+    // dark one; swap this back to #ffffff the day the accent goes dark again.
+    out property <color> on-accent: #15220a;       // --cp-on-accent
     out property <color> on-green: #06210f;
 
     // meter ramp
@@ -83,6 +120,32 @@ export global Theme {
     out property <color> kind-text: #e8355e;
     out property <color> kind-text-well: #38131d;
 
+    // timeline
+    //
+    // The lanes are darker than `panel`, not lighter: the timeline is a well
+    // the clips sit in, and a lane brighter than the pane would make the empty
+    // stretches read as content. `lane-alt` is the banded neighbour that keeps
+    // a stack of eight tracks countable without a rule between every pair.
+    //
+    // The lanes are pitch black, and structure comes from a grid rather than
+    // from banding: a vertical rule on every ruler tick, the lane hairlines
+    // across. Black is the right ground for a timeline — the clips are the
+    // only saturated thing in the window and they sit on it the way a picture
+    // sits on a mount — and a grid is easier to read a position off than
+    // alternating stripes, which only ever answer "which lane".
+    out property <color> lane: #000000;
+    out property <color> lane-alt: #000000;
+    out property <color> ruler: #1a1a1a;         // = raised
+    /// The vertical rules. Faint on purpose: a grid you notice is a grid that
+    /// competes with the clips it is there to place.
+    out property <color> grid: #ffffff0f;
+    // Red, and used for nothing else. A playhead that shared the accent would
+    // be one more blue line among the selection outlines.
+    out property <color> playhead: #ff453a;    // --color-playhead
+    // Drawn on the audio clip's own dark ground, so it is a light wash of the
+    // kind's hue rather than the vivid mark itself.
+    out property <color> wave: #fad69eb3;      // --color-clip-wave, 0.7 alpha
+
     // Chips that sit on artwork instead of on a panel, so they bring their own
     // ground — the surface underneath is a video frame and cannot be relied on
     // for contrast.
@@ -105,7 +168,8 @@ export global Theme {
     out property <length> pad: 14px;      // panel horizontal padding
     out property <length> label-w: 62px;
 
-    // window ground the panes float on
-    out property <color> page: #050506;           // --color-base
+    // window ground the panes float on — the prototype's page, a shade under
+    // the darkest panel so the gutters read as gaps and not as seams
+    out property <color> page: #08080a;
     out property <color> page-fg-muted: #a1a1a6;
 }

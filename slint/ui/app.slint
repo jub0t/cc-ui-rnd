@@ -6,15 +6,33 @@ import "fonts/Inter-Regular.ttf";
 import "fonts/Inter-Medium.ttf";
 import "fonts/Inter-SemiBold.ttf";
 
+// Synonym, the reference editor's text face (desktop/src/styles.css names it
+// --font-sans). It ships there as one variable woff2, which Slint cannot load,
+// so these are static instances cut from it at the three weights the theme
+// uses. Licensed under the ITF Free Font License — see fonts/LICENSE-Synonym.
+import "fonts/Synonym-Regular.ttf";
+import "fonts/Synonym-Medium.ttf";
+import "fonts/Synonym-SemiBold.ttf";
+
 import { Theme } from "theme.slint";
 import { Bezier, Curves, Fmt } from "util.slint";
 import { EffectData } from "demo/effects-panel.slint";
 import { MediaFilter, MediaItemData, MediaKind } from "workspace/media-pane.slint";
+import { MenuItemData, MenuRow } from "primitives/context-menu.slint";
 import { TitleBar } from "title-bar.slint";
 import { Workspace } from "workspace/workspace.slint";
+import {
+    ClipData, ClipField, ClipKind, ClipTextField, SelectedClipData,
+    TextAlignment, TimelineTabData, TimelineTool, TrackData,
+} from "timeline/model.slint";
 
 // Re-exported so main.rs can reach the globals and the struct.
-export { Curves, Fmt, Theme, Bezier, EffectData, MediaFilter, MediaItemData, MediaKind }
+export {
+    Curves, Fmt, Theme, Bezier, EffectData, MediaFilter, MediaItemData, MediaKind,
+    ClipData, ClipField, ClipKind, ClipTextField, SelectedClipData,
+    TextAlignment, TimelineTabData, TimelineTool, TrackData,
+    MenuItemData, MenuRow,
+}
 
 export component App inherits Window {
     title: "WolfCut";
@@ -66,7 +84,84 @@ export component App inherits Window {
     callback library-add-text();
     callback library-apply-effect(effect-id: string);
     callback library-apply-transition(transition-id: string);
+    callback library-apply-filter(filter-id: string);
     callback library-save-template();
+
+    // The monitor. The playhead and the frame rate are the timeline's, not a
+    // second copy: the programme position is one number, and a monitor that
+    // kept its own would drift from the lanes the moment either moved.
+    in property <int> output-width: 1920;
+    in property <int> output-height: 1080;
+    in property <int> ratio-index;
+    in property <int> quality-index;
+    in property <bool> playing;
+    in property <bool> has-picture;
+    in property <string> preview-clip-name;
+    in property <float> preview-duration;
+
+    callback play-toggled();
+    callback seek(seconds: float);
+    callback step-frames(frames: float);
+    callback ratio-changed(index: int);
+    callback quality-changed(index: int);
+
+    // The timeline. Tabs, lanes and clips are all Rust's: a chain is edited
+    // by index and a Slint model cannot be spliced from the language, which is
+    // the same reason the bin lives there.
+    in property <[TimelineTabData]> timeline-tabs;
+    in property <int> timeline-current-tab;
+    in property <[TrackData]> tracks;
+    in property <[ClipData]> clips;
+    in property <TimelineTool> tool: TimelineTool.select;
+    in property <bool> snap: true;
+    in property <int> selected-count;
+    /// Empty when the selection can be merged, otherwise why it cannot.
+    in property <string> merge-blocked-because;
+    in property <bool> has-av-tools;
+    in property <float> playhead;
+    in property <float> frame-rate: 30;
+    in property <float> scroll-left;
+    in property <float> seconds-per-pixel: 0.05;
+
+    /// The selected clip, flattened for the inspector. `present: false` is
+    /// what puts the config pane back on the project's details.
+    in property <SelectedClipData> selected-clip;
+    callback clip-set(field: ClipField, value: float);
+    callback clip-set-text(field: ClipTextField, value: string);
+    callback clip-set-colour(field: ClipTextField, value: color);
+    /// A control gesture finished; the accumulated change is one command.
+    callback clip-commit();
+
+    callback tab-selected(index: int);
+    callback tab-renamed(index: int, name: string);
+    callback tab-close-requested(index: int);
+    callback tab-added();
+    callback tool-changed(tool: TimelineTool);
+    callback snap-changed(snap: bool);
+    callback split();
+    callback merge();
+    callback delete-selected();
+    callback av-tools();
+    callback add-track();
+    callback zoom-to-fit(width: length);
+    callback zoom(factor: float, anchor-seconds: float);
+    callback scrubbed(seconds: float);
+    callback clip-pressed(id: string, additive: bool, edge: int);
+    callback clip-dragged(seconds: float, rows: int);
+    callback clip-released();
+    callback razored(id: string, seconds: float);
+    in property <[MenuItemData]> menu-items;
+    in property <length> menu-height;
+    in property <int> menu-token;
+    callback clip-context(id: string);
+    callback menu-selected(id: string);
+
+    callback band-selected(from-seconds: float, to-seconds: float,
+        from-row: int, to-row: int, additive: bool);
+    callback scrolled(seconds: float);
+    callback track-flag-changed(index: int, visible: bool, muted: bool, locked: bool);
+    callback track-removed(index: int);
+    callback track-renamed(index: int, name: string);
 
     // Title bar. The drag/maximize pair must be handled in main.rs — a window
     // cannot drag itself from inside the scene graph; the rest are seams like
@@ -144,9 +239,76 @@ export component App inherits Window {
             media-remove-selected => { root.media-remove-selected(); }
             media-activate(id) => { root.media-activate(id); }
 
+            selected-clip: root.selected-clip;
+            clip-set(field, value) => { root.clip-set(field, value); }
+            clip-set-text(field, value) => { root.clip-set-text(field, value); }
+            clip-set-colour(field, value) => { root.clip-set-colour(field, value); }
+            clip-commit => { root.clip-commit(); }
+
+            output-width: root.output-width;
+            output-height: root.output-height;
+            ratio-index: root.ratio-index;
+            quality-index: root.quality-index;
+            playing: root.playing;
+            has-picture: root.has-picture;
+            preview-clip-name: root.preview-clip-name;
+            preview-duration: root.preview-duration;
+
+            play-toggled => { root.play-toggled(); }
+            seek(seconds) => { root.seek(seconds); }
+            step-frames(frames) => { root.step-frames(frames); }
+            ratio-changed(index) => { root.ratio-changed(index); }
+            quality-changed(index) => { root.quality-changed(index); }
+
+            timeline-tabs: root.timeline-tabs;
+            timeline-current-tab: root.timeline-current-tab;
+            tracks: root.tracks;
+            clips: root.clips;
+            tool: root.tool;
+            snap: root.snap;
+            selected-count: root.selected-count;
+            merge-blocked-because: root.merge-blocked-because;
+            has-av-tools: root.has-av-tools;
+            playhead: root.playhead;
+            frame-rate: root.frame-rate;
+            scroll-left: root.scroll-left;
+            seconds-per-pixel: root.seconds-per-pixel;
+
+            tab-selected(index) => { root.tab-selected(index); }
+            tab-renamed(index, name) => { root.tab-renamed(index, name); }
+            tab-close-requested(index) => { root.tab-close-requested(index); }
+            tab-added => { root.tab-added(); }
+            tool-changed(tool) => { root.tool-changed(tool); }
+            snap-changed(snap) => { root.snap-changed(snap); }
+            split => { root.split(); }
+            merge => { root.merge(); }
+            delete-selected => { root.delete-selected(); }
+            av-tools => { root.av-tools(); }
+            add-track => { root.add-track(); }
+            zoom-to-fit(width) => { root.zoom-to-fit(width); }
+            zoom(factor, anchor) => { root.zoom(factor, anchor); }
+            scrubbed(seconds) => { root.scrubbed(seconds); }
+            clip-pressed(id, additive, edge) => { root.clip-pressed(id, additive, edge); }
+            clip-dragged(seconds, rows) => { root.clip-dragged(seconds, rows); }
+            clip-released => { root.clip-released(); }
+            razored(id, seconds) => { root.razored(id, seconds); }
+            menu-items: root.menu-items;
+            menu-height: root.menu-height;
+            menu-token: root.menu-token;
+            clip-context(id) => { root.clip-context(id); }
+            menu-selected(id) => { root.menu-selected(id); }
+            band-selected(a, b, c, d, additive) => { root.band-selected(a, b, c, d, additive); }
+            scrolled(seconds) => { root.scrolled(seconds); }
+            track-flag-changed(index, visible, muted, locked) => {
+                root.track-flag-changed(index, visible, muted, locked);
+            }
+            track-removed(index) => { root.track-removed(index); }
+            track-renamed(index, name) => { root.track-renamed(index, name); }
+
             library-add-text => { root.library-add-text(); }
             library-apply-effect(id) => { root.library-apply-effect(id); }
             library-apply-transition(id) => { root.library-apply-transition(id); }
+            library-apply-filter(id) => { root.library-apply-filter(id); }
             library-save-template => { root.library-save-template(); }
         }
     }

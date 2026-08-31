@@ -48,6 +48,25 @@ export enum Glyph {
     export,
     chevron-up,
     search,
+    // the timeline tray and its lane headers
+    pointer,
+    razor,
+    split,
+    merge,
+    trash,
+    magnet,
+    waveform,
+    eye-off,
+    volume,
+    volume-off,
+    unlock,
+    // the monitor's transport
+    play,
+    pause,
+    step-back,
+    step-forward,
+    skip-back,
+    skip-forward,
 }
 
 component Stroked inherits Path {
@@ -76,6 +95,16 @@ component Solid inherits Path {
     viewbox-height: 15;
     fill: root.tint;
     fill-rule: evenodd;
+}
+
+component Filled inherits Path {
+    in property <length> size: 14px;
+    in property <brush> tint: Theme.fg-muted;
+    width: root.size;
+    height: root.size;
+    viewbox-width: 24;
+    viewbox-height: 24;
+    fill: root.tint;
 }
 
 export component Icon inherits Rectangle {
@@ -275,5 +304,115 @@ export component Icon inherits Rectangle {
     if root.glyph == Glyph.fit: Solid {
         size: root.size; tint: root.tint;
         commands: "M 1 3 L 14 3 L 14 12 L 1 12 Z M 2 4 L 13 4 L 13 11 L 2 11 Z";
+    }
+
+    // ── the timeline ────────────────────────────────────────────────────────
+
+    // The select arrow. Closed and filled rather than stroked: at 14px a
+    // stroked arrowhead is mostly outline and reads as an outline of a cursor
+    // instead of a cursor.
+    if root.glyph == Glyph.pointer: Stroked {
+        size: root.size; tint: root.tint;
+        commands: "M 4 3 L 11 20 L 13.5 13.5 L 20 11 Z";
+    }
+    // Two blades crossing above their pivots — the razor every NLE draws.
+    // The circles are arcs in the command string; Slint's parser takes the SVG
+    // `A` form, so a full circle is two half-arcs back to back.
+    if root.glyph == Glyph.razor: Stroked {
+        size: root.size; tint: root.tint;
+        commands: "M 3.5 18 A 2.5 2.5 0 1 0 8.5 18 A 2.5 2.5 0 1 0 3.5 18"
+            + " M 15.5 18 A 2.5 2.5 0 1 0 20.5 18 A 2.5 2.5 0 1 0 15.5 18"
+            + " M 7.8 16.2 L 18 4 M 16.2 16.2 L 6 4";
+    }
+    // Split: a dashed cut line between two halves pulling apart. Slint has no
+    // stroke-dash-array, so the dashes are three separate segments.
+    if root.glyph == Glyph.split: Stroked {
+        size: root.size; tint: root.tint;
+        commands: "M 12 3 L 12 7 M 12 10 L 12 14 M 12 17 L 12 21"
+            + " M 8 7 L 5 7 A 2 2 0 0 0 3 9 L 3 15 A 2 2 0 0 0 5 17 L 8 17"
+            + " M 16 7 L 19 7 A 2 2 0 0 1 21 9 L 21 15 A 2 2 0 0 1 19 17 L 16 17";
+    }
+    // Merge: the same two halves, closed onto a solid seam.
+    if root.glyph == Glyph.merge: Stroked {
+        size: root.size; tint: root.tint;
+        commands: "M 12 3 L 12 21"
+            + " M 3 7 L 8 7 A 2 2 0 0 1 10 9 L 10 15 A 2 2 0 0 1 8 17 L 3 17"
+            + " M 21 7 L 16 7 A 2 2 0 0 0 14 9 L 14 15 A 2 2 0 0 0 16 17 L 21 17";
+    }
+    if root.glyph == Glyph.trash: Stroked {
+        size: root.size; tint: root.tint;
+        commands: "M 3 6 L 21 6"
+            + " M 8 6 L 8 4 A 1 1 0 0 1 9 3 L 15 3 A 1 1 0 0 1 16 4 L 16 6"
+            + " M 19 6 L 19 20 A 2 2 0 0 1 17 22 L 7 22 A 2 2 0 0 1 5 20 L 5 6"
+            + " M 10 11 L 10 17 M 14 11 L 14 17";
+    }
+    if root.glyph == Glyph.magnet: Stroked {
+        size: root.size; tint: root.tint;
+        commands: "M 6 15 L 6 8 A 6 6 0 0 1 18 8 L 18 15"
+            + " M 6 15 A 3 3 0 0 0 12 15 L 12 9"
+            + " M 18 15 A 3 3 0 0 1 12 15 L 12 9";
+    }
+    // The A/V tools mark: a level bar chart, not a waveform trace. Five bars
+    // survive being drawn at 14px; a traced wave turns to mush.
+    if root.glyph == Glyph.waveform: Stroked {
+        size: root.size; tint: root.tint;
+        commands: "M 3 12 L 3 13 M 7 8 L 7 16 M 11 5 L 11 19"
+            + " M 15 9 L 15 15 M 19 11 L 19 13";
+    }
+    if root.glyph == Glyph.eye-off: Stroked {
+        size: root.size; tint: root.tint;
+        commands: "M 10.7 5.1 A 10.9 10.9 0 0 1 12 5 C 18.5 5 22 12 22 12"
+            + " A 18 18 0 0 1 19.4 15.5"
+            + " M 6.6 6.6 A 18 18 0 0 0 2 12 C 2 12 5.5 19 12 19"
+            + " A 10.7 10.7 0 0 0 17.4 17.6"
+            + " M 2 2 L 22 22";
+    }
+    if root.glyph == Glyph.volume: Stroked {
+        size: root.size; tint: root.tint;
+        commands: "M 11 5 L 6 9 L 3 9 L 3 15 L 6 15 L 11 19 Z"
+            + " M 16 8.5 A 4.5 4.5 0 0 1 16 15.5"
+            + " M 19 5.5 A 8.5 8.5 0 0 1 19 18.5";
+    }
+    if root.glyph == Glyph.volume-off: Stroked {
+        size: root.size; tint: root.tint;
+        commands: "M 11 5 L 6 9 L 3 9 L 3 15 L 6 15 L 11 19 Z"
+            + " M 16 9 L 21 15 M 21 9 L 16 15";
+    }
+    // The same body as `lock` with the shackle swung open, so the pair reads
+    // as one control in two states rather than as two different marks.
+    if root.glyph == Glyph.unlock: Stroked {
+        size: root.size; tint: root.tint;
+        commands: "M 5 11 L 19 11 L 19 21 L 5 21 Z M 8 11 L 8 7 A 4 4 0 0 1 16 7";
+    }
+
+    // Play and pause are filled, the way the reference passes
+    // `fill="currentColor"` to them: at 16px an outlined triangle reads as an
+    // outline of a play button rather than as one.
+    if root.glyph == Glyph.play: Filled {
+        size: root.size; tint: root.tint;
+        commands: "M 7 4 L 20 12 L 7 20 Z";
+    }
+    if root.glyph == Glyph.pause: Filled {
+        size: root.size; tint: root.tint;
+        commands: "M 7 4 L 11 4 L 11 20 L 7 20 Z M 13 4 L 17 4 L 17 20 L 13 20 Z";
+    }
+    // The step and skip pairs stay stroked, as lucide draws them — the bar is
+    // a line and the wedge is an outline, and filling only the wedge would
+    // make the two halves of one mark disagree.
+    if root.glyph == Glyph.step-back: Stroked {
+        size: root.size; tint: root.tint;
+        commands: "M 18 20 L 18 4 M 14 20 L 4 12 L 14 4 Z";
+    }
+    if root.glyph == Glyph.step-forward: Stroked {
+        size: root.size; tint: root.tint;
+        commands: "M 6 4 L 6 20 M 10 4 L 20 12 L 10 20 Z";
+    }
+    if root.glyph == Glyph.skip-back: Stroked {
+        size: root.size; tint: root.tint;
+        commands: "M 19 20 L 9 12 L 19 4 Z M 5 19 L 5 5";
+    }
+    if root.glyph == Glyph.skip-forward: Stroked {
+        size: root.size; tint: root.tint;
+        commands: "M 5 4 L 15 12 L 5 20 Z M 19 5 L 19 19";
     }
 }

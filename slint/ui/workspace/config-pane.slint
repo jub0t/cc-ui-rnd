@@ -4,6 +4,10 @@ import { EffectData } from "../demo/effects-panel.slint";
 import {
     AdjustPanel, AppliedPresetData, PresetCatalog, PresetStack,
 } from "../inspector/clip-inspector.slint";
+import { TextPanel } from "../inspector/text-panel.slint";
+import {
+    ClipField, ClipKind, ClipTextField, SelectedClipData,
+} from "../timeline/model.slint";
 
 // The inspector column, in the legacy app's two states:
 //
@@ -24,7 +28,7 @@ component FactRow inherits HorizontalLayout {
     padding-left: Theme.pad;
     padding-right: Theme.pad;
     spacing: 12px;
-    min-height: 26px;
+    min-height: 21px;
 
     Text {
         text: root.label;
@@ -37,6 +41,7 @@ component FactRow inherits HorizontalLayout {
         horizontal-stretch: 1;
         text: root.value;
         color: Theme.fg;
+        font-family: Theme.font-technical;
         font-size: Theme.fs;
         horizontal-alignment: right;
         vertical-alignment: center;
@@ -50,8 +55,9 @@ component FactHeading inherits HorizontalLayout {
 
     padding-left: Theme.pad;
     padding-right: Theme.pad;
-    padding-top: 10px;
-    padding-bottom: 4px;
+    // The air belongs between the groups, not between the lines inside one.
+    padding-top: 12px;
+    padding-bottom: 3px;
 
     Text {
         text: root.title;
@@ -78,8 +84,9 @@ export component ConfigPane inherits Rectangle {
     callback remove-effect(id: int);
 
     // ── details ──────────────────────────────────────────────────────────
-    /// Which of the two states the pane is in.
-    in property <bool> has-selection;
+    /// The selected clip, or `present: false` for the project details.
+    in property <SelectedClipData> selected;
+    property <bool> has-selection: root.selected.present;
     in property <string> project-name: "Untitled project";
     in property <string> project-folder: "—";
     in property <string> project-output: "1080 x 1920";
@@ -101,13 +108,55 @@ export component ConfigPane inherits Rectangle {
     callback filters-remove(index: int);
     callback filters-set-param(index: int, second: bool, value: float);
 
+    callback clip-set(field: ClipField, value: float);
+    callback clip-set-text(field: ClipTextField, value: string);
+    callback clip-set-colour(field: ClipTextField, value: color);
+    callback clip-commit();
+
     callback effects-add(preset: AppliedPresetData);
     callback effects-toggle(index: int);
     callback effects-move-by(index: int, delta: int);
     callback effects-remove(index: int);
     callback effects-set-param(index: int, second: bool, value: float);
 
+    // The tab strip follows the selection, exactly as the reference's
+    // RightPanel does: nothing selected shows only Details, since there is
+    // nothing to edit; a media clip shows what can be changed and what can be
+    // added; a still gets Effects but not Filters, because it has picture and
+    // no sound; and a title gets Text alone — it has no volume, no speed and
+    // no audio filters, and offering those tabs would be offering panels that
+    // can only say "nothing here".
+    property <bool> is-text: root.selected.kind == ClipKind.text;
+    property <bool> is-image: root.selected.kind == ClipKind.image;
+    property <[string]> tabs: root.is-text ? ["Text"]
+        : root.is-image ? ["Adjust", "Effects"]
+        : ["Adjust", "Filters", "Effects"];
+    /// A one-segment segmented control is a label wearing a costume, so a lone
+    /// tab renders as the panel's plain heading instead.
+    property <bool> single: root.tabs.length < 2;
+
+    // The segmented control owns this: it writes to `current`, which would
+    // drop any binding declared here, so it is assigned and never bound.
     property <int> tab;
+    /// The kind the strip was last built for. A selection change can leave the
+    /// strip pointing past the end of a shorter list — Filters on a still,
+    /// anything at all on a title — so the index is pulled back in when the
+    /// shape of the strip changes, and left alone when it has not.
+    property <ClipKind> strip-kind;
+    changed selected => {
+        if (root.selected.kind != root.strip-kind) {
+            root.strip-kind = root.selected.kind;
+            // Clamped rather than reset: going from a video to a still should
+            // stay on Effects, which both offer, instead of jumping back to
+            // Adjust.
+            root.tab = Math.min(root.tab, root.tabs.length - 1);
+        }
+    }
+
+    /// Which panel the index names, resolved once rather than at each `if`:
+    /// the same number means different things depending on what is selected.
+    property <string> showing: root.tabs[Math.max(0,
+        Math.min(root.tab, root.tabs.length - 1))];
 
     Pane {
         // ── details ──────────────────────────────────────────────────────
@@ -143,7 +192,9 @@ export component ConfigPane inherits Rectangle {
             PaneScroll {
                 VerticalLayout {
                     padding-top: 4px;
-                    spacing: 2px;
+                    // No gap: the rows carry their own height and a spacing on
+                    // top of it opens the table back up.
+                    spacing: 0px;
 
                     FactHeading { title: "PROJECT"; }
                     FactRow { label: "Name"; value: root.project-name; }
@@ -174,9 +225,12 @@ export component ConfigPane inherits Rectangle {
             modify := Rectangle {
                 x: parent.width - self.width - 10px;
                 y: (parent.height - self.height) / 2;
-                width: modify-label.width + 28px;
+                width: modify-label.width + 30px;
                 height: 30px;
-                border-radius: Theme.r-sm;
+                // The roundest of the named radii, matching the pane's own
+                // corners: this is the one button in the panel and it should
+                // read as a button rather than as another field.
+                border-radius: Theme.r-lg;
                 background: modify-touch.has-hover ? Theme.field-hover : Theme.field;
 
                 animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
@@ -210,13 +264,36 @@ export component ConfigPane inherits Rectangle {
             }
 
             HorizontalLayout {
-                padding-left: 8px;
+                padding-left: root.single ? Theme.pad : 8px;
                 padding-right: 8px;
+                spacing: 8px;
 
-                VerticalLayout {
+                if root.single: Text {
+                    text: root.tabs[0];
+                    color: Theme.fg-muted;
+                    font-size: Theme.fs;
+                    font-weight: Theme.weight-title;
+                    letter-spacing: 1.5px;
+                    vertical-alignment: center;
+                }
+
+                if root.single: Rectangle { horizontal-stretch: 1; }
+
+                // The clip's own name on the trailing edge, so a panel of
+                // numbers says which clip it is describing. The strip below
+                // has no room for it, which is why it only appears here.
+                if root.single: Text {
+                    text: root.selected.name;
+                    color: Theme.fg-dim;
+                    font-size: Theme.fs-sm;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+
+                if !root.single: VerticalLayout {
                     alignment: center;
                     SegmentedControl {
-                        options: ["Adjust", "Filters", "Effects"];
+                        options: root.tabs;
                         current <=> root.tab;
                     }
                 }
@@ -229,9 +306,21 @@ export component ConfigPane inherits Rectangle {
             padding: 0px;
 
             PaneScroll {
-                if root.tab == 0: AdjustPanel { }
+                if root.showing == "Adjust": AdjustPanel {
+                    selected: root.selected;
+                    set(field, value) => { root.clip-set(field, value); }
+                    commit => { root.clip-commit(); }
+                }
 
-                if root.tab == 1: PresetStack {
+                if root.showing == "Text": TextPanel {
+                    selected: root.selected;
+                    set(field, value) => { root.clip-set(field, value); }
+                    set-text(field, value) => { root.clip-set-text(field, value); }
+                    set-colour(field, value) => { root.clip-set-colour(field, value); }
+                    commit => { root.clip-commit(); }
+                }
+
+                if root.showing == "Filters": PresetStack {
                     noun: "filter";
                     library-title: "Filter library";
                     group-labels: PresetCatalog.filter-groups;
@@ -247,7 +336,7 @@ export component ConfigPane inherits Rectangle {
                     }
                 }
 
-                if root.tab == 2: PresetStack {
+                if root.showing == "Effects": PresetStack {
                     noun: "effect";
                     library-title: "Effect library";
                     group-labels: PresetCatalog.effect-groups;

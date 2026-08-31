@@ -74,6 +74,10 @@ export component Section inherits VerticalLayout {
 export component SectionHeader inherits Rectangle {
     in property <string> title;
     in property <bool> collapsible;
+    /// Shown in the header only while the section is folded, so a closed
+    /// section still reports what it is holding. Folding a panel to get it out
+    /// of the way should not also hide what it was set to.
+    in property <string> summary;
     in-out property <bool> open: true;
 
     height: 36px;
@@ -110,6 +114,15 @@ export component SectionHeader inherits Rectangle {
         }
 
         Rectangle { horizontal-stretch: 1; }
+
+        if root.collapsible && !root.open && root.summary != "": Text {
+            text: root.summary;
+            color: Theme.fg-dim;
+            font-family: Theme.font-technical;
+            font-size: Theme.fs-sm;
+            vertical-alignment: center;
+            overflow: elide;
+        }
 
         HorizontalLayout {
             spacing: 2px;
@@ -157,14 +170,31 @@ export component IconButton inherits Rectangle {
     in property <string> label;
     in property <bool> checked;
     in property <bool> enabled: true;
+    /// Destructive action: the button states in red instead of the neutral
+    /// hover, so a delete announces itself before it is pressed rather than
+    /// after. Idle it stays muted like any other — a permanently red button in
+    /// a tray is noise.
+    in property <bool> danger;
+    /// The one action in a tray worth reaching for blind — the monitor's play
+    /// button, and nothing else so far. Carries the accent at rest, not only
+    /// on hover, which is what separates it from `checked`.
+    in property <bool> accent;
     /// widen past the square default
     in property <bool> wide;
     in property <length> icon-size: 14px;
 
     callback clicked();
 
-    property <brush> tint: root.checked ? Theme.on-accent
-        : (touch.has-hover && root.enabled) ? Theme.fg
+    property <bool> lit: touch.has-hover && root.enabled;
+    // Checked is a lime *glyph* on a tinted chip, never dark ink on a lime
+    // slab. Both references are explicit about this — "an activated tool
+    // button: lime glyph on a slightly darker surface, so the toolbar reads as
+    // 'this mode is on' without shouting" — and with the accent itself now
+    // lime, a filled chip in a tray of eight buttons would shout indeed.
+    property <brush> tint: root.checked ? Theme.accent
+        : (root.lit && root.danger) ? Theme.danger
+        : root.accent ? (root.lit ? Theme.accent-hover : Theme.accent)
+        : root.lit ? Theme.fg
         : Theme.fg-muted;
     property <length> side: 26px;
     property <bool> ring;
@@ -205,8 +235,10 @@ export component IconButton inherits Rectangle {
         height: root.side;
         border-radius: Theme.r-sm;
         opacity: root.enabled ? 1.0 : 0.4;
-        background: root.checked ? Theme.accent
+        background: root.checked ? Theme.accent-soft
             : !root.enabled ? Colors.transparent
+            : (touch.has-hover && root.danger) ? Theme.danger-soft
+            : (touch.has-hover && root.accent) ? Theme.accent-soft
             : touch.pressed ? Theme.field-active
             : touch.has-hover ? Theme.field
             : Colors.transparent;

@@ -8,6 +8,11 @@ import { FocusRing } from "focus-ring.slint";
 // Slint's PopupWindow does on its own.
 export component Select inherits Rectangle {
     in property <[string]> options;
+    /// Optional second column, set against the trailing edge of each row —
+    /// the "1:2" beside "Half". Shorter than `options` is fine; rows past its
+    /// end simply have none. The trigger never shows it: it is what you open
+    /// the list to compare.
+    in property <[string]> details;
     in-out property <int> current;
     in property <string> placeholder: "Select";
     /// leading adornment on the trigger
@@ -186,6 +191,14 @@ export component Select inherits Rectangle {
                             font-size: Theme.fs;
                             vertical-alignment: center;
                             overflow: elide;
+                        }
+
+                        if index < root.details.length: Text {
+                            text: root.details[index];
+                            color: index == root.active ? Theme.on-accent : Theme.fg-dim;
+                            font-family: Theme.font-technical;
+                            font-size: Theme.fs-sm;
+                            vertical-alignment: center;
                         }
 
                         if index == root.current: VerticalLayout {

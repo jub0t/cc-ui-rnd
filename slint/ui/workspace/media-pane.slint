@@ -46,7 +46,11 @@ component LibraryTab inherits Rectangle {
     // child's own preferred width, which is the same rule.
     horizontal-stretch: 1;
     border-radius: Theme.r-sm;
-    background: root.current ? Theme.field-hover : Colors.transparent;
+    // The current page is a chip lifted out of the track. The reference lifts
+    // it with a shadow as well as a fill; Slint has no box-shadow, so the
+    // value step carries it alone — which is why this is `field` and not the
+    // lighter `field-hover`, whose job is to answer the pointer.
+    background: root.current ? Theme.field : Colors.transparent;
 
     animate background { duration: 120ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
@@ -163,6 +167,7 @@ component CategoryRow inherits Rectangle {
         if root.count > 0: Text {
             text: "\{root.count}";
             color: Theme.fg-dim;
+            font-family: Theme.font-technical;
             font-size: 10px;
             vertical-alignment: center;
         }
@@ -396,6 +401,7 @@ component MediaCard inherits Rectangle {
                         ? "still"
                         : Fmt.short-duration(root.item.duration);
                     color: Theme.on-scrim;
+                    font-family: Theme.font-technical;
                     font-size: 10px;
                 }
             }
@@ -508,9 +514,13 @@ struct CatalogueItemData {
     /// honest version of a disabled control, used by the motion transitions
     /// the engine cannot animate yet.
     enabled: bool,
-    /// The rendered preview, for effects; empty for transitions, whose tile
-    /// is the transition mark on a sunken ground instead.
+    /// The rendered preview, for effects; empty for transitions and filters,
+    /// whose tiles carry a mark on a sunken ground instead.
     art: image,
+    /// What that tile shows when there is no artwork. Carried per entry rather
+    /// than fixed by the card, because a transition and an audio filter are
+    /// both artless and are not the same thing.
+    glyph: Glyph,
 }
 
 // A catalogue card: preview tile, label under it, and the apply affordance —
@@ -547,7 +557,7 @@ component CatalogueCard inherits Rectangle {
             if root.item.art.width == 0: Icon {
                 x: (parent.width - self.width) / 2;
                 y: (parent.height - self.height) / 2;
-                glyph: Glyph.transition;
+                glyph: root.item.glyph;
                 size: 22px;
                 tint: Theme.fg-dim;
             }
@@ -743,6 +753,7 @@ export component MediaPane inherits Rectangle {
     /// Catalogue pages: apply to the selected clip; Rust validates & explains.
     callback apply-effect(effect-id: string);
     callback apply-transition(transition-id: string);
+    callback apply-filter(filter-id: string);
     /// Templates page: open the save-as-template flow for this project.
     callback save-template();
 
@@ -751,11 +762,14 @@ export component MediaPane inherits Rectangle {
     property <bool> text-open: true;
     property <bool> transitions-open: true;
     property <bool> effects-open: true;
+    property <bool> filters-open: true;
     property <bool> templates-open: true;
     /// 0 = Basic, 1 = Motion
     property <int> transition-category;
     /// 0 = Basic, 1 = Blur, 2 = Color, 3 = Stylize, 4 = Distort
     property <int> effect-category;
+    /// 0 = Voice, 1 = Tone, 2 = Space — the inspector's filter shelves
+    property <int> filter-category;
     property <length> sidebar-w: 104px;
 
     // The catalogues, mirrored from lib/effects.ts in the reference: same ids
@@ -764,15 +778,38 @@ export component MediaPane inherits Rectangle {
     // reference's own rendered previews, each effect's real FFmpeg chain run
     // over one source still.
     property <[CatalogueItemData]> transitions-basic: [
-        { id: "cross-fade", label: "Cross Fade", enabled: true },
-        { id: "fade-black", label: "Fade to Black", enabled: true },
-        { id: "fade-white", label: "Fade to White", enabled: true },
+        { id: "cross-fade", label: "Cross Fade", enabled: true, glyph: Glyph.transition },
+        { id: "fade-black", label: "Fade to Black", enabled: true, glyph: Glyph.transition },
+        { id: "fade-white", label: "Fade to White", enabled: true, glyph: Glyph.transition },
     ];
     property <[CatalogueItemData]> transitions-motion: [
-        { id: "wipe-left", label: "Wipe Left", enabled: false },
-        { id: "wipe-right", label: "Wipe Right", enabled: false },
-        { id: "push", label: "Push", enabled: false },
-        { id: "zoom", label: "Zoom", enabled: false },
+        { id: "wipe-left", label: "Wipe Left", enabled: false, glyph: Glyph.transition },
+        { id: "wipe-right", label: "Wipe Right", enabled: false, glyph: Glyph.transition },
+        { id: "push", label: "Push", enabled: false, glyph: Glyph.transition },
+        { id: "zoom", label: "Zoom", enabled: false, glyph: Glyph.transition },
+    ];
+
+    // The audio filters, mirroring PresetCatalog.filters in the inspector —
+    // same ids, same shelves. They have no artwork and never will: a picture
+    // of a sound is a waveform, and every one of these would draw the same
+    // one. The mark says "this is audio" and the name does the rest.
+    property <[CatalogueItemData]> filters-voice: [
+        { id: "sweet", label: "Sweet", enabled: true, glyph: Glyph.waveform },
+        { id: "deep", label: "Deep", enabled: true, glyph: Glyph.waveform },
+        { id: "chipmunk", label: "Chipmunk", enabled: true, glyph: Glyph.waveform },
+        { id: "robot", label: "Robot", enabled: true, glyph: Glyph.waveform },
+    ];
+    property <[CatalogueItemData]> filters-tone: [
+        { id: "warm", label: "Warm", enabled: true, glyph: Glyph.waveform },
+        { id: "bright", label: "Bright", enabled: true, glyph: Glyph.waveform },
+        { id: "telephone", label: "Telephone", enabled: true, glyph: Glyph.waveform },
+        { id: "radio", label: "Radio", enabled: true, glyph: Glyph.waveform },
+    ];
+    property <[CatalogueItemData]> filters-space: [
+        { id: "room", label: "Room", enabled: true, glyph: Glyph.waveform },
+        { id: "hall", label: "Hall", enabled: true, glyph: Glyph.waveform },
+        { id: "plate", label: "Plate", enabled: true, glyph: Glyph.waveform },
+        { id: "cathedral", label: "Cathedral", enabled: true, glyph: Glyph.waveform },
     ];
     property <[CatalogueItemData]> effects-basic: [
         { id: "black-white", label: "Black & White", enabled: true,
@@ -844,10 +881,16 @@ export component MediaPane inherits Rectangle {
             HorizontalLayout {
                 padding: 8px;
 
+                // A sunken track and nothing else. No border: this sits
+                // inside a pane that is already outlined, and a second rule
+                // 8px in from the first reads as a box in a box. The
+                // reference draws it the same way — `rounded-lg bg-sunken
+                // p-0.5`, no border — which is what separates it from
+                // `SegmentedControl`, where the border is doing real work
+                // because that control sits loose in a form row with nothing
+                // else to bound it.
                 Rectangle {
                     background: Theme.well;
-                    border-width: 1px;
-                    border-color: Theme.line;
                     border-radius: Theme.r;
 
                     HorizontalLayout {
@@ -875,9 +918,14 @@ export component MediaPane inherits Rectangle {
                             clicked => { root.tab = 3; }
                         }
                         LibraryTab {
-                            label: "Templates";
+                            label: "Filters";
                             current: root.tab == 4;
                             clicked => { root.tab = 4; }
+                        }
+                        LibraryTab {
+                            label: "Templates";
+                            current: root.tab == 5;
+                            clicked => { root.tab = 5; }
                         }
                     }
                 }
@@ -907,161 +955,180 @@ export component MediaPane inherits Rectangle {
                 width: root.sidebar-w;
                 clip: true;
 
-                // Plain children with a `visible` toggle rather than `if`
-                // conditionals: a hidden row zeroes its own height, so
-                // collapsing still collapses, and nothing here re-derives its
-                // geometry when a tab switches.
+                // One group per page, each behind its own `if`.
+                //
+                // These were plain children with a `visible` toggle and a
+                // height of zero when hidden, to keep a tab switch from
+                // re-instantiating anything. That was wrong in a way that only
+                // showed up on the later tabs: a zero-height child still takes
+                // its share of the layout's `spacing`, so every group started
+                // one pixel lower for each hidden row above it, and Templates
+                // sat a dozen pixels below Media. A conditional group costs a
+                // rebuild on a tab switch — which the pages themselves already
+                // pay, a few lines down — and cannot drift.
                 VerticalLayout {
                     x: 0;
                     y: 0;
                     width: parent.width;
-                    // Fixed-height rows in a column far taller than they need:
-                    // pack them at the top rather than leave the layout to
-                    // decide what to do with the slack.
                     alignment: start;
                     padding: 4px;
-                    spacing: 1px;
 
-                    // Only the Media page has categories in this tree; the
-                    // others browse catalogues that have not been ported, so
-                    // their sidebar is empty rather than stocked with rows
-                    // that filter nothing.
-                    CategoryHeading {
-                        visible: root.tab == 0;
-                        height: self.visible ? 26px : 0;
-                        title: "Media";
-                        open: root.categories-open;
-                        toggled => { root.categories-open = !root.categories-open; }
-                    }
-
-                    CategoryRow {
-                        visible: root.tab == 0 && root.categories-open;
-                        height: self.visible ? 24px : 0;
-                        label: "All media";
-                        count: root.count-all;
-                        current: root.filter == MediaFilter.all;
-                        clicked => { root.narrow(MediaFilter.all); }
-                    }
-                    CategoryRow {
-                        visible: root.tab == 0 && root.categories-open;
-                        height: self.visible ? 24px : 0;
-                        label: "Video";
-                        count: root.count-video;
-                        current: root.filter == MediaFilter.video;
-                        clicked => { root.narrow(MediaFilter.video); }
-                    }
-                    CategoryRow {
-                        visible: root.tab == 0 && root.categories-open;
-                        height: self.visible ? 24px : 0;
-                        label: "Audio";
-                        count: root.count-audio;
-                        current: root.filter == MediaFilter.audio;
-                        clicked => { root.narrow(MediaFilter.audio); }
-                    }
-                    CategoryRow {
-                        visible: root.tab == 0 && root.categories-open;
-                        height: self.visible ? 24px : 0;
-                        label: "Images";
-                        count: root.count-images;
-                        current: root.filter == MediaFilter.images;
-                        clicked => { root.narrow(MediaFilter.images); }
+                    if root.tab == 0: VerticalLayout {
+                        spacing: 1px;
+                        CategoryHeading {
+                            height: 26px;
+                            title: "Media";
+                            open: root.categories-open;
+                            toggled => { root.categories-open = !root.categories-open; }
+                        }
+                        if root.categories-open: CategoryRow {
+                            height: 24px;
+                            label: "All media";
+                            count: root.count-all;
+                            current: root.filter == MediaFilter.all;
+                            clicked => { root.narrow(MediaFilter.all); }
+                        }
+                        if root.categories-open: CategoryRow {
+                            height: 24px;
+                            label: "Video";
+                            count: root.count-video;
+                            current: root.filter == MediaFilter.video;
+                            clicked => { root.narrow(MediaFilter.video); }
+                        }
+                        if root.categories-open: CategoryRow {
+                            height: 24px;
+                            label: "Audio";
+                            count: root.count-audio;
+                            current: root.filter == MediaFilter.audio;
+                            clicked => { root.narrow(MediaFilter.audio); }
+                        }
+                        if root.categories-open: CategoryRow {
+                            height: 24px;
+                            label: "Images";
+                            count: root.count-images;
+                            current: root.filter == MediaFilter.images;
+                            clicked => { root.narrow(MediaFilter.images); }
+                        }
                     }
 
-                    // Text
-                    CategoryHeading {
-                        visible: root.tab == 1;
-                        height: self.visible ? 26px : 0;
-                        title: "Text";
-                        open: root.text-open;
-                        toggled => { root.text-open = !root.text-open; }
-                    }
-                    CategoryRow {
-                        visible: root.tab == 1 && root.text-open;
-                        height: self.visible ? 24px : 0;
-                        label: "Titles";
-                        current: true;
-                    }
-
-                    // Transitions
-                    CategoryHeading {
-                        visible: root.tab == 2;
-                        height: self.visible ? 26px : 0;
-                        title: "Transitions";
-                        open: root.transitions-open;
-                        toggled => { root.transitions-open = !root.transitions-open; }
-                    }
-                    CategoryRow {
-                        visible: root.tab == 2 && root.transitions-open;
-                        height: self.visible ? 24px : 0;
-                        label: "Basic";
-                        current: root.transition-category == 0;
-                        clicked => { root.transition-category = 0; }
-                    }
-                    CategoryRow {
-                        visible: root.tab == 2 && root.transitions-open;
-                        height: self.visible ? 24px : 0;
-                        label: "Motion";
-                        current: root.transition-category == 1;
-                        clicked => { root.transition-category = 1; }
+                    if root.tab == 1: VerticalLayout {
+                        spacing: 1px;
+                        CategoryHeading {
+                            height: 26px;
+                            title: "Text";
+                            open: root.text-open;
+                            toggled => { root.text-open = !root.text-open; }
+                        }
+                        if root.text-open: CategoryRow {
+                            height: 24px;
+                            label: "Titles";
+                            current: true;
+                        }
                     }
 
-                    // Effects
-                    CategoryHeading {
-                        visible: root.tab == 3;
-                        height: self.visible ? 26px : 0;
-                        title: "Video Effects";
-                        open: root.effects-open;
-                        toggled => { root.effects-open = !root.effects-open; }
-                    }
-                    CategoryRow {
-                        visible: root.tab == 3 && root.effects-open;
-                        height: self.visible ? 24px : 0;
-                        label: "Basic";
-                        current: root.effect-category == 0;
-                        clicked => { root.effect-category = 0; }
-                    }
-                    CategoryRow {
-                        visible: root.tab == 3 && root.effects-open;
-                        height: self.visible ? 24px : 0;
-                        label: "Blur";
-                        current: root.effect-category == 1;
-                        clicked => { root.effect-category = 1; }
-                    }
-                    CategoryRow {
-                        visible: root.tab == 3 && root.effects-open;
-                        height: self.visible ? 24px : 0;
-                        label: "Color";
-                        current: root.effect-category == 2;
-                        clicked => { root.effect-category = 2; }
-                    }
-                    CategoryRow {
-                        visible: root.tab == 3 && root.effects-open;
-                        height: self.visible ? 24px : 0;
-                        label: "Stylize";
-                        current: root.effect-category == 3;
-                        clicked => { root.effect-category = 3; }
-                    }
-                    CategoryRow {
-                        visible: root.tab == 3 && root.effects-open;
-                        height: self.visible ? 24px : 0;
-                        label: "Distort";
-                        current: root.effect-category == 4;
-                        clicked => { root.effect-category = 4; }
+                    if root.tab == 2: VerticalLayout {
+                        spacing: 1px;
+                        CategoryHeading {
+                            height: 26px;
+                            title: "Transitions";
+                            open: root.transitions-open;
+                            toggled => { root.transitions-open = !root.transitions-open; }
+                        }
+                        if root.transitions-open: CategoryRow {
+                            height: 24px;
+                            label: "Basic";
+                            current: root.transition-category == 0;
+                            clicked => { root.transition-category = 0; }
+                        }
+                        if root.transitions-open: CategoryRow {
+                            height: 24px;
+                            label: "Motion";
+                            current: root.transition-category == 1;
+                            clicked => { root.transition-category = 1; }
+                        }
                     }
 
-                    // Templates
-                    CategoryHeading {
-                        visible: root.tab == 4;
-                        height: self.visible ? 26px : 0;
-                        title: "Templates";
-                        open: root.templates-open;
-                        toggled => { root.templates-open = !root.templates-open; }
+                    if root.tab == 3: VerticalLayout {
+                        spacing: 1px;
+                        CategoryHeading {
+                            height: 26px;
+                            title: "Video Effects";
+                            open: root.effects-open;
+                            toggled => { root.effects-open = !root.effects-open; }
+                        }
+                        if root.effects-open: CategoryRow {
+                            height: 24px;
+                            label: "Basic";
+                            current: root.effect-category == 0;
+                            clicked => { root.effect-category = 0; }
+                        }
+                        if root.effects-open: CategoryRow {
+                            height: 24px;
+                            label: "Blur";
+                            current: root.effect-category == 1;
+                            clicked => { root.effect-category = 1; }
+                        }
+                        if root.effects-open: CategoryRow {
+                            height: 24px;
+                            label: "Color";
+                            current: root.effect-category == 2;
+                            clicked => { root.effect-category = 2; }
+                        }
+                        if root.effects-open: CategoryRow {
+                            height: 24px;
+                            label: "Stylize";
+                            current: root.effect-category == 3;
+                            clicked => { root.effect-category = 3; }
+                        }
+                        if root.effects-open: CategoryRow {
+                            height: 24px;
+                            label: "Distort";
+                            current: root.effect-category == 4;
+                            clicked => { root.effect-category = 4; }
+                        }
                     }
-                    CategoryRow {
-                        visible: root.tab == 4 && root.templates-open;
-                        height: self.visible ? 24px : 0;
-                        label: "My templates";
-                        current: true;
+
+                    if root.tab == 4: VerticalLayout {
+                        spacing: 1px;
+                        CategoryHeading {
+                            height: 26px;
+                            title: "Audio Filters";
+                            open: root.filters-open;
+                            toggled => { root.filters-open = !root.filters-open; }
+                        }
+                        if root.filters-open: CategoryRow {
+                            height: 24px;
+                            label: "Voice";
+                            current: root.filter-category == 0;
+                            clicked => { root.filter-category = 0; }
+                        }
+                        if root.filters-open: CategoryRow {
+                            height: 24px;
+                            label: "Tone";
+                            current: root.filter-category == 1;
+                            clicked => { root.filter-category = 1; }
+                        }
+                        if root.filters-open: CategoryRow {
+                            height: 24px;
+                            label: "Space";
+                            current: root.filter-category == 2;
+                            clicked => { root.filter-category = 2; }
+                        }
+                    }
+
+                    if root.tab == 5: VerticalLayout {
+                        spacing: 1px;
+                        CategoryHeading {
+                            height: 26px;
+                            title: "Templates";
+                            open: root.templates-open;
+                            toggled => { root.templates-open = !root.templates-open; }
+                        }
+                        if root.templates-open: CategoryRow {
+                            height: 24px;
+                            label: "My templates";
+                            current: true;
+                        }
                     }
                 }
             }
@@ -1190,11 +1257,23 @@ export component MediaPane inherits Rectangle {
                     }
                 }
 
+                if root.tab == 4: HorizontalLayout {
+                    padding: 8px;
+
+                    CatalogueGrid {
+                        horizontal-stretch: 1;
+                        items: root.filter-category == 0 ? root.filters-voice
+                            : root.filter-category == 1 ? root.filters-tone
+                            : root.filters-space;
+                        applied(id) => { root.apply-filter(id); }
+                    }
+                }
+
                 // Templates: the save affordance, then the gallery — which is
                 // engine-backed in the reference (templateList), and nothing
                 // in this tree persists projects yet, so the gallery is its
                 // empty state until that seam exists.
-                if root.tab == 4: HorizontalLayout {
+                if root.tab == 5: HorizontalLayout {
                     padding: 8px;
 
                     ImportButton {
@@ -1204,7 +1283,7 @@ export component MediaPane inherits Rectangle {
                     }
                 }
 
-                if root.tab == 4: Empty {
+                if root.tab == 5: Empty {
                     glyph: Glyph.slot;
                     text: "No templates yet. Mark media as slots, then save this project as a template.";
                 }

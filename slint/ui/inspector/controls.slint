@@ -24,6 +24,17 @@ export enum ParamFormat {
     steps,       // "12"
     rate,        // "1.00x"
     fade,        // 0 is "none", else "1.5 s"
+
+    // The clip inspector's own. Several of these are fractions of something —
+    // the frame's height, the frame's width — rather than absolute units,
+    // because the frame can be any resolution and points would be a lie.
+    fraction,    // 0..1 as a whole percent: "72%"
+    centred,     // a signed offset: "centred" at zero, else "-12.5%"
+    degrees,     // "45°"
+    gain,        // decibels, with the floor spelled "Silent"
+    height,      // "9.0% of height"
+    outline,     // 0 is "none", else "3.5%"
+    seconds2,    // "1.25s" — two places, for a fade dialled against a duration
 }
 
 export global InspectorFmt {
@@ -62,12 +73,48 @@ export global InspectorFmt {
         if (fmt == ParamFormat.rate-hz) { return InspectorFmt.fixed1(v) + " Hz"; }
         if (fmt == ParamFormat.steps) { return "\{Math.round(v)}"; }
         if (fmt == ParamFormat.rate) { return InspectorFmt.fixed2(v) + "x"; }
+        if (fmt == ParamFormat.fraction) { return "\{Math.round(v * 100)}%"; }
+        if (fmt == ParamFormat.centred) {
+            // A hair either side of zero still reads as centred: the step is
+            // 0.005, so an exact zero is easy to miss by one press.
+            return Math.abs(v) < 0.0025 ? "centred" : InspectorFmt.fixed1(v * 100) + "%";
+        }
+        if (fmt == ParamFormat.degrees) { return "\{Math.round(v)}°"; }
+        if (fmt == ParamFormat.gain) {
+            // The bottom of the fader is silence, not -60 dB: a fader that
+            // cannot reach zero is a fader you cannot mute with.
+            return v <= -60 ? "Silent"
+                : Math.abs(v) < 0.05 ? "0.0 dB"
+                : (v > 0 ? "+" : "") + InspectorFmt.fixed1(v) + " dB";
+        }
+        if (fmt == ParamFormat.height) {
+            return InspectorFmt.fixed1(v * 100) + "% of height";
+        }
+        if (fmt == ParamFormat.outline) {
+            return v == 0 ? "none" : InspectorFmt.fixed1(v * 100) + "%";
+        }
+        if (fmt == ParamFormat.seconds2) {
+            return v == 0 ? "none" : InspectorFmt.fixed2(v) + "s";
+        }
         return v == 0 ? "none" : InspectorFmt.fixed1(v) + " s";
+    }
+
+    /// Linear gain to decibels. Zero maps to the bottom of the fader rather
+    /// than to -infinity, so the control has a reachable floor.
+    public pure function to-decibels(gain: float) -> float {
+        return gain <= 0 ? -60 : Fmt.clamp(20 * Math.log(gain, 10), -60, 24);
+    }
+
+    /// And back. At the very bottom the fader means silence, so it snaps to
+    /// exactly zero rather than leaving an inaudible-but-nonzero gain in the
+    /// project.
+    public pure function from-decibels(decibels: float) -> float {
+        return decibels <= -60 ? 0 : Math.pow(10, decibels / 20);
     }
 
     // What the raw NumberField beside a fader should show for a given step.
     public pure function precision-of(step: float) -> int {
-        return step < 0.1 ? 2 : step < 1 ? 1 : 0;
+        return step < 0.01 ? 3 : step < 0.1 ? 2 : step < 1 ? 1 : 0;
     }
 }
 
@@ -194,6 +241,7 @@ export component Param inherits VerticalLayout {
         Text {
             text: InspectorFmt.format(root.fmt, root.value);
             color: Theme.fg;
+            font-family: Theme.font-technical;
             font-size: Theme.fs;
             vertical-alignment: center;
         }
@@ -414,6 +462,115 @@ export component SearchField inherits Rectangle {
                     clicked => {
                         root.text = "";
                         root.edited("");
+                    }
+                }
+            }
+        }
+    }
+}
+
+// A colour on a labelled row.
+//
+// The reference hands this to the platform — `<input type="color">` — which
+// has no counterpart here. Rather than fake an eyedropper and a wheel, the
+// swatch opens a shelf of the colours a title actually gets set to: the
+// neutrals it is legible on, and the kind hues already in the theme. The hex
+// is shown beside it so a value from outside the shelf is still readable
+// rather than invisible.
+export component ColourField inherits HorizontalLayout {
+    in property <string> label;
+    in property <color> value;
+    /// The value spelled out, formatted by whoever owns it — Slint cannot
+    /// print a colour.
+    in property <string> hex;
+
+    callback changed(value: color);
+
+    property <[color]> shelf: [
+        #ffffff, #f5f5f7, #a1a1a6, #6e6e73, #15220a, #000000,
+        #cbf53f, #30d158, #ffd60a, #f09e2f, #ff453a, #e8355e,
+        #8b5cf6, #4d8df6, #34c759, #142640,
+    ];
+
+    padding-left: Theme.pad;
+    padding-right: Theme.pad;
+    spacing: 8px;
+    min-height: Theme.h;
+
+    Text {
+        text: root.label;
+        color: Theme.fg-muted;
+        font-size: Theme.fs;
+        vertical-alignment: center;
+    }
+
+    Rectangle { horizontal-stretch: 1; }
+
+    Text {
+        text: root.hex;
+        color: Theme.fg-dim;
+        font-family: Theme.font-technical;
+        font-size: Theme.fs-sm;
+        vertical-alignment: center;
+    }
+
+    VerticalLayout {
+        alignment: center;
+
+        swatch := Rectangle {
+            width: 34px;
+            height: 20px;
+            border-radius: Theme.r-xs;
+            // The swatch sits on its own light-to-dark checker of one square,
+            // so a colour near the panel's own still has an edge.
+            background: Theme.fg-dim;
+            border-width: 1px;
+            border-color: touch.has-hover ? Theme.line-strong : Theme.line;
+
+            Rectangle {
+                x: 1px;
+                y: 1px;
+                width: parent.width - 2px;
+                height: parent.height - 2px;
+                border-radius: Theme.r-xs - 1px;
+                background: root.value;
+            }
+
+            touch := TouchArea {
+                mouse-cursor: pointer;
+                clicked => { shelf.show(); }
+            }
+
+            shelf := PopupWindow {
+                x: -128px;
+                y: swatch.height + 4px;
+                width: 160px;
+                height: 92px;
+                close-policy: close-on-click-outside;
+
+                Rectangle {
+                    background: Theme.raised;
+                    border-width: 1px;
+                    border-color: Theme.line-strong;
+                    border-radius: Theme.r;
+
+                    for entry[index] in root.shelf: Rectangle {
+                        x: 8px + Math.mod(index, 6) * 24px;
+                        y: 8px + Math.floor(index / 6) * 26px;
+                        width: 20px;
+                        height: 20px;
+                        border-radius: Theme.r-xs;
+                        background: entry;
+                        border-width: 1px;
+                        border-color: pick.has-hover ? Theme.fg : Theme.line;
+
+                        pick := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => {
+                                root.changed(entry);
+                                shelf.close();
+                            }
+                        }
                     }
                 }
             }
