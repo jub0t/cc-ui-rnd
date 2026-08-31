@@ -149,23 +149,16 @@ impl Library {
         let filter = self.filter.get();
         let items = self.items.borrow();
 
-        view.set_vec(
+        // Row-wise, like the timeline's: selecting a card must not rebuild the
+        // grid under the pointer that selected it. The envelopes came with the
+        // rows — nothing the bin does can change one.
+        sync(
+            view,
             items
                 .iter()
                 .filter(|item| Self::shows(filter, item.kind))
-                .map(|item| {
-                    let mut row = item.clone();
-                    // The same envelope, from the same seed, as the clip cut
-                    // from this file: `m{id}` is what the demo timeline's
-                    // clips name as their media, so a file looks like itself
-                    // in the bin and on a lane.
-                    if item.kind == MediaKind::Audio {
-                        row.wave =
-                            wave_path(&format!("m{}", item.id), 0.0, item.duration, 1.0).into();
-                    }
-                    row
-                })
-                .collect::<Vec<_>>(),
+                .cloned()
+                .collect(),
         );
 
         app.set_media_count_all(items.len() as i32);
@@ -184,6 +177,15 @@ fn media(id: i32, name: &str, kind: MediaKind, duration: f32) -> MediaItemData {
         name: SharedString::from(name),
         kind,
         duration,
+        // The same envelope, from the same seed, as the clip cut from this
+        // file: `m{id}` is what the demo timeline's clips name as their media,
+        // so a file looks like itself in the bin and on a lane. Built once
+        // with the row, because it depends on nothing the bin can change.
+        wave: if kind == MediaKind::Audio {
+            wave_path(&format!("m{id}"), 0.0, duration, 1.0).into()
+        } else {
+            SharedString::new()
+        },
         // No decoder in this tree yet, so no artwork: the card falls back to
         // the kind's tint and mark, which is what it does in the reference
         // until the filmstrip or the peaks arrive.
@@ -425,6 +427,11 @@ const OUTPUTS: [(i32, i32); 6] = [
 /// reference's model puts it. Trims and splits both floor at this.
 const MIN_DURATION: f32 = 1.0 / 60.0;
 
+/// Steps per second the drawn waveform is quantised to. See `Studio::wave`:
+/// it is what keeps a trim from synthesising a new envelope on every pointer
+/// event, and the grid is fine enough that no step of it is visible.
+const WAVE_STEPS: f32 = 30.0;
+
 #[derive(Clone)]
 struct ClipDoc {
     id: String,
@@ -573,7 +580,7 @@ struct Studio {
     /// changes none of them, and a publish happens on every frame of one —
     /// without this, dragging a clip rebuilds a few kilobytes of path string
     /// per audio clip per frame for a shape that did not change.
-    waves: RefCell<std::collections::HashMap<String, Rc<str>>>,
+    waves: RefCell<std::collections::HashMap<String, SharedString>>,
     timelines: Vec<TimelineDoc>,
     active: usize,
     selection: Vec<String>,
@@ -612,12 +619,53 @@ struct Studio {
     next_id: u32,
 }
 
-/// The three models the timeline publishes into, kept rather than rebuilt so a
-/// republish is a `set_vec` and not a new model on every keystroke.
-struct TimelineModels {
+/// Every model the window is handed, kept for its lifetime rather than
+/// rebuilt.
+///
+/// A new model, or `set_vec` on the one already there, is a *reset* — and
+/// Slint answers a reset by dropping every instance the repeater behind it
+/// built and starting again. Mid-gesture that is fatal: the TouchArea holding
+/// the pointer is one of the instances dropped, so a trim moved one notch and
+/// then let go of the mouse. `sync` below is what replaced it.
+struct Models {
     tabs: Rc<VecModel<TimelineTabData>>,
     tracks: Rc<VecModel<TrackData>>,
     clips: Rc<VecModel<ClipData>>,
+    /// The clip's context menu, the A/V tray's, and the title bar's.
+    menu: Rc<VecModel<MenuItemData>>,
+    av: Rc<VecModel<MenuItemData>>,
+    bar: Rc<VecModel<MenuItemData>>,
+    /// The two engine lists in Settings.
+    transcribers: Rc<VecModel<ModelData>>,
+    voices: Rc<VecModel<ModelData>>,
+}
+
+/// Republish a list into a live model without resetting it.
+///
+/// Rows that did not change are not written at all, and a write is a
+/// `row-changed` on an instance that stays alive: no teardown, so a gesture
+/// survives the republish it caused, and no re-layout or re-parse of a
+/// waveform's path for a clip the pointer never went near.
+fn sync<T: Clone + PartialEq + 'static>(model: &VecModel<T>, next: Vec<T>) {
+    let mut next = next;
+    let shared = model.row_count().min(next.len());
+    let tail = next.split_off(shared);
+    for (row, value) in next.into_iter().enumerate() {
+        // Compared before writing: `set-row-data` notifies whether or not the
+        // row moved, and a notification costs the row a re-layout.
+        if model.row_data(row).as_ref() != Some(&value) {
+            model.set_row_data(row, value);
+        }
+    }
+    // Then the difference in length, a row at a time: `row-added` and
+    // `row-removed` shift the instances either side of the change rather than
+    // rebuilding them, which is the one thing a reset cannot do.
+    while model.row_count() > shared {
+        model.remove(model.row_count() - 1);
+    }
+    for value in tail {
+        model.push(value);
+    }
 }
 
 impl Studio {
@@ -753,20 +801,30 @@ impl Studio {
     }
 
     /// The memoised envelope for one clip.
-    fn wave(&self, clip: &ClipDoc) -> Rc<str> {
-        // Rounded into the key: the path has four decimal places, so changes
-        // below a millisecond or a thousandth of a gain cannot move it.
+    fn wave(&self, clip: &ClipDoc) -> SharedString {
+        // Quantised, not just rounded. A trim moves the ends by a fraction of
+        // a frame per pointer event, and at a millisecond of resolution every
+        // one of those was a fresh 128-column path: built here, re-parsed by
+        // the renderer, and kept in this map for the life of the process. A
+        // thirtieth of a second is finer than the difference can be seen once
+        // the shape is stretched onto the clip, and it bounds the map to the
+        // handful of entries a drag actually visits.
+        let step = |seconds: f32| (seconds * WAVE_STEPS).round() / WAVE_STEPS;
+        let (source_start, duration) = (step(clip.source_start), step(clip.duration));
         let key = format!(
             "{}|{:.3}|{:.3}|{:.3}",
-            clip.media, clip.source_start, clip.duration, clip.volume
+            clip.media, source_start, duration, clip.volume
         );
         if let Some(cached) = self.waves.borrow().get(&key) {
             return cached.clone();
         }
-        let built: Rc<str> = Rc::from(wave_path(
+        // Cached as the string Slint itself holds, not as a Rust one: a
+        // `SharedString` clone is a refcount, so handing the same envelope to
+        // the model on every event of a drag copies nothing.
+        let built = SharedString::from(wave_path(
             &clip.media,
-            clip.source_start,
-            clip.duration,
+            source_start,
+            duration,
             clip.volume,
         ));
         self.waves.borrow_mut().insert(key, built.clone());
@@ -1150,19 +1208,36 @@ impl Studio {
         }
     }
 
-    fn publish(&self, app: &App, models: &TimelineModels) {
-        models.tabs.set_vec(
+    /// Everything the window shows.
+    fn publish(&self, app: &App, models: &Models) {
+        self.publish_lanes(app, models);
+        self.publish_chrome(app, models);
+    }
+
+    /// The timeline and the readouts that follow it.
+    ///
+    /// Split from the chrome because this is what runs on every event of a
+    /// scrub, a drag, a trim or a knob: sixty times a second while a pointer
+    /// is down. Nothing a menu, a dialog or the engine lists show can have
+    /// changed under a pointer that is dragging a clip, and rebuilding them
+    /// anyway — three menus, the export panel's half-dozen formatted strings,
+    /// both engine lists — is what made the playhead trail the pointer and
+    /// then catch up in a jump.
+    fn publish_lanes(&self, app: &App, models: &Models) {
+        sync(
+            &models.tabs,
             self.timelines
                 .iter()
                 .map(|timeline| TimelineTabData {
                     id: timeline.id.as_str().into(),
                     name: timeline.name.as_str().into(),
                 })
-                .collect::<Vec<_>>(),
+                .collect(),
         );
 
         // Reversed on the way out: top-most lane first is what the panel draws.
-        models.tracks.set_vec(
+        sync(
+            &models.tracks,
             self.now()
                 .tracks
                 .iter()
@@ -1174,10 +1249,11 @@ impl Studio {
                     muted: track.muted,
                     locked: track.locked,
                 })
-                .collect::<Vec<_>>(),
+                .collect(),
         );
 
-        models.clips.set_vec(
+        sync(
+            &models.clips,
             self.now()
                 .clips
                 .iter()
@@ -1196,12 +1272,12 @@ impl Studio {
                     volume: clip.volume,
                     text_body: clip.text_body.as_str().into(),
                     wave: if clip.kind == ClipKind::Audio {
-                        self.wave(clip).as_ref().into()
+                        self.wave(clip)
                     } else {
                         SharedString::new()
                     },
                 })
-                .collect::<Vec<_>>(),
+                .collect(),
         );
 
         // What is under the playhead. The topmost picture wins, the way the
@@ -1221,16 +1297,39 @@ impl Studio {
             showing.map(|clip| clip.name.as_str()).unwrap_or_default().into(),
         );
         app.set_preview_duration(self.duration());
+        app.set_playing(self.playing);
+
+        app.set_selected_clip(self.selected());
+        app.set_timeline_current_tab(self.active as i32);
+        app.set_playhead(self.playhead);
+        app.set_scroll_left(self.scroll_left);
+        app.set_seconds_per_pixel(self.seconds_per_pixel);
+        app.set_frame_rate(self.frame_rate);
+        app.set_tool(self.tool);
+        app.set_snap(self.snap);
+        app.set_selected_count(self.selection.len() as i32);
+        app.set_has_av_tools(self.has_av_tools());
+        app.set_merge_blocked_because(match self.merge_blocked() {
+            Some(reason) => reason.into(),
+            None => SharedString::new(),
+        });
+    }
+
+    /// The menus, the dialogs and the engine lists.
+    ///
+    /// Every one of these is opened by a click, and every path that can open
+    /// one goes through the full `publish` — so the rows are always rebuilt
+    /// before the surface that shows them appears.
+    fn publish_chrome(&self, app: &App, models: &Models) {
         let (width, height) = OUTPUTS[self.ratio.min(OUTPUTS.len() - 1)];
         app.set_output_width(width);
         app.set_output_height(height);
         app.set_ratio_index(self.ratio as i32);
         app.set_quality_index(self.quality as i32);
-        app.set_playing(self.playing);
 
         let rows = self.menu();
         app.set_menu_height(Studio::menu_height(&rows));
-        app.set_menu_items(ModelRc::from(Rc::new(VecModel::from(rows))));
+        sync(&models.menu, rows);
         app.set_menu_token(self.menu_token);
 
         app.set_export(self.export_data());
@@ -1258,36 +1357,19 @@ impl Studio {
             version: "0.1.0".into(),
             engine: "wolfcut-engine · ffmpeg 7.1".into(),
         });
-        app.set_transcribers(ModelRc::from(Rc::new(VecModel::from(Studio::model_rows(
-            &self.transcribers,
-        )))));
-        app.set_voices(ModelRc::from(Rc::new(VecModel::from(Studio::model_rows(&self.voices)))));
+        sync(&models.transcribers, Studio::model_rows(&self.transcribers));
+        sync(&models.voices, Studio::model_rows(&self.voices));
 
         let av = self.av_menu();
         app.set_av_height(Studio::menu_height(&av));
-        app.set_av_items(ModelRc::from(Rc::new(VecModel::from(av))));
+        sync(&models.av, av);
         app.set_av_token(self.av_token);
 
         let bar = self.menu_bar();
         app.set_app_menu_height(Studio::menu_height(&bar));
-        app.set_app_menu_items(ModelRc::from(Rc::new(VecModel::from(bar))));
+        sync(&models.bar, bar);
         app.set_app_menu_token(self.menu_bar_token);
         app.set_open_menu(self.open_menu);
-
-        app.set_selected_clip(self.selected());
-        app.set_timeline_current_tab(self.active as i32);
-        app.set_playhead(self.playhead);
-        app.set_scroll_left(self.scroll_left);
-        app.set_seconds_per_pixel(self.seconds_per_pixel);
-        app.set_frame_rate(self.frame_rate);
-        app.set_tool(self.tool);
-        app.set_snap(self.snap);
-        app.set_selected_count(self.selection.len() as i32);
-        app.set_has_av_tools(self.has_av_tools());
-        app.set_merge_blocked_because(match self.merge_blocked() {
-            Some(reason) => reason.into(),
-            None => SharedString::new(),
-        });
     }
 }
 
@@ -1696,35 +1778,63 @@ fn main() -> Result<(), slint::PlatformError> {
 
     // --- the timeline ----------------------------------------------------
     //
-    // Every handler below ends in the same publish, for the reason the bin's
-    // do: one path that always produces a consistent panel is worth more than
-    // the row-level updates it could be split into.
+    // Every handler below ends in a republish, and there are two of them: the
+    // lanes alone for anything a pointer can drag, and the whole window for
+    // everything else. One path that always produces a consistent panel is
+    // still worth more than row-level updates — but a gesture cannot afford
+    // to rebuild the menus and the dialogs sixty times a second on its way
+    // through.
     let studio = Rc::new(RefCell::new(demo_studio()));
-    let timeline_models = Rc::new(TimelineModels {
+    let models = Rc::new(Models {
         tabs: Rc::new(VecModel::default()),
         tracks: Rc::new(VecModel::default()),
         clips: Rc::new(VecModel::default()),
+        menu: Rc::new(VecModel::default()),
+        av: Rc::new(VecModel::default()),
+        bar: Rc::new(VecModel::default()),
+        transcribers: Rc::new(VecModel::default()),
+        voices: Rc::new(VecModel::default()),
     });
-    app.set_timeline_tabs(ModelRc::from(timeline_models.tabs.clone()));
-    app.set_tracks(ModelRc::from(timeline_models.tracks.clone()));
-    app.set_clips(ModelRc::from(timeline_models.clips.clone()));
+    // Handed over once, here, and never replaced: a fresh model is a reset,
+    // and a reset rebuilds every row that hangs off it.
+    app.set_timeline_tabs(ModelRc::from(models.tabs.clone()));
+    app.set_tracks(ModelRc::from(models.tracks.clone()));
+    app.set_clips(ModelRc::from(models.clips.clone()));
+    app.set_menu_items(ModelRc::from(models.menu.clone()));
+    app.set_av_items(ModelRc::from(models.av.clone()));
+    app.set_app_menu_items(ModelRc::from(models.bar.clone()));
+    app.set_transcribers(ModelRc::from(models.transcribers.clone()));
+    app.set_voices(ModelRc::from(models.voices.clone()));
 
     // Mutate, then republish. Handed the weak handle rather than the app so a
     // callback outliving the window is a no-op instead of a panic.
-    macro_rules! on_timeline {
-        (|$state:ident $(, $arg:ident : $ty:ty)*| $body:block) => {{
+    macro_rules! publishing {
+        ($publish:ident, |$state:ident $(, $arg:ident : $ty:ty)*| $body:block) => {{
             let weak = app.as_weak();
             let studio = studio.clone();
-            let models = timeline_models.clone();
+            let models = models.clone();
             move |$($arg : $ty),*| {
                 let Some(app) = weak.upgrade() else { return };
                 {
                     let mut $state = studio.borrow_mut();
                     $body
                 }
-                studio.borrow().publish(&app, &models);
+                studio.borrow().$publish(&app, &models);
             }
         }};
+    }
+
+    /// The whole window. What anything that opens a menu or a dialog uses.
+    macro_rules! on_timeline {
+        ($($handler:tt)*) => { publishing!(publish, $($handler)*) };
+    }
+
+    /// The lanes and the readouts that follow them, and nothing else. For the
+    /// handlers a pointer drives directly — a scrub, a move, a trim, a knob —
+    /// which arrive as a stream of events and must each cost as little as the
+    /// change they carry.
+    macro_rules! on_lanes {
+        ($($handler:tt)*) => { publishing!(publish_lanes, $($handler)*) };
     }
 
     // ── tabs ──
@@ -1879,15 +1989,15 @@ fn main() -> Result<(), slint::PlatformError> {
     }));
 
     // ── the view ──
-    app.on_scrubbed(on_timeline!(|state, seconds: f32| {
+    app.on_scrubbed(on_lanes!(|state, seconds: f32| {
         state.playhead = seconds.max(0.0);
     }));
 
-    app.on_scrolled(on_timeline!(|state, seconds: f32| {
+    app.on_scrolled(on_lanes!(|state, seconds: f32| {
         state.scroll_left = seconds.max(0.0);
     }));
 
-    app.on_zoom(on_timeline!(|state, factor: f32, anchor: f32| {
+    app.on_zoom(on_lanes!(|state, factor: f32, anchor: f32| {
         let before = state.seconds_per_pixel;
         // Floored at a frame across two pixels and capped at ten minutes to
         // the pane, which is as far either way as the ruler stays legible.
@@ -1900,7 +2010,7 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     }));
 
-    app.on_zoom_to_fit(on_timeline!(|state, width: f32| {
+    app.on_zoom_to_fit(on_lanes!(|state, width: f32| {
         // A little air past the end, so the last clip is not flush against the
         // right edge, and a floor so an empty timeline does not divide by zero.
         let span = state.duration().max(1.0) * 1.05;
@@ -1963,7 +2073,7 @@ fn main() -> Result<(), slint::PlatformError> {
     // A press resolves the selection before anything moves, so a drag that
     // starts on an already-selected clip carries the whole set rather than
     // collapsing to the one clip touched.
-    app.on_clip_pressed(on_timeline!(|state, id: SharedString, additive: bool, edge: i32| {
+    app.on_clip_pressed(on_lanes!(|state, id: SharedString, additive: bool, edge: i32| {
         let id = id.to_string();
         let Some(clip) = state.clip(&id).cloned() else { return };
         // A locked lane takes no presses at all — not even to select. Half a
@@ -2020,7 +2130,7 @@ fn main() -> Result<(), slint::PlatformError> {
         state.gesture = Gesture::Move { primary: id, origins };
     }));
 
-    app.on_clip_dragged(on_timeline!(|state, seconds: f32, rows: i32| {
+    app.on_clip_dragged(on_lanes!(|state, seconds: f32, rows: i32| {
         // Lifted out rather than matched in place: every arm goes on to mutate
         // the clips, which cannot happen while the gesture is borrowed out of
         // the same struct. It goes back at the end, so a drag survives.
@@ -2095,7 +2205,7 @@ fn main() -> Result<(), slint::PlatformError> {
     // Releasing is what would make a move or a trim real: the reference echoes
     // it locally and turns the whole gesture into one undoable command here.
     // There is no command stack in this tree, so this only ends the gesture.
-    app.on_clip_released(on_timeline!(|state| {
+    app.on_clip_released(on_lanes!(|state| {
         state.gesture = Gesture::None;
     }));
 
@@ -2126,7 +2236,7 @@ fn main() -> Result<(), slint::PlatformError> {
         state.selection = vec![id];
     }));
 
-    app.on_band_selected(on_timeline!(
+    app.on_band_selected(on_lanes!(
         |state, from: f32, to: f32, from_row: i32, to_row: i32, additive: bool| {
             let caught: Vec<String> = state
                 .now()
@@ -2161,7 +2271,7 @@ fn main() -> Result<(), slint::PlatformError> {
     // One field and one number rather than a patch of the whole clip: a patch
     // is "everything, with one thing different", and a late-arriving one
     // overwrites whatever landed while it was in flight.
-    app.on_clip_set(on_timeline!(|state, field: ClipField, value: f32| {
+    app.on_clip_set(on_lanes!(|state, field: ClipField, value: f32| {
         let Some(id) = state.selection.first().cloned() else { return };
         let Some(index) = state.now().clips.iter().position(|clip| clip.id == id) else {
             return;
@@ -2209,7 +2319,7 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     }));
 
-    app.on_clip_set_text(on_timeline!(|state, field: ClipTextField, value: SharedString| {
+    app.on_clip_set_text(on_lanes!(|state, field: ClipTextField, value: SharedString| {
         let Some(id) = state.selection.first().cloned() else { return };
         let Some(index) = state.now().clips.iter().position(|clip| clip.id == id) else {
             return;
@@ -2231,7 +2341,7 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     }));
 
-    app.on_clip_set_colour(on_timeline!(|state, field: ClipTextField, value: slint::Color| {
+    app.on_clip_set_colour(on_lanes!(|state, field: ClipTextField, value: slint::Color| {
         let Some(id) = state.selection.first().cloned() else { return };
         let Some(index) = state.now().clips.iter().position(|clip| clip.id == id) else {
             return;
@@ -2256,12 +2366,12 @@ fn main() -> Result<(), slint::PlatformError> {
     // The transport moves the timeline's playhead rather than a second copy of
     // it: the programme position is one number, and a monitor that kept its
     // own would drift from the lanes the moment either moved.
-    app.on_seek(on_timeline!(|state, seconds: f32| {
+    app.on_seek(on_lanes!(|state, seconds: f32| {
         state.playing = false;
         state.playhead = seconds.clamp(0.0, state.duration());
     }));
 
-    app.on_step_frames(on_timeline!(|state, frames: f32| {
+    app.on_step_frames(on_lanes!(|state, frames: f32| {
         state.playing = false;
         // Stepped on the frame grid, not by adding a fraction of a second:
         // repeated steps off-grid would accumulate a drift that shows up as a
@@ -2293,7 +2403,7 @@ fn main() -> Result<(), slint::PlatformError> {
     app.on_play_toggled({
         let weak = app.as_weak();
         let studio = studio.clone();
-        let models = timeline_models.clone();
+        let models = models.clone();
         let playback = playback.clone();
         move || {
             let Some(app) = weak.upgrade() else { return };
@@ -2337,7 +2447,9 @@ fn main() -> Result<(), slint::PlatformError> {
                             if !studio.borrow().playing {
                                 playback.stop();
                             }
-                            studio.borrow().publish(&app, &models);
+                            // A frame of playback moves the playhead and nothing
+                            // else — no menu, no dialog, no engine list.
+                            studio.borrow().publish_lanes(&app, &models);
                         }
                     },
                 );
@@ -2477,7 +2589,7 @@ fn main() -> Result<(), slint::PlatformError> {
     app.on_export_cancel({
         let weak = app.as_weak();
         let studio = studio.clone();
-        let models = timeline_models.clone();
+        let models = models.clone();
         let exporting = exporting.clone();
         move || {
             let Some(app) = weak.upgrade() else { return };
@@ -2493,7 +2605,7 @@ fn main() -> Result<(), slint::PlatformError> {
     app.on_export_start({
         let weak = app.as_weak();
         let studio = studio.clone();
-        let models = timeline_models.clone();
+        let models = models.clone();
         let exporting = exporting.clone();
         move || {
             let Some(app) = weak.upgrade() else { return };
@@ -2593,7 +2705,7 @@ fn main() -> Result<(), slint::PlatformError> {
     downloads.start(TimerMode::Repeated, std::time::Duration::from_millis(120), {
         let weak = app.as_weak();
         let studio = studio.clone();
-        let models = timeline_models.clone();
+        let models = models.clone();
         move || {
             let Some(app) = weak.upgrade() else { return };
             let mut moved = false;
@@ -2687,7 +2799,7 @@ fn main() -> Result<(), slint::PlatformError> {
     app.on_app_menu_selected({
         let weak = app.as_weak();
         let studio = studio.clone();
-        let models = timeline_models.clone();
+        let models = models.clone();
         move |action| {
             let Some(app) = weak.upgrade() else { return };
             {
@@ -2769,7 +2881,7 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     });
 
-    studio.borrow().publish(&app, &timeline_models);
+    studio.borrow().publish(&app, &models);
 
     // --- the pieces Slint cannot express ---------------------------------
     app.global::<Curves>()
