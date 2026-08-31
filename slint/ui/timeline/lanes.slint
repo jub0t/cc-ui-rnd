@@ -59,8 +59,10 @@ component Clip inherits Rectangle {
 
     /// A press landed: the caller resolves the selection before any drag.
     callback pressed(additive: bool, edge: int);
-    /// Window-space delta since the press, as seconds across and lanes down.
-    callback dragged(seconds: float, rows: int);
+    /// Window-space delta since the press: seconds across, pixels down. Not
+    /// lanes down — the lanes are no longer one height, so which row a drag
+    /// has reached is a question only the side holding the heights can answer.
+    callback dragged(seconds: float, pixels: length);
     callback released();
     callback razored(seconds: float);
     callback context-requested();
@@ -85,9 +87,6 @@ component Clip inherits Rectangle {
     property <int> edge-at: touch.mouse-x < root.edge-grab ? 0
         : touch.mouse-x > root.width - root.edge-grab ? 1
         : -1;
-    /// The lane pitch, needed by the drag to turn pixels into rows. Passed in
-    /// rather than reached for: a clip has no way to ask how tall a lane is.
-    in property <length> parent-lane-height: 64px;
     /// Its lane is locked. Rust refuses the gestures either way; this is so
     /// the clip says why before you try, rather than feeling broken.
     in property <bool> locked;
@@ -338,8 +337,7 @@ component Clip inherits Rectangle {
                 root.dragged(
                     (self.absolute-position.x + self.mouse-x - self.origin-x)
                         / root.px-per-second,
-                    Math.round((self.absolute-position.y + self.mouse-y - self.origin-y)
-                        / root.parent-lane-height));
+                    self.absolute-position.y + self.mouse-y - self.origin-y);
             }
         }
 
@@ -361,12 +359,11 @@ export component Lanes inherits Rectangle {
     /// The zoom, as the reference spells it: seconds covered by one pixel.
     in property <float> seconds-per-pixel: 0.05;
     in property <length> track-scroll;
-    in property <length> lane-height: 64px;
     in property <length> ruler-height: 28px;
 
     callback scrubbed(seconds: float);
     callback clip-pressed(id: string, additive: bool, edge: int);
-    callback clip-dragged(seconds: float, rows: int);
+    callback clip-dragged(seconds: float, pixels: length);
     callback clip-released();
     callback razored(id: string, seconds: float);
     /// Right-click on a clip. The caller fills the menu and bumps `menu-token`;
@@ -382,7 +379,7 @@ export component Lanes inherits Rectangle {
     /// selecting as the band sweeps looks busy and makes a mistaken sweep hard
     /// to back out of.
     callback band-selected(from-seconds: float, to-seconds: float,
-        from-row: int, to-row: int, additive: bool);
+        from-y: length, to-y: length, additive: bool);
     callback scrolled(seconds: float);
     callback track-scrolled(pixels: length);
     callback zoomed(factor: float, anchor-seconds: float);
@@ -391,9 +388,9 @@ export component Lanes inherits Rectangle {
     /// place. Asked on every move of it, because the answer — the ghost below
     /// — is where the drop would land, and that has to be recomputed as the
     /// pointer travels.
-    callback drag-hovered(payload: string, seconds: float, row: int);
+    callback drag-hovered(payload: string, seconds: float, y: length);
     /// Released here. Same three arguments: the drop is the hover, committed.
-    callback dropped(payload: string, seconds: float, row: int);
+    callback dropped(payload: string, seconds: float, y: length);
     /// The answer to the last hover. `active` is also the verdict — false is
     /// how the drag is refused, and the cursor says so.
     in property <DropData> drop;
@@ -407,8 +404,16 @@ export component Lanes inherits Rectangle {
     pure function seconds-at(x: length) -> float {
         return root.scroll-left + x / root.px-per-second;
     }
-    pure function row-at(y: length) -> int {
-        return Math.floor((y - root.ruler-height + root.track-scroll) / root.lane-height);
+    /// Pixels down the stack, from a y inside the lane area — which is what
+    /// both gestures that used to resolve a row now send instead. The band and
+    /// the drop target both start at the foot of the ruler, so their local y
+    /// needs only the scroll adding to it.
+    pure function stack-y(y: length) -> length {
+        return y + root.track-scroll;
+    }
+    /// The top of a row inside the lane area, scroll included.
+    pure function row-y(row: int) -> length {
+        return root.ruler-height + root.tracks[row].top - root.track-scroll;
     }
 
     // The ruler's tick ladder, from Rust. Zero means unbound, which draws no
@@ -460,11 +465,11 @@ export component Lanes inherits Rectangle {
         // ── banded lanes ─────────────────────────────────────────────────
         for track[row] in root.tracks: Rectangle {
             x: 0;
-            y: root.ruler-height + row * root.lane-height - root.track-scroll;
+            y: root.ruler-height + track.top - root.track-scroll;
             width: parent.width;
-            height: root.lane-height;
+            height: track.height;
             background: Math.mod(row, 2) == 0 ? Theme.lane : Theme.lane-alt;
-            visible: self.y + root.lane-height > root.ruler-height && self.y < root.height;
+            visible: self.y + track.height > root.ruler-height && self.y < root.height;
 
             Rectangle {
                 x: 0;
@@ -519,8 +524,8 @@ export component Lanes inherits Rectangle {
                         root.band-selected(
                             root.seconds-at(Math.min(self.from-x, self.to-x)),
                             root.seconds-at(Math.max(self.from-x, self.to-x)),
-                            root.row-at(Math.min(self.from-y, self.to-y) + root.ruler-height),
-                            root.row-at(Math.max(self.from-y, self.to-y) + root.ruler-height),
+                            root.stack-y(Math.min(self.from-y, self.to-y)),
+                            root.stack-y(Math.max(self.from-y, self.to-y)),
                             self.additive);
                     }
                 }
@@ -535,23 +540,24 @@ export component Lanes inherits Rectangle {
         // ── the clips ────────────────────────────────────────────────────
         for entry in root.clips: Clip {
             x: root.at(entry.start);
-            y: root.ruler-height + entry.row * root.lane-height - root.track-scroll + 4px;
+            // Both from the lane it sits on, so a clip follows its row's
+            // height without a second copy of it to keep in step.
+            y: root.row-y(entry.row) + 4px;
             width: Math.max(2px, entry.duration * root.px-per-second);
-            height: root.lane-height - 10px;
+            height: Math.max(2px, root.tracks[entry.row].height - 10px);
             visible: self.x + self.width > 0 && self.x < root.width
                 && self.y + self.height > root.ruler-height && self.y < root.height;
 
             item: entry;
             px-per-second: root.px-per-second;
             tool: root.tool;
-            parent-lane-height: root.lane-height;
             // Read back through the lane the clip sits on rather than carried
             // on the clip: locking is a property of the lane, and copying it
             // onto every clip would be one more thing to keep in step.
             locked: root.tracks[entry.row].locked;
 
             pressed(additive, edge) => { root.clip-pressed(entry.id, additive, edge); }
-            dragged(seconds, rows) => { root.clip-dragged(seconds, rows); }
+            dragged(seconds, pixels) => { root.clip-dragged(seconds, pixels); }
             released => { root.clip-released(); }
             razored(seconds) => { root.razored(entry.id, entry.start + seconds); }
             context-requested => {
@@ -596,14 +602,14 @@ export component Lanes inherits Rectangle {
                 // reads its own answer back, one statement later.
                 root.drag-hovered(Payload.text(event.data),
                     root.seconds-at(event.position.x),
-                    root.row-at(event.position.y + root.ruler-height));
+                    root.stack-y(event.position.y));
                 return root.drop.active ? DragAction.copy : DragAction.none;
             }
 
             dropped(event) => {
                 root.dropped(Payload.text(event.data),
                     root.seconds-at(event.position.x),
-                    root.row-at(event.position.y + root.ruler-height));
+                    root.stack-y(event.position.y));
                 return DragAction.copy;
             }
         }
@@ -616,10 +622,9 @@ export component Lanes inherits Rectangle {
         // would sit there after the pointer had gone.
         if root.drop.active && landing.has-drag: Rectangle {
             x: root.at(root.drop.start);
-            y: root.ruler-height + root.drop.row * root.lane-height
-                - root.track-scroll + 4px;
+            y: root.row-y(root.drop.row) + 4px;
             width: Math.max(2px, root.drop.duration * root.px-per-second);
-            height: root.lane-height - 10px;
+            height: Math.max(2px, root.tracks[root.drop.row].height - 10px);
             border-radius: Theme.r-sm;
             background: Paint.well(root.drop.kind);
             // The accent, not the kind's mark: this is a target, and every

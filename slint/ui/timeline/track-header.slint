@@ -1,7 +1,7 @@
 import { Theme } from "../theme.slint";
 import { Glyph, Icon } from "../icons.slint";
 import { IconButton } from "../primitives/panel.slint";
-import { TrackData } from "model.slint";
+import { TrackData, TrackSize } from "model.slint";
 
 // The lane labels, in a fixed column beside the lanes.
 //
@@ -13,11 +13,112 @@ import { TrackData } from "model.slint";
 // caller's `track-scroll`, so the labels and the lanes cannot drift apart.
 // There is one source of truth for how far down the stack we are.
 
+// The row-height dropdown, one per lane.
+//
+// A menu and not a cycling button: four values is one too many to walk
+// through blind, and the list is also where "Auto" gets to say that it is the
+// default rather than a fourth size. Sized and placed like the switches beside
+// it, so the row reads as one strip of controls.
+component SizeMenu inherits Rectangle {
+    in property <TrackSize> current;
+    in property <string> name;
+
+    callback picked(size: TrackSize);
+
+    width: 26px;
+    min-height: 26px;
+
+    property <[string]> labels: ["Auto", "Small", "Medium", "Large"];
+    property <length> row-h: 24px;
+    /// The two directions between a TrackSize and its row. Slint has no map,
+    /// and four values do not earn one.
+    pure function chosen() -> int {
+        return root.current == TrackSize.small ? 1
+            : root.current == TrackSize.medium ? 2
+            : root.current == TrackSize.large ? 3
+            : 0;
+    }
+    pure function size-at(index: int) -> TrackSize {
+        return index == 1 ? TrackSize.small
+            : index == 2 ? TrackSize.medium
+            : index == 3 ? TrackSize.large
+            : TrackSize.auto;
+    }
+
+    IconButton {
+        glyph: Glyph.rows;
+        label: "Row height for " + root.name;
+        icon-size: 12px;
+        // Lit only when the lane has been sized by hand: auto is the resting
+        // state, and a button lit on every row would say nothing.
+        checked: root.current != TrackSize.auto;
+        clicked => { list.show(); }
+    }
+
+    list := PopupWindow {
+        // Hung from the button's trailing edge rather than its leading one:
+        // this is the last control in the row on a narrow column, and a list
+        // opening rightwards would open off the pane.
+        x: 26px - self.width;
+        y: 26px;
+        width: 116px;
+        height: 4 * root.row-h + 8px;
+        close-policy: close-on-click-outside;
+
+        Rectangle {
+            background: Theme.raised;
+            border-width: 1px;
+            border-color: Theme.line-strong;
+            border-radius: Theme.r;
+            clip: true;
+
+            VerticalLayout {
+                padding: 4px;
+                alignment: start;
+
+                for label[index] in root.labels: Rectangle {
+                    height: root.row-h;
+                    border-radius: Theme.r-sm;
+                    background: pick.has-hover ? Theme.field-hover : Colors.transparent;
+
+                    HorizontalLayout {
+                        padding-left: 8px;
+                        padding-right: 8px;
+                        spacing: 6px;
+
+                        Text {
+                            horizontal-stretch: 1;
+                            text: label;
+                            color: pick.has-hover ? Theme.fg : Theme.fg-muted;
+                            font-size: Theme.fs;
+                            vertical-alignment: center;
+                        }
+
+                        if index == root.chosen(): VerticalLayout {
+                            alignment: center;
+                            Icon { glyph: Glyph.check; size: 12px; tint: Theme.accent; }
+                        }
+                    }
+
+                    pick := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            root.picked(root.size-at(index));
+                            list.close();
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 component Header inherits Rectangle {
     in property <TrackData> track;
     in property <bool> removable;
 
     callback flag-changed(visible: bool, muted: bool, locked: bool);
+    callback sized(size: TrackSize);
     callback removed();
     callback renamed(name: string);
 
@@ -132,6 +233,15 @@ component Header inherits Rectangle {
 
             VerticalLayout {
                 alignment: start;
+                SizeMenu {
+                    current: root.track.size;
+                    name: root.track.name;
+                    picked(size) => { root.sized(size); }
+                }
+            }
+
+            VerticalLayout {
+                alignment: start;
                 IconButton {
                     glyph: root.track.locked ? Glyph.lock : Glyph.unlock;
                     label: root.track.locked ? "Unlock " + root.track.name
@@ -182,13 +292,14 @@ component Header inherits Rectangle {
 }
 
 export component TrackHeaders inherits Rectangle {
-    in property <[TrackData]> tracks;
     /// Top lane first, so index 0 is the row drawn at the top of the lanes.
-    in property <length> lane-height: 64px;
+    /// Each row carries its own height and where it starts; see TrackData.
+    in property <[TrackData]> tracks;
     in property <length> ruler-height: 28px;
     in property <length> track-scroll;
 
     callback flag-changed(index: int, visible: bool, muted: bool, locked: bool);
+    callback sized(index: int, size: TrackSize);
     callback removed(index: int);
     callback renamed(index: int, name: string);
 
@@ -196,12 +307,12 @@ export component TrackHeaders inherits Rectangle {
 
     for track[index] in root.tracks: Header {
         x: 0;
-        y: root.ruler-height + index * root.lane-height - root.track-scroll;
+        y: root.ruler-height + track.top - root.track-scroll;
         width: parent.width;
-        height: root.lane-height;
+        height: track.height;
         // Clipped to the stack rather than allowed to ride over the ruler,
         // which a scrolled row would otherwise do.
-        visible: self.y + root.lane-height > root.ruler-height && self.y < root.height;
+        visible: self.y + track.height > root.ruler-height && self.y < root.height;
 
         track: track;
         removable: root.tracks.length > 1;
@@ -209,6 +320,7 @@ export component TrackHeaders inherits Rectangle {
         flag-changed(visible, muted, locked) => {
             root.flag-changed(index, visible, muted, locked);
         }
+        sized(size) => { root.sized(index, size); }
         removed => { root.removed(index); }
         renamed(name) => { root.renamed(index, name); }
     }

@@ -29,6 +29,17 @@ export struct TimelineTabData {
     name: string,
 }
 
+/// How tall a lane is drawn.
+///
+/// `auto` is the default, and the only one that thinks: a lane is as tall as
+/// the tallest thing on it, so a lane of footage opens large, a lane of sound
+/// medium, and a lane of filter layers minimal. That is the shape CapCut gets
+/// by typing its tracks — arrived at here without typing them, which matters
+/// because these lanes are deliberately untyped and a mixed one still has to
+/// be right. The other three are the override, per lane, from the dropdown in
+/// its header.
+export enum TrackSize { auto, small, medium, large }
+
 /// One lane. Deliberately untyped, like the reference's Track: any media goes
 /// on any track, which is why every lane carries both a visibility and a mute
 /// switch rather than one or the other.
@@ -37,6 +48,14 @@ export struct TrackData {
     name: string,
     visible: bool,
     muted: bool,
+    /// What the header's dropdown shows, and what `height` was resolved from.
+    size: TrackSize,
+    /// The lane's drawn height, and its top edge measured down the stack from
+    /// the first lane. Both resolved by Rust: the stack is no longer a
+    /// multiple of one pitch, and a running total over a model is not
+    /// something Slint's expression language can express.
+    height: length,
+    top: length,
     /// Clips on a locked lane cannot be selected, moved, trimmed or cut, and
     /// nothing can be dropped onto it. Not a flag the reference carries — its
     /// TrackFlag is visible/muted only — but a lane you can see and hear and

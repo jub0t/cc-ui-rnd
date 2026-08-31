@@ -437,6 +437,16 @@ const OUTPUTS: [(i32, i32); 6] = [
 /// reference's model puts it. Trims and splits both floor at this.
 const MIN_DURATION: f32 = 1.0 / 60.0;
 
+/// The three lane heights, in logical pixels.
+///
+/// Picture gets the tallest because a filmstrip is the one thing that needs
+/// the room; sound the middle, where an envelope still has shape; a filter
+/// layer the least, because it is a bar with a name on it and nothing else to
+/// show. The ladder is what `TrackSize::Auto` picks from — see `lane_height`.
+const LANE_LARGE: f32 = 80.0;
+const LANE_MEDIUM: f32 = 60.0;
+const LANE_SMALL: f32 = 40.0;
+
 /// How long a title or a filter layer runs when it is placed: long enough to
 /// read, short enough that trimming it is a nudge rather than a fight. The
 /// same three seconds the reference gives a new title.
@@ -552,6 +562,9 @@ struct TrackDoc {
     /// Nothing on this lane can be selected, moved, trimmed or cut, and
     /// nothing can be dropped onto it.
     locked: bool,
+    /// How tall to draw it. `Auto` — the default — takes the height from what
+    /// is on the lane; see `lane_height`.
+    size: TrackSize,
 }
 
 struct TimelineDoc {
@@ -584,6 +597,16 @@ enum Gesture {
         /// The clip actually grabbed; it is the one that snaps.
         primary: String,
         origins: Vec<MoveOrigin>,
+        /// The lane heights as they were when the press landed.
+        ///
+        /// Frozen, not read live, because an `Auto` lane takes its height from
+        /// what is on it — so the act of dragging a clip onto a lane resizes
+        /// that lane and the ones under it, which moves the very edges the
+        /// next event measures itself against. Live, a drag of the wrong
+        /// length lands the clip on a lane that shrinks the lane it came
+        /// from, which puts the same pointer back over the first lane, and the
+        /// clip flips between the two for as long as the mouse is held still.
+        lanes: Vec<f32>,
     },
     Trim {
         clip: String,
@@ -770,6 +793,52 @@ impl Studio {
             .any(|track| track.id == track_id && track.locked)
     }
 
+    /// How tall one lane is drawn.
+    ///
+    /// The auto case is the whole point of the ladder: a lane takes the height
+    /// of the tallest thing on it, so a lane of footage opens large, a lane of
+    /// sound medium and a lane of filter layers minimal — without the lanes
+    /// having to be typed, which they deliberately are not. An empty one takes
+    /// the middle size; it has nothing to be told by, and starting small would
+    /// make a new lane look like a place nothing belongs.
+    fn lane_height(&self, lane: &TrackDoc) -> f32 {
+        match lane.size {
+            TrackSize::Small => LANE_SMALL,
+            TrackSize::Medium => LANE_MEDIUM,
+            TrackSize::Large => LANE_LARGE,
+            TrackSize::Auto => {
+                let tallest = self
+                    .now()
+                    .clips
+                    .iter()
+                    .filter(|clip| clip.track == lane.id)
+                    .map(|clip| match clip.kind {
+                        ClipKind::Video | ClipKind::Image => LANE_LARGE,
+                        ClipKind::Audio | ClipKind::Text => LANE_MEDIUM,
+                        ClipKind::Filter => LANE_SMALL,
+                    })
+                    .fold(0.0_f32, f32::max);
+                if tallest > 0.0 { tallest } else { LANE_MEDIUM }
+            }
+        }
+    }
+
+    /// Every lane's height, top-most first — the order the panel draws them
+    /// and the order `row_of` counts in.
+    ///
+    /// Rebuilt on demand rather than cached: it is a handful of lanes over a
+    /// handful of clips, and a cache would be one more thing that can disagree
+    /// with the document.
+    fn lane_heights(&self) -> Vec<f32> {
+        self.now().tracks.iter().rev().map(|lane| self.lane_height(lane)).collect()
+    }
+
+    /// The row a point down the stack falls in, clamped to the stack: past the
+    /// foot is the last lane, not nothing.
+    fn row_at(&self, y: f32) -> i32 {
+        row_at(&self.lane_heights(), y)
+    }
+
     /// Seconds the project runs to, for Fit and for the scroll floor.
     fn duration(&self) -> f32 {
         self.now()
@@ -951,13 +1020,7 @@ impl Studio {
         let name = self.next_track_name();
         // Pushed, not inserted: the model runs bottom-up, so the end of the
         // list is the top of the stack — which is row zero.
-        self.now_mut().tracks.push(TrackDoc {
-            id,
-            name,
-            visible: true,
-            muted: false,
-            locked: false,
-        });
+        self.now_mut().tracks.push(track(&id, &name));
         0
     }
 
@@ -1441,19 +1504,31 @@ impl Studio {
                 .collect(),
         );
 
-        // Reversed on the way out: top-most lane first is what the panel draws.
+        // Reversed on the way out: top-most lane first is what the panel
+        // draws. Each row carries its own height and the running total above
+        // it, because the stack is no longer a multiple of one pitch and a
+        // prefix sum over a model is not something Slint can express.
+        let mut top = 0.0;
         sync(
             &models.tracks,
             self.now()
                 .tracks
                 .iter()
                 .rev()
-                .map(|track| TrackData {
-                    id: track.id.as_str().into(),
-                    name: track.name.as_str().into(),
-                    visible: track.visible,
-                    muted: track.muted,
-                    locked: track.locked,
+                .map(|lane| {
+                    let height = self.lane_height(lane);
+                    let row = TrackData {
+                        id: lane.id.as_str().into(),
+                        name: lane.name.as_str().into(),
+                        visible: lane.visible,
+                        muted: lane.muted,
+                        locked: lane.locked,
+                        size: lane.size,
+                        height,
+                        top,
+                    };
+                    top += height;
+                    row
                 })
                 .collect(),
         );
@@ -1666,6 +1741,54 @@ fn wave_path(media: &str, source_start: f32, duration: f32, gain: f32) -> String
     path
 }
 
+/// The top edge of a row, measured down the stack from the first lane.
+fn row_top(heights: &[f32], row: i32) -> f32 {
+    heights.iter().take(row.max(0) as usize).sum()
+}
+
+/// The row a point down the stack falls in, clamped to the stack.
+fn row_at(heights: &[f32], y: f32) -> i32 {
+    let mut top = 0.0;
+    for (row, height) in heights.iter().enumerate() {
+        top += height;
+        if y < top {
+            return row as i32;
+        }
+    }
+    (heights.len() as i32 - 1).max(0)
+}
+
+/// The row whose top edge is nearest a point down the stack.
+///
+/// What a *move* wants, and not the same question as `row_at`: dragging a clip
+/// halfway into the lane below should put it there, which is the rounding the
+/// old `delta / lane-height` did for free back when every lane was one height.
+fn nearest_row(heights: &[f32], y: f32) -> i32 {
+    let (mut top, mut best, mut best_distance) = (0.0_f32, 0_i32, f32::MAX);
+    for (row, height) in heights.iter().enumerate() {
+        let distance = (top - y).abs();
+        if distance < best_distance {
+            best_distance = distance;
+            best = row as i32;
+        }
+        top += height;
+    }
+    best
+}
+
+/// A lane, at the defaults everything but the demo uses: seen, heard,
+/// unlocked, and as tall as whatever ends up on it.
+fn track(id: &str, name: &str) -> TrackDoc {
+    TrackDoc {
+        id: id.into(),
+        name: name.into(),
+        visible: true,
+        muted: false,
+        locked: false,
+        size: TrackSize::Auto,
+    }
+}
+
 fn clip(
     id: &str,
     name: &str,
@@ -1750,16 +1873,26 @@ fn demo_studio() -> Studio {
     // lower thirds.
     lower.offset_y = 0.3;
 
+    // A layer over the cut, so the stack opens with one lane of each height:
+    // footage large, sound and titles medium, this minimal.
+    let mut layer = clip("c12", "Telephone", ClipKind::Filter, "T4", "", 4.2, 3.4);
+    layer.preset = "telephone".into();
+    layer.fade_in = 0.3;
+    layer.fade_out = 0.3;
+
     let timeline = TimelineDoc {
         id: "TL1".into(),
         name: "Timeline 1".into(),
-        // Bottom-most first: T1 is the floor of the stack, T3 the top.
+        // Bottom-most first: T1 is the floor of the stack, T4 the top.
         tracks: vec![
-            TrackDoc { id: "T1".into(), name: "Track 1".into(), visible: true, muted: false, locked: false },
-            TrackDoc { id: "T2".into(), name: "Track 2".into(), visible: true, muted: false, locked: false },
-            TrackDoc { id: "T3".into(), name: "Track 3".into(), visible: true, muted: false, locked: false },
+            track("T1", "Track 1"),
+            track("T2", "Track 2"),
+            track("T3", "Track 3"),
+            track("T4", "Track 4"),
         ],
-        clips: vec![voice, line, out, wide, mid, long, close, tail, title, lower],
+        clips: vec![
+            voice, line, out, wide, mid, long, close, tail, title, lower, layer,
+        ],
     };
 
     Studio {
@@ -1770,10 +1903,10 @@ fn demo_studio() -> Studio {
                 id: "TL2".into(),
                 name: "Rough cut".into(),
                 tracks: vec![
-                    TrackDoc { id: "T4".into(), name: "Track 1".into(), visible: true, muted: false, locked: false },
-                    TrackDoc { id: "T5".into(), name: "Track 2".into(), visible: true, muted: false, locked: false },
+                    track("T5", "Track 1"),
+                    track("T6", "Track 2"),
                 ],
-                clips: vec![clip("c11", "0326-0452.mp4", ClipKind::Video, "T5", "m7", 0.0, 4.2)],
+                clips: vec![clip("c11", "0326-0452.mp4", ClipKind::Video, "T6", "m7", 0.0, 4.2)],
             },
         ],
         active: 0,
@@ -2081,18 +2214,12 @@ fn main() -> Result<(), slint::PlatformError> {
 
     app.on_tab_added(on_timeline!(|state| {
         let id = state.mint("TL");
-        let track = state.mint("T");
+        let lane = state.mint("T");
         let number = state.timelines.len() + 1;
         state.timelines.push(TimelineDoc {
             id,
             name: format!("Timeline {number}"),
-            tracks: vec![TrackDoc {
-                id: track,
-                name: "Track 1".into(),
-                visible: true,
-                muted: false,
-                locked: false,
-            }],
+            tracks: vec![track(&lane, "Track 1")],
             clips: Vec::new(),
         });
         state.active = state.timelines.len() - 1;
@@ -2124,13 +2251,7 @@ fn main() -> Result<(), slint::PlatformError> {
         let name = state.next_track_name();
         // Pushed, not inserted: the model runs bottom-up, so the end of the
         // list is the top of the stack — which is where a new lane belongs.
-        state.now_mut().tracks.push(TrackDoc {
-            id,
-            name,
-            visible: true,
-            muted: false,
-            locked: false,
-        });
+        state.now_mut().tracks.push(track(&id, &name));
     }));
 
     app.on_delete_selected(on_timeline!(|state| {
@@ -2278,6 +2399,13 @@ fn main() -> Result<(), slint::PlatformError> {
     }));
 
     // Removing a lane takes its clips with it, and keeps a floor of one.
+    app.on_track_sized(on_timeline!(|state, row: i32, size: TrackSize| {
+        let Some(id) = state.row_track(row).map(|lane| lane.id.clone()) else { return };
+        if let Some(lane) = state.now_mut().tracks.iter_mut().find(|lane| lane.id == id) {
+            lane.size = size;
+        }
+    }));
+
     app.on_track_removed(on_timeline!(|state, row: i32| {
         if state.now().tracks.len() <= 1 {
             return;
@@ -2349,16 +2477,16 @@ fn main() -> Result<(), slint::PlatformError> {
                 })
             })
             .collect();
-        state.gesture = Gesture::Move { primary: id, origins };
+        state.gesture = Gesture::Move { primary: id, origins, lanes: state.lane_heights() };
     }));
 
-    app.on_clip_dragged(on_lanes!(|state, seconds: f32, rows: i32| {
+    app.on_clip_dragged(on_lanes!(|state, seconds: f32, pixels: f32| {
         // Lifted out rather than matched in place: every arm goes on to mutate
         // the clips, which cannot happen while the gesture is borrowed out of
         // the same struct. It goes back at the end, so a drag survives.
         let gesture = std::mem::replace(&mut state.gesture, Gesture::None);
         match &gesture {
-            Gesture::Move { primary, origins } => {
+            Gesture::Move { primary, origins, lanes } => {
                 let Some(anchor) = origins.iter().find(|origin| &origin.clip == primary) else {
                     return;
                 };
@@ -2368,11 +2496,18 @@ fn main() -> Result<(), slint::PlatformError> {
                 let snapped = state.snapped(anchor.start + seconds, threshold, primary);
                 let shift = snapped - anchor.start;
 
-                let lanes = state.now().tracks.len() as i32;
+                // The lanes are no longer one pitch, so the row cannot be a
+                // division: it is the row whose top edge the grabbed clip's
+                // has been dragged nearest to, measured against the stack as
+                // it was when the press landed. The rest of the selection
+                // keeps its offset from that in rows.
+                let rows = nearest_row(lanes, row_top(lanes, anchor.row) + pixels) - anchor.row;
+
+                let count = state.now().tracks.len() as i32;
                 let moves: Vec<(String, f32, Option<String>)> = origins
                     .iter()
                     .map(|origin| {
-                        let row = (origin.row + rows).clamp(0, lanes - 1);
+                        let row = (origin.row + rows).clamp(0, count - 1);
                         // A locked lane refuses the drop: the clip still moves
                         // in time, it just stays on the lane it came from. The
                         // reference does the same for an unknown track id.
@@ -2444,10 +2579,11 @@ fn main() -> Result<(), slint::PlatformError> {
         let studio = studio.clone();
         let models = models.clone();
         let library = library.clone();
-        move |payload: SharedString, seconds: f32, row: i32| {
+        move |payload: SharedString, seconds: f32, y: f32| {
             let Some(app) = weak.upgrade() else { return };
             {
                 let mut state = studio.borrow_mut();
+                let row = state.row_at(y);
                 state.drop = state.plan(payload.as_str(), seconds, row, &library);
             }
             // The lanes only: this runs on every move of the drag.
@@ -2460,11 +2596,12 @@ fn main() -> Result<(), slint::PlatformError> {
         let studio = studio.clone();
         let models = models.clone();
         let library = library.clone();
-        move |payload: SharedString, seconds: f32, row: i32| {
+        move |payload: SharedString, seconds: f32, y: f32| {
             let Some(app) = weak.upgrade() else { return };
             {
                 let mut state = studio.borrow_mut();
                 state.drop = None;
+                let row = state.row_at(y);
                 if let Some(plan) = state.plan(payload.as_str(), seconds, row, &library) {
                     state.place(&plan);
                 }
@@ -2575,7 +2712,12 @@ fn main() -> Result<(), slint::PlatformError> {
     }));
 
     app.on_band_selected(on_lanes!(
-        |state, from: f32, to: f32, from_row: i32, to_row: i32, additive: bool| {
+        |state, from: f32, to: f32, from_y: f32, to_y: f32, additive: bool| {
+            // The band arrives as two corners in pixels down the stack, and
+            // the rows are resolved here for the reason the drops are: the
+            // lanes are no longer one height, and this side is the one that
+            // knows what each of them is.
+            let (from_row, to_row) = (state.row_at(from_y), state.row_at(to_y));
             let caught: Vec<String> = state
                 .now()
                 .clips

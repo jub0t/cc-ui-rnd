@@ -25,14 +25,14 @@ import { TitleBar } from "title-bar.slint";
 import { Workspace } from "workspace/workspace.slint";
 import {
     ClipData, ClipField, ClipKind, ClipTextField, DropData, SelectedClipData,
-    TextAlignment, TimelineTabData, TimelineTool, TrackData,
+    TextAlignment, TimelineTabData, TimelineTool, TrackData, TrackSize,
 } from "timeline/model.slint";
 
 // Re-exported so main.rs can reach the globals and the struct.
 export {
     Curves, Fmt, Payload, Theme, Bezier, EffectData, MediaFilter, MediaItemData, MediaKind,
     ClipData, ClipField, ClipKind, ClipTextField, DropData, SelectedClipData,
-    TextAlignment, TimelineTabData, TimelineTool, TrackData,
+    TextAlignment, TimelineTabData, TimelineTool, TrackData, TrackSize,
     MenuItemData, MenuRow, ExportData, ExportPhase, ModelData, SettingsData,
 }
 
@@ -153,7 +153,7 @@ export component App inherits Window {
     callback zoom(factor: float, anchor-seconds: float);
     callback scrubbed(seconds: float);
     callback clip-pressed(id: string, additive: bool, edge: int);
-    callback clip-dragged(seconds: float, rows: int);
+    callback clip-dragged(seconds: float, pixels: length);
     callback clip-released();
     callback razored(id: string, seconds: float);
     in property <[MenuItemData]> menu-items;
@@ -163,16 +163,17 @@ export component App inherits Window {
     callback menu-selected(id: string);
 
     callback band-selected(from-seconds: float, to-seconds: float,
-        from-row: int, to-row: int, additive: bool);
+        from-y: length, to-y: length, additive: bool);
     callback scrolled(seconds: float);
 
     // Drag and drop from the library onto the lanes. `drop` is Rust's running
     // answer to "where would this land" — the ghost the lanes draw — and it is
     // also the verdict: inactive means the drag is refused.
     in property <DropData> drop;
-    callback drag-hovered(payload: string, seconds: float, row: int);
-    callback dropped(payload: string, seconds: float, row: int);
+    callback drag-hovered(payload: string, seconds: float, y: length);
+    callback dropped(payload: string, seconds: float, y: length);
     callback track-flag-changed(index: int, visible: bool, muted: bool, locked: bool);
+    callback track-sized(index: int, size: TrackSize);
     callback track-removed(index: int);
     callback track-renamed(index: int, name: string);
 
@@ -352,7 +353,7 @@ export component App inherits Window {
             zoom(factor, anchor) => { root.zoom(factor, anchor); }
             scrubbed(seconds) => { root.scrubbed(seconds); }
             clip-pressed(id, additive, edge) => { root.clip-pressed(id, additive, edge); }
-            clip-dragged(seconds, rows) => { root.clip-dragged(seconds, rows); }
+            clip-dragged(seconds, pixels) => { root.clip-dragged(seconds, pixels); }
             clip-released => { root.clip-released(); }
             razored(id, seconds) => { root.razored(id, seconds); }
             menu-items: root.menu-items;
@@ -370,6 +371,7 @@ export component App inherits Window {
             track-flag-changed(index, visible, muted, locked) => {
                 root.track-flag-changed(index, visible, muted, locked);
             }
+            track-sized(index, size) => { root.track-sized(index, size); }
             track-removed(index) => { root.track-removed(index); }
             track-renamed(index, name) => { root.track-renamed(index, name); }
 

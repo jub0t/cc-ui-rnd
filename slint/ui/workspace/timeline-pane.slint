@@ -5,7 +5,7 @@ import { ContextMenu, MenuItemData } from "../primitives/context-menu.slint";
 import { HairlineSplitter } from "splitter.slint";
 import { ThinScrollbar } from "../primitives/scrollbar.slint";
 import {
-    ClipData, DropData, TimelineTabData, TimelineTool, TrackData,
+    ClipData, DropData, TimelineTabData, TimelineTool, TrackData, TrackSize,
 } from "../timeline/model.slint";
 import { TimelineTabs } from "../timeline/tabs.slint";
 import { TimelineTray } from "../timeline/tray.slint";
@@ -62,7 +62,7 @@ export component TimelinePane inherits Rectangle {
 
     callback scrubbed(seconds: float);
     callback clip-pressed(id: string, additive: bool, edge: int);
-    callback clip-dragged(seconds: float, rows: int);
+    callback clip-dragged(seconds: float, pixels: length);
     callback clip-released();
     callback razored(id: string, seconds: float);
     in property <[MenuItemData]> menu-items;
@@ -72,35 +72,43 @@ export component TimelinePane inherits Rectangle {
     callback menu-selected(id: string);
 
     callback band-selected(from-seconds: float, to-seconds: float,
-        from-row: int, to-row: int, additive: bool);
+        from-y: length, to-y: length, additive: bool);
     callback scrolled(seconds: float);
 
     /// A library card dragged over the lanes, and let go of. See DropData.
     in property <DropData> drop;
-    callback drag-hovered(payload: string, seconds: float, row: int);
-    callback dropped(payload: string, seconds: float, row: int);
+    callback drag-hovered(payload: string, seconds: float, y: length);
+    callback dropped(payload: string, seconds: float, y: length);
     callback track-flag-changed(index: int, visible: bool, muted: bool, locked: bool);
+    callback track-sized(index: int, size: TrackSize);
     callback track-removed(index: int);
     callback track-renamed(index: int, name: string);
 
     /// Wide enough for a lane name and its switches without eliding the name
     /// at every default. The reference opens at 164px and carries two toggles;
-    /// this column carries three, and 164 left the name with about six
-    /// characters once the remove button appeared on hover.
-    in-out property <length> header-width: 208px;
+    /// this column carries four, and 164 left the name with about six
+    /// characters once the remove button appeared on hover. Both numbers went
+    /// up by one 26px slot when the row-height menu joined the switches —
+    /// the alternative was a name that elided at the default width, which is
+    /// the thing this width exists to prevent.
+    in-out property <length> header-width: 234px;
     /// Narrow enough to be useful as a squeeze, wide enough that the switches
     /// never overlap the name.
-    in property <length> min-header: 132px;
+    in property <length> min-header: 158px;
 
     /// Where the column was when the divider went down. A drag is one pointer,
     /// so one slot is enough.
     property <length> press-width;
-    in property <length> lane-height: 64px;
     in property <length> ruler-height: 28px;
 
     /// Clamped here rather than only where it is written, so a pane dragged
-    /// taller than its own track stack cannot stay parked past the end.
-    property <length> stack-h: root.tracks.length * root.lane-height;
+    /// taller than its own track stack cannot stay parked past the end. The
+    /// stack is measured off its last lane, since the lanes are no longer one
+    /// height to multiply out.
+    property <length> stack-h: root.tracks.length > 0
+        ? root.tracks[root.tracks.length - 1].top
+            + root.tracks[root.tracks.length - 1].height
+        : 0px;
     property <length> overflow: Math.max(0px,
         root.stack-h - Math.max(0px, lanes.height - root.ruler-height));
     property <length> at: Math.max(0px, Math.min(root.overflow, root.track-scroll));
@@ -176,13 +184,13 @@ export component TimelinePane inherits Rectangle {
                 height: parent.height;
 
                 tracks: root.tracks;
-                lane-height: root.lane-height;
                 ruler-height: root.ruler-height;
                 track-scroll: root.at;
 
                 flag-changed(index, visible, muted, locked) => {
                     root.track-flag-changed(index, visible, muted, locked);
                 }
+                sized(index, size) => { root.track-sized(index, size); }
                 removed(index) => { root.track-removed(index); }
                 renamed(index, name) => { root.track-renamed(index, name); }
             }
@@ -215,12 +223,11 @@ export component TimelinePane inherits Rectangle {
                 scroll-left: root.scroll-left;
                 seconds-per-pixel: root.seconds-per-pixel;
                 track-scroll: root.at;
-                lane-height: root.lane-height;
                 ruler-height: root.ruler-height;
 
                 scrubbed(seconds) => { root.scrubbed(seconds); }
                 clip-pressed(id, additive, edge) => { root.clip-pressed(id, additive, edge); }
-                clip-dragged(seconds, rows) => { root.clip-dragged(seconds, rows); }
+                clip-dragged(seconds, pixels) => { root.clip-dragged(seconds, pixels); }
                 clip-released => { root.clip-released(); }
                 razored(id, seconds) => { root.razored(id, seconds); }
                 menu-items: root.menu-items;
