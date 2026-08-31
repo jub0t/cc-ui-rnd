@@ -167,3 +167,30 @@
 @media (prefers-reduced-motion: reduce) {
   .previewDot { transition: none; }
 }
+
+/* --- reorder handle ------------------------------------------------------ */
+
+/* Pulled into the row's gutter so the FX label barely moves: the handle should
+   read as living in the margin, not as another column. */
+.grip {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 16px;
+  height: 22px;
+  margin-left: -5px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--cp-r-xs);
+  background: none;
+  color: var(--cp-fg-dim);
+  cursor: grab;
+  touch-action: none;
+  transition: color 100ms var(--cp-ease);
+}
+
+.grip:hover { color: var(--cp-fg-muted); }
+.grip:focus-visible { outline: none; box-shadow: var(--cp-focus); }
+
+.rowDragging { background: var(--cp-raised); }
+.rowDragging .grip { color: var(--cp-accent); cursor: grabbing; }

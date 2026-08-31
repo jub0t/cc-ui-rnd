@@ -7,6 +7,7 @@ import { MediaSection } from './demo/media/MediaSection'
 import { InspectorSection } from './demo/inspector/InspectorSection'
 import { ContextMenuSection } from './demo/menu/ContextMenuDemo'
 import { PreviewSection } from './demo/preview/PreviewPanel'
+import { TaskModalSection } from './demo/task/TaskModalDemo'
 import './App.css'
 
 export function App() {
@@ -42,6 +43,9 @@ export function App() {
 
       <hr className="divider" />
       <PreviewSection />
+
+      <hr className="divider" />
+      <TaskModalSection />
     </main>
   )
 }

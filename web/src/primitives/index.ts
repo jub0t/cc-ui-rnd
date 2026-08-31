@@ -22,6 +22,18 @@ export type { LevelMeterProps } from './LevelMeter'
 export { Panel, Section, Row, IconButton } from './Panel'
 export type { PanelProps, SectionProps, RowProps, IconButtonProps } from './Panel'
 
+export { Tooltip } from './Tooltip'
+export type { TooltipProps, TooltipSide } from './Tooltip'
+
+export { Modal } from './Modal'
+export type { ModalProps } from './Modal'
+
+export { ContextMenu, useContextMenu } from './ContextMenu'
+export type { ContextMenuAction, ContextMenuItem, ContextMenuProps, ContextMenuState } from './ContextMenu'
+
+export { MiniMenu } from './MiniMenu'
+export type { MiniMenuAction, MiniMenuItem, MiniMenuProps } from './MiniMenu'
+
 export { usePointerDrag } from './usePointerDrag'
 export type { DragInfo, PointerDragOptions } from './usePointerDrag'
 

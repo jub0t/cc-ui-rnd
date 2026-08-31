@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   CloseIcon,
+  GripIcon,
   IconButton,
   Knob,
   LevelMeter,
@@ -10,6 +11,8 @@ import {
   Row,
   Section,
   SparkleIcon,
+  Tooltip,
+  usePointerDrag,
 } from '../primitives'
 import styles from './panels.module.css'
 
@@ -28,6 +31,75 @@ const INITIAL: Effect[] = [
 ]
 
 const POOL = ['Sharpen', 'Vignette', 'Chroma Key', 'Reverb', 'Compressor', 'De-esser']
+
+/** Row height plus the section's gap — the distance one drag step covers. */
+const ROW_PITCH = 34
+
+/**
+ * An FX row, with the handle that reorders it. The chain runs top to bottom,
+ * so the order is a real setting rather than a filing preference, which is why
+ * it is worth being able to change without deleting and re-adding.
+ *
+ * Dragging is measured against the index the gesture *started* on, not the
+ * current one — the list reorders live underneath the pointer, and reading the
+ * moving index would make every step compound.
+ */
+function FxRow({
+  effect,
+  index,
+  count,
+  onMoveTo,
+  onRemove,
+}: {
+  effect: Effect
+  index: number
+  count: number
+  onMoveTo: (id: number, target: number) => void
+  onRemove: () => void
+}) {
+  const origin = useRef(index)
+  const [dragging, setDragging] = useState(false)
+
+  const beginDrag = usePointerDrag({
+    cursor: 'grabbing',
+    onStart: () => {
+      origin.current = index
+      setDragging(true)
+    },
+    onMove: ({ dy, moved }) => {
+      if (!moved) return
+      onMoveTo(effect.id, origin.current + Math.round(dy / ROW_PITCH))
+    },
+    onEnd: () => setDragging(false),
+  })
+
+  return (
+    <Row
+      label="FX"
+      className={dragging ? styles.rowDragging : undefined}
+      lead={
+        <Tooltip label="Drag to reorder, or use the arrow keys">
+          <button
+            type="button"
+            className={styles.grip}
+            aria-label={`Reorder ${effect.name} — ${index + 1} of ${count}`}
+            onPointerDown={beginDrag}
+            onKeyDown={(event) => {
+              const step = event.key === 'ArrowUp' ? -1 : event.key === 'ArrowDown' ? 1 : 0
+              if (step === 0) return
+              event.preventDefault()
+              onMoveTo(effect.id, index + step)
+            }}
+          >
+            <GripIcon size={13} />
+          </button>
+        </Tooltip>
+      }
+    >
+      <EffectChip effect={effect} onRemove={onRemove} />
+    </Row>
+  )
+}
 
 function EffectChip({ effect, onRemove }: { effect: Effect; onRemove: () => void }) {
   return (
@@ -93,6 +165,24 @@ export function EffectsPanel() {
     ])
 
   const remove = (id: number) => setEffects((current) => current.filter((e) => e.id !== id))
+
+  /** Reorder within the kind, leaving the other kind's slots where they are. */
+  const moveTo = (id: number, target: number) =>
+    setEffects((current) => {
+      const moving = current.find((e) => e.id === id)
+      if (!moving) return current
+      const group = current.filter((e) => e.kind === moving.kind)
+      const from = group.findIndex((e) => e.id === id)
+      const to = Math.max(0, Math.min(group.length - 1, target))
+      if (from < 0 || to === from) return current
+
+      const reordered = [...group]
+      const [pulled] = reordered.splice(from, 1)
+      if (pulled) reordered.splice(to, 0, pulled)
+
+      let cursor = 0
+      return current.map((e) => (e.kind === moving.kind ? reordered[cursor++]! : e))
+    })
   const of = (kind: Effect['kind']) => effects.filter((e) => e.kind === kind)
 
   const addButton = (kind: Effect['kind']) => (
@@ -104,10 +194,15 @@ export function EffectsPanel() {
   return (
     <Panel>
       <Section title="Effects" actions={addButton('video')}>
-        {of('video').map((effect) => (
-          <Row key={effect.id} label="FX">
-            <EffectChip effect={effect} onRemove={() => remove(effect.id)} />
-          </Row>
+        {of('video').map((effect, index, all) => (
+          <FxRow
+            key={effect.id}
+            effect={effect}
+            index={index}
+            count={all.length}
+            onMoveTo={moveTo}
+            onRemove={() => remove(effect.id)}
+          />
         ))}
       </Section>
 
@@ -144,15 +239,20 @@ export function EffectsPanel() {
           </div>
         </Row>
         <Row>
-          <LevelMeter value={level} peak={peak} aria-label="Output level" />
+          <LevelMeter value={level} peak={peak} thickness={9} aria-label="Output level" />
         </Row>
       </Section>
 
       <Section title="Audio effects" actions={addButton('audio')}>
-        {of('audio').map((effect) => (
-          <Row key={effect.id} label="FX">
-            <EffectChip effect={effect} onRemove={() => remove(effect.id)} />
-          </Row>
+        {of('audio').map((effect, index, all) => (
+          <FxRow
+            key={effect.id}
+            effect={effect}
+            index={index}
+            count={all.length}
+            onMoveTo={moveTo}
+            onRemove={() => remove(effect.id)}
+          />
         ))}
       </Section>
     </Panel>

@@ -247,14 +247,15 @@ export function PreviewPanel() {
         </div>
 
         <div className={styles.buttons}>
-          <IconButton label="Go to start" disabled={frame === 0} onClick={() => seek(0)}>
+          <IconButton label="Go to start" shortcut="Home" disabled={frame === 0} onClick={() => seek(0)}>
             <SkipBack size={14} />
           </IconButton>
-          <IconButton label="Previous frame" disabled={frame === 0} onClick={() => seek(frame - 1)}>
+          <IconButton label="Previous frame" shortcut="←" disabled={frame === 0} onClick={() => seek(frame - 1)}>
             <StepBack size={14} />
           </IconButton>
           <IconButton
             label={playing ? 'Pause' : 'Play'}
+            shortcut="Space"
             className={styles.play}
             onClick={() => {
               // Playing from the tail would sit there doing nothing, so the
@@ -267,6 +268,7 @@ export function PreviewPanel() {
           </IconButton>
           <IconButton
             label="Next frame"
+            shortcut="→"
             disabled={frame >= TOTAL_FRAMES}
             onClick={() => seek(frame + 1)}
           >
@@ -274,6 +276,7 @@ export function PreviewPanel() {
           </IconButton>
           <IconButton
             label="Go to end"
+            shortcut="End"
             disabled={frame >= TOTAL_FRAMES}
             onClick={() => seek(TOTAL_FRAMES)}
           >

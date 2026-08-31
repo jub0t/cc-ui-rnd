@@ -8,6 +8,7 @@ import {
   FlipHorizontal,
   FlipVertical,
   Frame,
+  GripVertical,
   Lock,
   Minus,
   Plus,
@@ -77,6 +78,7 @@ export const FrameIcon = fromLucide(Frame)
 export const CopyIcon = fromLucide(Copy)
 export const FlipHIcon = fromLucide(FlipHorizontal)
 export const FlipVIcon = fromLucide(FlipVertical)
+export const GripIcon = fromLucide(GripVertical)
 
 /**
  * Keyframe marker. Lucide sets `fill="none"` on the svg root and leaves the

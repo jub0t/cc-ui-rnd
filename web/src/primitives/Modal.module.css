@@ -1,0 +1,94 @@
+/* The veil blurs the page rather than only darkening it. Dimming alone still
+   leaves every control legible behind the dialog, which invites you to keep
+   reading them; blurring says plainly that the page is not available. */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: safe center;
+  padding: 24px;
+  overflow: auto;
+  background: rgb(6 6 8 / 0.5);
+  backdrop-filter: blur(10px) saturate(0.85);
+  -webkit-backdrop-filter: blur(10px) saturate(0.85);
+  animation: veilIn 140ms var(--cp-ease);
+}
+
+@keyframes veilIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  border: 1px solid var(--cp-line-strong);
+  border-radius: var(--cp-r-lg);
+  background: var(--cp-panel);
+  color: var(--cp-fg);
+  font-family: var(--cp-font);
+  font-size: var(--cp-fs);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.6);
+  outline: none;
+  animation: dialogIn 160ms var(--cp-ease);
+}
+
+@keyframes dialogIn {
+  from { opacity: 0; transform: translateY(6px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px var(--cp-pad) 0;
+}
+
+.title {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--cp-fs-lg);
+  font-weight: 600;
+}
+
+.close {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--cp-r-sm);
+  background: none;
+  color: var(--cp-fg-dim);
+  cursor: pointer;
+  transition: background 100ms var(--cp-ease), color 100ms var(--cp-ease);
+}
+
+.close:hover { background: var(--cp-field); color: var(--cp-fg); }
+.close:focus-visible { outline: none; box-shadow: var(--cp-focus); }
+
+.body {
+  padding: 10px var(--cp-pad) 16px;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px var(--cp-pad);
+  border-top: 1px solid var(--cp-line);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backdrop,
+  .dialog {
+    animation: none;
+  }
+}

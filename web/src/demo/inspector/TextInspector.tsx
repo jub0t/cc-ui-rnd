@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Panel, PlusIcon, Row, Section, SegmentedControl, Select, clamp } from '../../primitives'
+import { Tooltip } from '../../primitives/Tooltip'
 import { HelpButton, Note, Param, SwitchRow } from './controls'
 import styles from './inspector.module.css'
 
@@ -128,10 +129,12 @@ export function TextInspector() {
           <Select options={FAMILIES} value={family} onChange={setFamily} aria-label="Font family" />
         </Row>
         <Row>
-          <button type="button" className={styles.dashed}>
-            <PlusIcon size={13} />
-            Add font file
-          </button>
+          <Tooltip label="Load a .ttf, .otf or .woff2 from disk">
+            <button type="button" className={styles.dashed}>
+              <PlusIcon size={13} />
+              Add font file
+            </button>
+          </Tooltip>
         </Row>
         <Row>
           <Select options={WEIGHTS} value={weight} onChange={setWeight} aria-label="Font weight" />
@@ -146,7 +149,13 @@ export function TextInspector() {
           defaultValue={0.045}
           format={ofHeight}
         />
-        <SwitchRow label="Italic" checked={italic} onChange={setItalic} />
+        <SwitchRow
+          label="Italic"
+          checked={italic}
+          onChange={setItalic}
+          tip="Uses the family's own italic when it has one, and slants the roman when it does not"
+          shortcut="Ctrl+I"
+        />
       </Section>
 
       <Section title="Colour">

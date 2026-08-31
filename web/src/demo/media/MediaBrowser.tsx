@@ -1,7 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, DragEvent, KeyboardEvent, PointerEvent, ReactNode } from 'react'
-import { AudioLines, Check, Grid2x2, ImageIcon, LayoutGrid, Search, Upload, Video, X } from 'lucide-react'
+import {
+  AudioLines,
+  ChartColumn,
+  Check,
+  Grid2x2,
+  ImageIcon,
+  LayoutGrid,
+  Search,
+  Upload,
+  Video,
+  X,
+} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { clamp } from '../../primitives'
+import { Tooltip } from '../../primitives/Tooltip'
 import { bytes, duration, timecode } from '../editor/format'
 import { Button, TextInput, cn } from '../editor/ui'
 import {
@@ -17,6 +30,7 @@ import {
 } from './catalogue'
 import type { Asset, MediaKind, Tab } from './catalogue'
 import { EffectFilters, EffectTile, Frame, TemplateTile, TitleTile, TransitionTile, Waveform } from './previews'
+import type { WaveShape } from './previews'
 
 /**
  * The editor's top-left browser: a tab strip over a category rail and a
@@ -102,7 +116,7 @@ function FileTile({ item }: { item: BinItem }) {
   )
 }
 
-function MediaThumb({ item }: { item: BinItem }) {
+function MediaThumb({ item, wave }: { item: BinItem; wave: WaveShape }) {
   const box = useRef<HTMLSpanElement>(null)
   const [scrub, setScrub] = useState<number | null>(null)
   const scrubbable = item.kind === 'video' && item.seconds > 0 && item.ext === undefined
@@ -128,7 +142,7 @@ function MediaThumb({ item }: { item: BinItem }) {
       {item.ext !== undefined ? (
         <FileTile item={item} />
       ) : item.kind === 'audio' ? (
-        <Waveform hue={item.hue} seed={item.seconds + item.hue} />
+        <Waveform hue={item.hue} seed={item.seconds + item.hue} shape={wave} />
       ) : (
         <Frame hue={item.hue} seed={item.seconds + item.hue} t={scrub ?? 0.42} />
       )}
@@ -139,7 +153,9 @@ function MediaThumb({ item }: { item: BinItem }) {
         <span
           className={cn(
             'absolute top-1.5 left-1.5 grid size-[19px] place-items-center rounded-sm',
-            item.kind === 'audio' ? 'bg-warn text-white' : 'bg-accent text-onaccent',
+            // the audio plate is bright now, so its badge has to be the dark
+            // thing on it rather than another warm colour that vanishes
+            item.kind === 'audio' ? 'bg-black/45 text-white' : 'bg-accent text-onaccent',
           )}
         >
           {item.kind === 'audio' ? <AudioLines size={12} /> : <ImageIcon size={12} />}
@@ -162,6 +178,43 @@ function MediaThumb({ item }: { item: BinItem }) {
         </>
       )}
     </span>
+  )
+}
+
+/** A tiny segmented row of icon toggles. Each one is a Tooltip rather than a
+ *  native title: four of them sit side by side, which is exactly the case the
+ *  native delay makes unusable. */
+function ToggleGroup<T>({
+  value,
+  onChange,
+  options,
+}: {
+  value: T
+  onChange: (value: T) => void
+  options: { value: T; label: string; icon: LucideIcon }[]
+}) {
+  return (
+    <div className="flex flex-none items-center gap-px rounded-md bg-well p-0.5 ring-1 ring-line ring-inset">
+      {options.map(({ value: option, label, icon: Icon }) => {
+        const on = option === value
+        return (
+          <Tooltip key={label} label={label}>
+            <button
+              type="button"
+              aria-label={label}
+              aria-pressed={on}
+              onClick={() => onChange(option)}
+              className={cn(
+                'grid size-6 place-items-center rounded transition-colors focus-visible:ring-1 focus-visible:ring-accent',
+                on ? 'bg-field text-ink' : 'text-inkdim hover:text-ink',
+              )}
+            >
+              <Icon size={13} />
+            </button>
+          </Tooltip>
+        )
+      })}
+    </div>
   )
 }
 
@@ -232,6 +285,7 @@ export function MediaBrowser() {
   const [selection, setSelection] = useState<Record<Tab, string[]>>({ ...EMPTY_SELECTION, Media: ['m1'] })
   const [query, setQuery] = useState('')
   const [dense, setDense] = useState(false)
+  const [wave, setWave] = useState<WaveShape>('centred')
   const [dragOver, setDragOver] = useState(false)
   const [imported, setImported] = useState<BinItem[]>([])
   const [flash, setFlash] = useState<string | null>(null)
@@ -261,7 +315,7 @@ export function MediaBrowser() {
       case 'Media':
         return bin
           .filter((item) => keep(item.kind, item.name))
-          .map((item) => ({ id: item.id, name: item.name, meta: item.meta, tile: <MediaThumb item={item} /> }))
+          .map((item) => ({ id: item.id, name: item.name, meta: item.meta, tile: <MediaThumb item={item} wave={wave} /> }))
       case 'Text':
         return TITLES.filter((preset) => keep(preset.category, preset.name)).map((preset) => ({
           id: preset.id,
@@ -291,7 +345,7 @@ export function MediaBrowser() {
           tile: <TemplateTile layout={item.layout} />,
         }))
     }
-  }, [tab, active, query, bin, ids])
+  }, [tab, active, query, bin, ids, wave])
 
   const countIn = (id: string) => {
     switch (tab) {
@@ -536,29 +590,27 @@ export function MediaBrowser() {
                 )}
               </div>
 
+              {tab === 'Media' && (
+                <ToggleGroup
+                  value={wave}
+                  onChange={setWave}
+                  options={[
+                    { value: 'centred', label: 'Centred waveform', icon: AudioLines },
+                    { value: 'floored', label: 'Floored waveform', icon: ChartColumn },
+                  ]}
+                />
+              )}
+
               {/* Density, not zoom: a bin is browsed at two speeds — reading
                   names, and recognising pictures. */}
-              <div className="flex flex-none items-center gap-px rounded-md bg-well p-0.5 ring-1 ring-line ring-inset">
-                {[
-                  { on: !dense, label: 'Comfortable grid', icon: Grid2x2, set: false },
-                  { on: dense, label: 'Compact grid', icon: LayoutGrid, set: true },
-                ].map(({ on, label, icon: Icon, set }) => (
-                  <button
-                    key={label}
-                    type="button"
-                    title={label}
-                    aria-label={label}
-                    aria-pressed={on}
-                    onClick={() => setDense(set)}
-                    className={cn(
-                      'grid size-6 place-items-center rounded transition-colors focus-visible:ring-1 focus-visible:ring-accent',
-                      on ? 'bg-field text-ink' : 'text-inkdim hover:text-ink',
-                    )}
-                  >
-                    <Icon size={13} />
-                  </button>
-                ))}
-              </div>
+              <ToggleGroup
+                value={dense}
+                onChange={setDense}
+                options={[
+                  { value: false, label: 'Comfortable grid', icon: Grid2x2 },
+                  { value: true, label: 'Compact grid', icon: LayoutGrid },
+                ]}
+              />
             </div>
           </div>
 

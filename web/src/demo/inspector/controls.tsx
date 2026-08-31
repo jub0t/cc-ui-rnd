@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
 import { Search } from 'lucide-react'
 import { CloseIcon, NumberField, Row, clamp, cx, decimalsOf, roundTo, usePointerDrag } from '../../primitives'
+import { Tooltip } from '../../primitives/Tooltip'
 import styles from './inspector.module.css'
 
 /**
@@ -238,18 +239,31 @@ export function SwitchRow({
   checked,
   onChange,
   help,
+  tip,
+  shortcut,
 }: {
   label: string
   checked: boolean
   onChange: (checked: boolean) => void
   help?: ReactNode
+  /** what the label cannot say in two words. A `help` disclosure is for the
+   *  settings that need a sentence; this is for the ones that need a phrase. */
+  tip?: string
+  shortcut?: string
 }) {
+  const control = <Switch checked={checked} onChange={onChange} aria-label={label} />
   return (
     <Row>
       <div className={styles.switchRow}>
         <span className={styles.label}>{label}</span>
         {help}
-        <Switch checked={checked} onChange={onChange} aria-label={label} />
+        {tip === undefined ? (
+          control
+        ) : (
+          <Tooltip label={tip} shortcut={shortcut}>
+            {control}
+          </Tooltip>
+        )}
       </div>
     </Row>
   )
