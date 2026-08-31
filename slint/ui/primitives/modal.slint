@@ -1,0 +1,220 @@
+import { Theme } from "../theme.slint";
+import { Glyph, Icon } from "../icons.slint";
+
+// The dialog layer this tree did not have.
+//
+// Slint has no portal, so a modal cannot be declared where it belongs and
+// rendered somewhere else: it is placed once at the window root, filling it,
+// and shown by a property. Everything under it keeps existing — a modal is a
+// scrim over the app, not a replacement for it — which is why the scrim takes
+// pointer events rather than merely painting over them.
+export component Modal inherits Rectangle {
+    in property <bool> open;
+    in property <string> title;
+    in property <Glyph> glyph;
+    /// False while a job is running: a dialog you can dismiss out from under an
+    /// export is a dialog that loses the export.
+    in property <bool> dismissable: true;
+    in property <length> surface-width: 460px;
+    /// Zero fits the content, which is what a short dialog wants; a fixed
+    /// height is for the ones with their own scrolling body.
+    in property <length> surface-height: 0px;
+
+    callback closed();
+
+    visible: root.open;
+    // Dark rather than blurred: Slint has no backdrop filter, and a scrim that
+    // only dims is honest about that where a fake blur would not be.
+    background: #00000099;
+
+    // Declared first, so the surface and everything in it sits above and takes
+    // its own presses. A click that lands here landed outside the dialog.
+    TouchArea {
+        clicked => {
+            if (root.dismissable) {
+                root.closed();
+            }
+        }
+    }
+
+    surface := Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        width: root.surface-width;
+        height: root.surface-height > 0px ? root.surface-height : body.preferred-height;
+        background: Theme.panel;
+        border-width: 1px;
+        border-color: Theme.line-strong;
+        border-radius: 16px;
+        clip: true;
+
+        // Swallows presses that land on the dialog, so they do not reach the
+        // scrim underneath and dismiss it.
+        TouchArea { }
+
+        body := VerticalLayout {
+            Rectangle {
+                height: 48px;
+
+                Rectangle {
+                    x: 0;
+                    y: parent.height - 1px;
+                    width: parent.width;
+                    height: 1px;
+                    background: Theme.line;
+                }
+
+                HorizontalLayout {
+                    padding-left: 18px;
+                    padding-right: 12px;
+                    spacing: 8px;
+
+                    VerticalLayout {
+                        alignment: center;
+                        Icon {
+                            glyph: root.glyph;
+                            size: 16px;
+                            tint: Theme.accent;
+                        }
+                    }
+
+                    Text {
+                        horizontal-stretch: 1;
+                        text: root.title;
+                        color: Theme.fg;
+                        font-size: Theme.fs-lg;
+                        font-weight: Theme.weight-title;
+                        vertical-alignment: center;
+                    }
+
+                    // Gone, not disabled, while a job is running: there is no
+                    // safe answer to pressing it, so it should not be there to
+                    // press.
+                    if root.dismissable: VerticalLayout {
+                        alignment: center;
+                        Rectangle {
+                            width: 26px;
+                            height: 26px;
+                            border-radius: Theme.r-sm;
+                            background: shut.has-hover ? Theme.field : Colors.transparent;
+
+                            Icon {
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+                                glyph: Glyph.close;
+                                size: 13px;
+                                tint: shut.has-hover ? Theme.fg : Theme.fg-muted;
+                            }
+
+                            shut := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => { root.closed(); }
+                            }
+                        }
+                    }
+                }
+            }
+
+            @children
+        }
+    }
+}
+
+// The push a dialog is built around. Three weights, because a dialog has one
+// action worth doing, a few worth offering, and sometimes one worth warning
+// about.
+export component Button inherits Rectangle {
+    in property <string> label;
+    in property <Glyph> glyph;
+    /// the one action the dialog exists for
+    in property <bool> primary;
+    in property <bool> danger;
+    in property <bool> enabled: true;
+    /// fill the width it is given, for a footer's single action
+    in property <bool> block;
+
+    callback clicked();
+
+    property <length> gap: root.glyph == Glyph.none ? 0px : 6px;
+    property <length> mark: root.glyph == Glyph.none ? 0px : 14px;
+
+    height: 32px;
+    horizontal-stretch: root.block ? 1 : 0;
+    // From the label's *preferred* width, never its actual one: the layout
+    // below sizes the label from this button's width, so reading back the
+    // result is a loop.
+    min-width: root.block ? 0px : text.preferred-width + root.mark + root.gap + 28px;
+    border-radius: Theme.r;
+    opacity: root.enabled ? 1.0 : 0.4;
+    background: !root.enabled ? Theme.field
+        : root.primary ? (touch.has-hover ? Theme.accent-hover : Theme.accent)
+        : root.danger ? (touch.has-hover ? Theme.danger-soft : Theme.field)
+        : touch.has-hover ? Theme.field-hover
+        : Theme.field;
+
+    animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+
+    HorizontalLayout {
+        alignment: center;
+        spacing: root.gap;
+
+        if root.glyph != Glyph.none: VerticalLayout {
+            alignment: center;
+            Icon {
+                glyph: root.glyph;
+                size: 14px;
+                tint: root.primary ? Theme.on-accent
+                    : root.danger ? Theme.danger
+                    : Theme.fg;
+            }
+        }
+
+        text := Text {
+            text: root.label;
+            color: root.primary ? Theme.on-accent
+                : root.danger ? Theme.danger
+                : Theme.fg;
+            font-size: Theme.fs;
+            font-weight: root.primary ? Theme.weight-title : Theme.weight-body;
+            vertical-alignment: center;
+        }
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// A determinate bar. Nothing indeterminate: every job in this app can say how
+// far along it is, and a barber's pole for one that can is a lie.
+export component Progress inherits Rectangle {
+    in property <float> value;
+
+    height: 4px;
+    border-radius: 2px;
+    background: Theme.well;
+    border-width: 1px;
+    border-color: Theme.line;
+    clip: true;
+
+    Rectangle {
+        x: 0;
+        y: 0;
+        width: parent.width * Math.clamp(root.value, 0, 1);
+        height: parent.height;
+        border-radius: 2px;
+        background: Theme.accent;
+    }
+}
+
+// A dialog's own heading, over a group of rows. Smaller and dimmer than a
+// section header in a panel: a dialog is one screen and does not need its
+// groups shouting at each other.
+export component DialogHeading inherits Text {
+    color: Theme.fg-dim;
+    font-size: Theme.fs-sm;
+    font-weight: Theme.weight-title;
+    letter-spacing: 0.8px;
+}

@@ -29,6 +29,10 @@ export struct MediaItemData {
     /// today it is always empty; the seam is here so the card does not have to
     /// be rewritten the day it isn't.
     thumbnail: image,
+    /// The audio envelope as SVG path commands in a 1x1 viewbox, or empty.
+    /// Same shape, same source and same normalisation as a timeline clip's:
+    /// a file should look like itself wherever it is drawn.
+    wave: string,
     selected: bool,
 }
 
@@ -367,11 +371,27 @@ component MediaCard inherits Rectangle {
                 image-fit: cover;
             }
 
-            // What a card shows before its artwork exists. Large and faint
-            // on purpose: at the badge's own size and colour it read as the
-            // corner mark duplicated into the middle of the tile rather than
+            // Sound draws itself. The envelope and the duration stamp between
+            // them already say "this is an audio file", so there is no mark on
+            // top of them — a badge over a waveform is the same fact twice,
+            // and the one that costs the tile its whole middle.
+            if root.item.wave != "": Path {
+                x: 8px;
+                y: 0;
+                width: parent.width - 16px;
+                height: parent.height;
+                commands: root.item.wave;
+                viewbox-width: 1;
+                viewbox-height: 1;
+                fit: fill;
+                fill: root.mark;
+            }
+
+            // What everything else shows before its artwork exists. Large and
+            // faint on purpose: at the badge's own size and colour it read as
+            // a corner mark duplicated into the middle of the tile rather than
             // as a placeholder.
-            if root.item.thumbnail.width == 0: Icon {
+            if root.item.thumbnail.width == 0 && root.item.wave == "": Icon {
                 x: (parent.width - self.width) / 2;
                 y: (parent.height - self.height) / 2;
                 glyph: root.badge;

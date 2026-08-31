@@ -105,6 +105,10 @@ export component Workspace inherits Rectangle {
     callback merge();
     callback delete-selected();
     callback av-tools();
+    in property <[MenuItemData]> av-items;
+    in property <length> av-height;
+    in property <int> av-token;
+    callback av-selected(id: string);
     callback add-track();
     callback zoom-to-fit(width: length);
     callback zoom(factor: float, anchor-seconds: float);
@@ -289,6 +293,10 @@ export component Workspace inherits Rectangle {
         merge => { root.merge(); }
         delete-selected => { root.delete-selected(); }
         av-tools => { root.av-tools(); }
+        av-items: root.av-items;
+        av-height: root.av-height;
+        av-token: root.av-token;
+        av-selected(id) => { root.av-selected(id); }
         add-track => { root.add-track(); }
         zoom-to-fit(width) => { root.zoom-to-fit(width); }
         zoom(factor, anchor) => { root.zoom(factor, anchor); }

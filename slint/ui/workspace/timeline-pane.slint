@@ -1,7 +1,7 @@
 import { Theme } from "../theme.slint";
 import { Fmt } from "../util.slint";
 import { Pane } from "pane.slint";
-import { MenuItemData } from "../primitives/context-menu.slint";
+import { ContextMenu, MenuItemData } from "../primitives/context-menu.slint";
 import { HairlineSplitter } from "splitter.slint";
 import { ClipData, TimelineTabData, TimelineTool, TrackData } from "../timeline/model.slint";
 import { TimelineTabs } from "../timeline/tabs.slint";
@@ -39,6 +39,11 @@ export component TimelinePane inherits Rectangle {
     callback merge();
     callback delete-selected();
     callback av-tools();
+
+    in property <[MenuItemData]> av-items;
+    in property <length> av-height;
+    in property <int> av-token;
+    callback av-selected(id: string);
     callback add-track();
     callback zoom-to-fit(width: length);
     callback zoom(factor: float, anchor-seconds: float);
@@ -116,7 +121,14 @@ export component TimelinePane inherits Rectangle {
             split => { root.split(); }
             merge => { root.merge(); }
             delete-selected => { root.delete-selected(); }
-            av-tools => { root.av-tools(); }
+            av-tools(at-x) => {
+                av.request-x = at-x;
+                // Just under the tray: the menu's own origin is the top of
+                // the lane grid, so a couple of pixels is all the air it
+                // needs to clear the button it hangs from.
+                av.request-y = 2px;
+                root.av-tools();
+            }
             add-track => { root.add-track(); }
             fit => { root.zoom-to-fit(lanes.width); }
             // No anchor from a button: the reference zooms about the pointer
@@ -132,6 +144,22 @@ export component TimelinePane inherits Rectangle {
         Rectangle {
             vertical-stretch: 1;
             clip: true;
+
+            // Inside the grid rather than beside it: a Pane lays its children
+            // out and a layout owns their y, so a menu placed as a sibling of
+            // the tabs and the tray cannot position itself. Here the origin is
+            // the top of the lanes, which is where the tray's button points
+            // anyway. The popup escapes this element's clip on its own.
+            av := ContextMenu {
+                x: 0;
+                y: 0;
+                width: parent.width;
+                height: parent.height;
+                items: root.av-items;
+                menu-height: root.av-height;
+                token: root.av-token;
+                selected(id) => { root.av-selected(id); }
+            }
 
             TrackHeaders {
                 x: 0;

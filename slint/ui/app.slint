@@ -19,6 +19,8 @@ import { Bezier, Curves, Fmt } from "util.slint";
 import { EffectData } from "demo/effects-panel.slint";
 import { MediaFilter, MediaItemData, MediaKind } from "workspace/media-pane.slint";
 import { MenuItemData, MenuRow } from "primitives/context-menu.slint";
+import { ExportData, ExportDialog, ExportPhase } from "dialogs/export.slint";
+import { ModelData, SettingsData, SettingsDialog } from "dialogs/settings.slint";
 import { TitleBar } from "title-bar.slint";
 import { Workspace } from "workspace/workspace.slint";
 import {
@@ -31,7 +33,7 @@ export {
     Curves, Fmt, Theme, Bezier, EffectData, MediaFilter, MediaItemData, MediaKind,
     ClipData, ClipField, ClipKind, ClipTextField, SelectedClipData,
     TextAlignment, TimelineTabData, TimelineTool, TrackData,
-    MenuItemData, MenuRow,
+    MenuItemData, MenuRow, ExportData, ExportPhase, ModelData, SettingsData,
 }
 
 export component App inherits Window {
@@ -142,6 +144,10 @@ export component App inherits Window {
     callback merge();
     callback delete-selected();
     callback av-tools();
+    in property <[MenuItemData]> av-items;
+    in property <length> av-height;
+    in property <int> av-token;
+    callback av-selected(id: string);
     callback add-track();
     callback zoom-to-fit(width: length);
     callback zoom(factor: float, anchor-seconds: float);
@@ -172,6 +178,35 @@ export component App inherits Window {
 
     callback titlebar-begin-drag();
     callback titlebar-toggle-maximize();
+    // The dialogs. Both are held at the root because Slint has no portal: a
+    // modal has to be declared where it is drawn, and it is drawn over
+    // everything.
+    in property <ExportData> export;
+    in property <SettingsData> settings;
+    in property <[ModelData]> transcribers;
+    in property <[ModelData]> voices;
+    in property <[string]> languages;
+
+    callback export-closed();
+    callback export-name-edited(name: string);
+    callback export-browse();
+    callback export-resolution-changed(index: int);
+    callback export-rate-changed(index: int);
+    callback export-quality-changed(index: int);
+    callback export-start();
+    callback export-cancel();
+    callback export-reveal();
+    callback export-again();
+
+    callback settings-closed();
+    callback settings-page-changed(index: int);
+    callback settings-language-changed(index: int);
+    callback settings-transcribe-language-changed(index: int);
+    callback model-activated(id: string);
+    callback model-download(id: string);
+    callback model-cancel(id: string);
+    callback model-remove(id: string);
+
     callback open-settings();
     callback toggle-theme();
     callback export-clicked();
@@ -199,6 +234,47 @@ export component App inherits Window {
         clicked => {
             sink.focus();
         }
+    }
+
+    ExportDialog {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        data: root.export;
+
+        closed => { root.export-closed(); }
+        name-edited(name) => { root.export-name-edited(name); }
+        browse => { root.export-browse(); }
+        resolution-changed(index) => { root.export-resolution-changed(index); }
+        rate-changed(index) => { root.export-rate-changed(index); }
+        quality-changed(index) => { root.export-quality-changed(index); }
+        begin => { root.export-start(); }
+        cancel => { root.export-cancel(); }
+        reveal => { root.export-reveal(); }
+        again => { root.export-again(); }
+    }
+
+    SettingsDialog {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        data: root.settings;
+        transcribers: root.transcribers;
+        voices: root.voices;
+        languages: root.languages;
+
+        closed => { root.settings-closed(); }
+        page-changed(index) => { root.settings-page-changed(index); }
+        language-changed(index) => { root.settings-language-changed(index); }
+        transcribe-language-changed(index) => {
+            root.settings-transcribe-language-changed(index);
+        }
+        model-activated(id) => { root.model-activated(id); }
+        model-download(id) => { root.model-download(id); }
+        model-cancel(id) => { root.model-cancel(id); }
+        model-remove(id) => { root.model-remove(id); }
     }
 
     VerticalLayout {
@@ -284,6 +360,10 @@ export component App inherits Window {
             merge => { root.merge(); }
             delete-selected => { root.delete-selected(); }
             av-tools => { root.av-tools(); }
+            av-items: root.av-items;
+            av-height: root.av-height;
+            av-token: root.av-token;
+            av-selected(id) => { root.av-selected(id); }
             add-track => { root.add-track(); }
             zoom-to-fit(width) => { root.zoom-to-fit(width); }
             zoom(factor, anchor) => { root.zoom(factor, anchor); }

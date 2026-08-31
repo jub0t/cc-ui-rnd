@@ -153,7 +153,18 @@ impl Library {
             items
                 .iter()
                 .filter(|item| Self::shows(filter, item.kind))
-                .cloned()
+                .map(|item| {
+                    let mut row = item.clone();
+                    // The same envelope, from the same seed, as the clip cut
+                    // from this file: `m{id}` is what the demo timeline's
+                    // clips name as their media, so a file looks like itself
+                    // in the bin and on a lane.
+                    if item.kind == MediaKind::Audio {
+                        row.wave =
+                            wave_path(&format!("m{}", item.id), 0.0, item.duration, 1.0).into();
+                    }
+                    row
+                })
                 .collect::<Vec<_>>(),
         );
 
@@ -290,6 +301,116 @@ fn tick_interval(seconds_per_pixel: f32) -> f32 {
         .unwrap_or(3600.0)
 }
 
+
+// ─── the dialogs ────────────────────────────────────────────────────────────
+
+/// Export output sizes, matching the picker's rows.
+const EXPORT_SIZES: [(i32, i32); 4] = [(3840, 2160), (2560, 1440), (1920, 1080), (1280, 720)];
+const EXPORT_RATES: [f32; 3] = [24.0, 30.0, 60.0];
+/// Video bitrate in Mbps at 1080p30, scaled by pixel count and frame rate —
+/// the model web/'s export panel uses, because the number it produces is the
+/// one the choice is actually made on.
+const EXPORT_TIERS: [f32; 3] = [16.0, 8.0, 4.0];
+const AUDIO_BPS: f32 = 192_000.0;
+
+struct ExportState {
+    open: bool,
+    name: String,
+    folder: String,
+    resolution: usize,
+    rate: usize,
+    quality: usize,
+    phase: ExportPhase,
+    progress: f32,
+    message: String,
+}
+
+impl Default for ExportState {
+    fn default() -> Self {
+        Self {
+            open: false,
+            name: "Untitled project".into(),
+            folder: "~/Movies/WolfCut".into(),
+            // 1080p30 balanced: the middle of every list, which is what a
+            // default should be when the project has not said otherwise.
+            resolution: 2,
+            rate: 1,
+            quality: 1,
+            phase: ExportPhase::Idle,
+            progress: 0.0,
+            message: String::new(),
+        }
+    }
+}
+
+struct SettingsState {
+    open: bool,
+    tab: i32,
+    language: usize,
+    transcribe_language: i32,
+}
+
+impl Default for SettingsState {
+    fn default() -> Self {
+        Self { open: false, tab: 0, language: 0, transcribe_language: 0 }
+    }
+}
+
+#[derive(Clone)]
+struct ModelState {
+    id: String,
+    name: String,
+    note: String,
+    /// on disk, in megabytes
+    megabytes: f32,
+    accuracy: i32,
+    installed: bool,
+    active: bool,
+    /// megabytes fetched so far, while a download is in flight
+    fetched: Option<f32>,
+}
+
+fn demo_transcribers() -> Vec<ModelState> {
+    vec![
+        ModelState { id: "tiny".into(), name: "Tiny".into(), note: "Fastest, roughest".into(), megabytes: 78.0, accuracy: 1, installed: true, active: false, fetched: None },
+        ModelState { id: "base".into(), name: "Base".into(), note: "Quick, usable for notes".into(), megabytes: 148.0, accuracy: 2, installed: true, active: true, fetched: None },
+        ModelState { id: "small".into(), name: "Small".into(), note: "The usual choice".into(), megabytes: 488.0, accuracy: 3, installed: false, active: false, fetched: None },
+        ModelState { id: "medium".into(), name: "Medium".into(), note: "Slower, noticeably better".into(), megabytes: 1530.0, accuracy: 4, installed: false, active: false, fetched: None },
+        ModelState { id: "large".into(), name: "Large v3".into(), note: "Best, and it will cost you".into(), megabytes: 3090.0, accuracy: 5, installed: false, active: false, fetched: None },
+    ]
+}
+
+fn demo_voices() -> Vec<ModelState> {
+    vec![
+        ModelState { id: "vc-en".into(), name: "English · Neutral".into(), note: "Two speakers, 22kHz".into(), megabytes: 63.0, accuracy: 3, installed: true, active: true, fetched: None },
+        ModelState { id: "vc-en-hq".into(), name: "English · Studio".into(), note: "One speaker, 48kHz".into(), megabytes: 214.0, accuracy: 5, installed: false, active: false, fetched: None },
+        ModelState { id: "vc-zh".into(), name: "Chinese · Neutral".into(), note: "Two speakers, 22kHz".into(), megabytes: 71.0, accuracy: 3, installed: false, active: false, fetched: None },
+    ]
+}
+
+/// Bytes in the units a person reads them in.
+fn bytes(count: f32) -> String {
+    if count >= 1_000_000_000.0 {
+        format!("{:.1} GB", count / 1_000_000_000.0)
+    } else if count >= 1_000_000.0 {
+        format!("{:.0} MB", count / 1_000_000.0)
+    } else {
+        format!("{:.0} KB", (count / 1_000.0).max(1.0))
+    }
+}
+
+/// Seconds as a rough remaining time. Rough on purpose: a countdown to the
+/// second on an estimate that is not accurate to the second is theatre.
+fn eta(seconds: f32) -> String {
+    if seconds <= 1.0 {
+        "almost done".into()
+    } else if seconds < 60.0 {
+        format!("{:.0}s left", seconds)
+    } else {
+        format!("{:.0}m {:02.0}s left", (seconds / 60.0).floor(), seconds % 60.0)
+    }
+}
+
 /// The monitor's output sizes, matching the picker's rows.
 const OUTPUTS: [(i32, i32); 6] = [
     (1920, 1080),
@@ -337,6 +458,8 @@ struct ClipDoc {
     fx: bool,
     transition_in: bool,
     text_body: String,
+    /// On a detached audio clip: the video clip the sound came from.
+    detached_from: Option<String>,
     /// The overlay, when this is a text clip. Every field is a fraction of the
     /// output frame rather than an absolute size: the frame can be any
     /// resolution, and a title dialled in at 1080p should not move at 4K.
@@ -470,6 +593,14 @@ struct Studio {
     /// One clip, held for Paste. A real clipboard is the system's and holds a
     /// serialised edit; this is the seam that becomes one.
     clipboard: Option<ClipDoc>,
+    /// The two sheets. Held with the rest of the state because what they show
+    /// is the project, and because only one of them can be up at a time.
+    export: ExportState,
+    settings: SettingsState,
+    transcribers: Vec<ModelState>,
+    voices: Vec<ModelState>,
+    /// The A/V tray menu, built like the clip menu and shown the same way.
+    av_token: i32,
     /// The clip the context menu was opened on. Held separately from the
     /// selection because the menu outlives the press that opened it.
     menu_target: Option<String>,
@@ -790,6 +921,145 @@ impl Studio {
         rows.iter().map(|row| metrics(row.kind)).sum::<f32>() + 8.0
     }
 
+    /// What one export tier would weigh, in bytes.
+    fn export_size(&self, tier: usize) -> f32 {
+        let (width, height) = EXPORT_SIZES[self.export.resolution.min(3)];
+        let rate = EXPORT_RATES[self.export.rate.min(2)];
+        let pixels = (width as f32 * height as f32) / (1920.0 * 1080.0);
+        let video = EXPORT_TIERS[tier.min(2)] * 1_000_000.0 * pixels * (rate / 30.0);
+        (video + AUDIO_BPS) * self.duration().max(1.0) / 8.0
+    }
+
+    fn export_data(&self) -> ExportData {
+        let (width, height) = EXPORT_SIZES[self.export.resolution.min(3)];
+        let rate = EXPORT_RATES[self.export.rate.min(2)];
+        let clips = self.now().clips.len();
+        let titles = self
+            .now()
+            .clips
+            .iter()
+            .filter(|clip| clip.kind == ClipKind::Text)
+            .count();
+        // The stage names follow the progress rather than being counted off:
+        // the engine reports one number, and what it is busy with at that
+        // number is a fact about the pipeline, not about the UI.
+        let stage = if self.export.progress < 0.68 {
+            "Rendering video"
+        } else if self.export.progress < 0.88 {
+            "Encoding audio"
+        } else {
+            "Finalising file"
+        };
+
+        ExportData {
+            open: self.export.open,
+            name: self.export.name.as_str().into(),
+            path: format!("{}/{}.mp4", self.export.folder, self.export.name).into(),
+            format: format!("{width} × {height} · {rate:.2} fps").into(),
+            duration: {
+                let whole = self.duration().max(0.0) as i32;
+                format!("{}:{:02}", whole / 60, whole % 60).into()
+            },
+            contents: if titles > 0 {
+                format!("{clips} clips · {titles} titles")
+            } else {
+                format!("{clips} clips")
+            }
+            .into(),
+            resolution: self.export.resolution as i32,
+            rate: self.export.rate as i32,
+            quality: self.export.quality as i32,
+            size_high: bytes(self.export_size(0)).into(),
+            size_balanced: bytes(self.export_size(1)).into(),
+            size_small: bytes(self.export_size(2)).into(),
+            phase: self.export.phase,
+            progress: self.export.progress,
+            stage: stage.into(),
+            // The rate is the simulation's: a real one comes off the engine.
+            eta: eta((1.0 - self.export.progress) * 9.0).into(),
+            message: self.export.message.as_str().into(),
+            done_size: bytes(self.export_size(self.export.quality)).into(),
+            empty: clips == 0,
+        }
+    }
+
+    fn model_rows(models: &[ModelState]) -> Vec<ModelData> {
+        models
+            .iter()
+            .map(|model| {
+                let total = model.megabytes;
+                let fetched = model.fetched.unwrap_or(0.0);
+                ModelData {
+                    id: model.id.as_str().into(),
+                    name: model.name.as_str().into(),
+                    note: model.note.as_str().into(),
+                    size: format!("{total:.0} MB").into(),
+                    accuracy: model.accuracy,
+                    installed: model.installed,
+                    active: model.active && model.installed,
+                    downloading: model.fetched.is_some(),
+                    progress: if total > 0.0 { fetched / total } else { 0.0 },
+                    transferred: format!("{fetched:.0} MB of {total:.0} MB · 12 MB/s").into(),
+                    eta: eta((total - fetched) / 12.0).into(),
+                }
+            })
+            .collect()
+    }
+
+    /// The tray's A/V menu. What it offers depends on what is selected, which
+    /// is why it is built here and not declared in the tray.
+    fn av_menu(&self) -> Vec<MenuItemData> {
+        let Some(clip) = self
+            .selection
+            .first()
+            .filter(|_| self.selection.len() == 1)
+            .and_then(|id| self.clip(id))
+        else {
+            return Vec::new();
+        };
+
+        let row = |id: &str, label: &str, glyph: Glyph, enabled: bool| MenuItemData {
+            id: id.into(),
+            label: label.into(),
+            kind: MenuRow::Action,
+            glyph,
+            shortcut: SharedString::new(),
+            enabled,
+            danger: false,
+            checkable: false,
+            checked: false,
+        };
+
+        // A title's one tool is to speak its words; it has no sound to detach.
+        if clip.kind == ClipKind::Text {
+            return vec![row("speak", "Generate voice", Glyph::Volume, true)];
+        }
+
+        let has_sound = clip.kind != ClipKind::Image;
+        let detached = self
+            .now()
+            .clips
+            .iter()
+            .any(|other| other.detached_from.as_deref() == Some(clip.id.as_str()));
+        vec![
+            row("captions", "Auto captions", Glyph::TextMark, has_sound),
+            MenuItemData { kind: MenuRow::Separator, ..Default::default() },
+            row(
+                "detach",
+                "Detach audio",
+                Glyph::Waveform,
+                clip.kind == ClipKind::Video && !detached,
+            ),
+            row(
+                "reattach",
+                "Reattach audio",
+                Glyph::Merge,
+                (clip.kind == ClipKind::Video && detached)
+                    || (clip.kind == ClipKind::Audio && clip.detached_from.is_some()),
+            ),
+        ]
+    }
+
     fn publish(&self, app: &App, models: &TimelineModels) {
         models.tabs.set_vec(
             self.timelines
@@ -872,6 +1142,41 @@ impl Studio {
         app.set_menu_height(Studio::menu_height(&rows));
         app.set_menu_items(ModelRc::from(Rc::new(VecModel::from(rows))));
         app.set_menu_token(self.menu_token);
+
+        app.set_export(self.export_data());
+        app.set_settings(SettingsData {
+            open: self.settings.open,
+            tab: self.settings.tab,
+            language: self.settings.language as i32,
+            transcribe_language: self.settings.transcribe_language,
+            disk: {
+                let on_disk: f32 = self
+                    .transcribers
+                    .iter()
+                    .chain(self.voices.iter())
+                    .filter(|model| model.installed)
+                    .map(|model| model.megabytes)
+                    .sum();
+                let count = self
+                    .transcribers
+                    .iter()
+                    .chain(self.voices.iter())
+                    .filter(|model| model.installed)
+                    .count();
+                format!("{count} installed · {on_disk:.0} MB on disk").into()
+            },
+            version: "0.1.0".into(),
+            engine: "wolfcut-engine · ffmpeg 7.1".into(),
+        });
+        app.set_transcribers(ModelRc::from(Rc::new(VecModel::from(Studio::model_rows(
+            &self.transcribers,
+        )))));
+        app.set_voices(ModelRc::from(Rc::new(VecModel::from(Studio::model_rows(&self.voices)))));
+
+        let av = self.av_menu();
+        app.set_av_height(Studio::menu_height(&av));
+        app.set_av_items(ModelRc::from(Rc::new(VecModel::from(av))));
+        app.set_av_token(self.av_token);
 
         app.set_selected_clip(self.selected());
         app.set_timeline_current_tab(self.active as i32);
@@ -993,6 +1298,7 @@ fn clip(
         fx: false,
         transition_in: false,
         text_body: String::new(),
+        detached_from: None,
         text: TextStyleDoc::default(),
     }
 }
@@ -1083,6 +1389,11 @@ fn demo_studio() -> Studio {
         quality: 1,
         playing: false,
         clipboard: None,
+        export: ExportState::default(),
+        settings: SettingsState::default(),
+        transcribers: demo_transcribers(),
+        voices: demo_voices(),
+        av_token: 0,
         menu_target: None,
         menu_token: 0,
         gesture: Gesture::None,
@@ -1450,11 +1761,6 @@ fn main() -> Result<(), slint::PlatformError> {
         state.now_mut().clips.remove(tail);
         state.selection = vec![kept];
     }));
-
-    // The reference opens a menu here — detach the sound, transcribe it, speak
-    // a title's words. There is no popup layer in this tree yet, so the seam
-    // is the callback and the menu is what grows on top of it.
-    app.on_av_tools(|| {});
 
     // ── the view ──
     app.on_scrubbed(on_timeline!(|state, seconds: f32| {
@@ -2023,6 +2329,244 @@ fn main() -> Result<(), slint::PlatformError> {
                 state.now_mut().clips.retain(|c| c.id != id);
                 state.selection.retain(|held| held != &id);
                 state.menu_target = None;
+            }
+            _ => {}
+        }
+    }));
+
+
+    // ── the dialogs ──
+    app.on_export_clicked(on_timeline!(|state| {
+        state.export.open = true;
+        state.export.phase = ExportPhase::Idle;
+        state.export.message = String::new();
+    }));
+    app.on_open_settings(on_timeline!(|state| { state.settings.open = true; }));
+    app.on_export_closed(on_timeline!(|state| { state.export.open = false; }));
+    app.on_settings_closed(on_timeline!(|state| { state.settings.open = false; }));
+
+    app.on_export_name_edited(on_timeline!(|state, name: SharedString| {
+        state.export.name = name.to_string();
+    }));
+    app.on_export_resolution_changed(on_timeline!(|state, index: i32| {
+        state.export.resolution = (index.max(0) as usize).min(3);
+    }));
+    app.on_export_rate_changed(on_timeline!(|state, index: i32| {
+        state.export.rate = (index.max(0) as usize).min(2);
+    }));
+    app.on_export_quality_changed(on_timeline!(|state, index: i32| {
+        state.export.quality = (index.max(0) as usize).min(2);
+    }));
+    app.on_export_again(on_timeline!(|state| {
+        state.export.phase = ExportPhase::Idle;
+        state.export.progress = 0.0;
+    }));
+    // Both of these want a file manager, which is a dependency decision rather
+    // than a detail of this dialog. The seams are here for the day it lands.
+    app.on_export_browse(|| {});
+    app.on_export_reveal(|| {});
+
+    // The run itself. A timer, like playback: it exists only while the job
+    // does, and it stops itself at the end.
+    let exporting = Rc::new(Timer::default());
+    app.on_export_cancel({
+        let weak = app.as_weak();
+        let studio = studio.clone();
+        let models = timeline_models.clone();
+        let exporting = exporting.clone();
+        move || {
+            let Some(app) = weak.upgrade() else { return };
+            exporting.stop();
+            let mut state = studio.borrow_mut();
+            state.export.phase = ExportPhase::Idle;
+            state.export.progress = 0.0;
+            drop(state);
+            studio.borrow().publish(&app, &models);
+        }
+    });
+
+    app.on_export_start({
+        let weak = app.as_weak();
+        let studio = studio.clone();
+        let models = timeline_models.clone();
+        let exporting = exporting.clone();
+        move || {
+            let Some(app) = weak.upgrade() else { return };
+            {
+                let mut state = studio.borrow_mut();
+                state.export.phase = ExportPhase::Running;
+                state.export.progress = 0.0;
+                state.export.message = String::new();
+            }
+            exporting.start(TimerMode::Repeated, std::time::Duration::from_millis(90), {
+                let weak = weak.clone();
+                let studio = studio.clone();
+                let models = models.clone();
+                let exporting = exporting.clone();
+                move || {
+                    let Some(app) = weak.upgrade() else { return };
+                    {
+                        let mut state = studio.borrow_mut();
+                        state.export.progress = (state.export.progress + 0.012).min(1.0);
+                        if state.export.progress >= 1.0 {
+                            state.export.phase = ExportPhase::Done;
+                        }
+                    }
+                    if studio.borrow().export.phase != ExportPhase::Running {
+                        exporting.stop();
+                    }
+                    studio.borrow().publish(&app, &models);
+                }
+            });
+            studio.borrow().publish(&app, &models);
+        }
+    });
+
+    // ── settings ──
+    app.on_settings_page_changed(on_timeline!(|state, index: i32| {
+        state.settings.tab = index;
+    }));
+    app.on_settings_language_changed(on_timeline!(|state, index: i32| {
+        state.settings.language = index.max(0) as usize;
+    }));
+    app.on_settings_transcribe_language_changed(on_timeline!(|state, index: i32| {
+        state.settings.transcribe_language = index;
+    }));
+
+    app.on_model_activated(on_timeline!(|state, id: SharedString| {
+        // One active model per engine, so choosing is also un-choosing. Which
+        // list the id is in decides which engine it belongs to.
+        let engines = &mut *state;
+        for list in [&mut engines.transcribers, &mut engines.voices] {
+            if list.iter().any(|model| model.id == id.as_str() && model.installed) {
+                for model in list.iter_mut() {
+                    model.active = model.id == id.as_str();
+                }
+            }
+        }
+    }));
+
+    app.on_model_download(on_timeline!(|state, id: SharedString| {
+        let engines = &mut *state;
+        for list in [&mut engines.transcribers, &mut engines.voices] {
+            if let Some(model) = list.iter_mut().find(|model| model.id == id.as_str()) {
+                model.fetched = Some(0.0);
+            }
+        }
+    }));
+
+    app.on_model_cancel(on_timeline!(|state, id: SharedString| {
+        let engines = &mut *state;
+        for list in [&mut engines.transcribers, &mut engines.voices] {
+            if let Some(model) = list.iter_mut().find(|model| model.id == id.as_str()) {
+                model.fetched = None;
+            }
+        }
+    }));
+
+    app.on_model_remove(on_timeline!(|state, id: SharedString| {
+        let engines = &mut *state;
+        for list in [&mut engines.transcribers, &mut engines.voices] {
+            if let Some(model) = list.iter_mut().find(|model| model.id == id.as_str()) {
+                model.installed = false;
+                model.active = false;
+                model.fetched = None;
+            }
+            // An engine with nothing active falls back to whatever is left,
+            // rather than silently having no model at all.
+            if list.iter().all(|model| !model.active) {
+                if let Some(next) = list.iter_mut().find(|model| model.installed) {
+                    next.active = true;
+                }
+            }
+        }
+    }));
+
+    // Downloads advance on one timer for all of them: they are simulated, and
+    // a timer each would be a timer each for no reason.
+    let downloads = Rc::new(Timer::default());
+    downloads.start(TimerMode::Repeated, std::time::Duration::from_millis(120), {
+        let weak = app.as_weak();
+        let studio = studio.clone();
+        let models = timeline_models.clone();
+        move || {
+            let Some(app) = weak.upgrade() else { return };
+            let mut moved = false;
+            {
+                let mut state = studio.borrow_mut();
+                let engines = &mut *state;
+        for list in [&mut engines.transcribers, &mut engines.voices] {
+                    for model in list.iter_mut() {
+                        let Some(fetched) = model.fetched else { continue };
+                        moved = true;
+                        let next = fetched + 12.0 * 0.12 * 8.0;
+                        if next >= model.megabytes {
+                            model.fetched = None;
+                            model.installed = true;
+                        } else {
+                            model.fetched = Some(next);
+                        }
+                    }
+                }
+            }
+            // Only republish when something actually moved: this ticks for the
+            // life of the process, and a republish on every tick would redraw
+            // the whole window eight times a second to change nothing.
+            if moved {
+                studio.borrow().publish(&app, &models);
+            }
+        }
+    });
+
+    // ── the tray's A/V menu ──
+    app.on_av_tools(on_timeline!(|state| { state.av_token += 1; }));
+
+    app.on_av_selected(on_timeline!(|state, action: SharedString| {
+        let Some(id) = state.selection.first().cloned() else { return };
+        let Some(index) = state.now().clips.iter().position(|clip| clip.id == id) else {
+            return;
+        };
+        let clip = state.now().clips[index].clone();
+
+        match action.as_str() {
+            // Both of these end in a dialog this tree has not grown — the
+            // transcriber's sheet and the speech one. The edit each performs is
+            // real; what is missing is the sheet in front of it.
+            "captions" | "speak" => {}
+            "detach" => {
+                // The sound leaves the picture and becomes its own clip on the
+                // lane below, keeping a pointer home so it can be put back.
+                let new_id = state.mint("c");
+                let row = state.row_of(&clip.track);
+                let below = state
+                    .row_track(row + 1)
+                    .map(|track| track.id.clone())
+                    .unwrap_or_else(|| clip.track.clone());
+                let mut sound = clip.clone();
+                sound.id = new_id;
+                sound.kind = ClipKind::Audio;
+                sound.track = below;
+                sound.name = format!("{} audio", clip.name);
+                sound.detached_from = Some(clip.id.clone());
+                sound.fx = false;
+                sound.transition_in = false;
+                state.now_mut().clips[index].volume = 0.0;
+                state.now_mut().clips.push(sound);
+            }
+            "reattach" => {
+                let parent = clip.detached_from.clone().unwrap_or_else(|| clip.id.clone());
+                let doomed: Vec<String> = state
+                    .now()
+                    .clips
+                    .iter()
+                    .filter(|other| other.detached_from.as_deref() == Some(parent.as_str()))
+                    .map(|other| other.id.clone())
+                    .collect();
+                state.now_mut().clips.retain(|other| !doomed.contains(&other.id));
+                if let Some(video) = state.now_mut().clips.iter_mut().find(|c| c.id == parent) {
+                    video.volume = 1.0;
+                }
+                state.selection = vec![parent];
             }
             _ => {}
         }

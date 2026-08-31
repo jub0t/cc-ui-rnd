@@ -48,7 +48,7 @@ export component TimelineTray inherits Rectangle {
     callback split();
     callback merge();
     callback delete-selected();
-    callback av-tools();
+    callback av-tools(at-x: length);
     callback add-track();
     callback fit();
     callback zoom(factor: float);
@@ -146,11 +146,16 @@ export component TimelineTray inherits Rectangle {
         if root.has-av-tools: HorizontalLayout {
             spacing: 0px;
             Divider { }
-            IconButton {
+            av := IconButton {
                 glyph: Glyph.waveform;
                 label: "Audio and video tools";
                 wide: true;
-                clicked => { root.av-tools(); }
+                // Reported in the tray's own coordinates: the button slides
+                // along the bar as the selection count and the merge reason
+                // come and go, and a menu pinned to a guess would drift off it.
+                clicked => {
+                    root.av-tools(av.absolute-position.x - root.absolute-position.x);
+                }
             }
         }
 

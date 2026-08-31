@@ -1,0 +1,446 @@
+import { Theme } from "../theme.slint";
+import { Glyph, Icon } from "../icons.slint";
+import { Button, DialogHeading, Modal, Progress } from "../primitives/modal.slint";
+import { SegmentedControl } from "../primitives/segmented-control.slint";
+import { PaneScroll } from "../workspace/pane.slint";
+
+// Settings, ported from the reference's SettingsDialog: a fixed-height sheet
+// with a column of pages down the side. The model rows take their shape from
+// web/'s transcriber panel, which separates the two things the reference's row
+// conflated — a downloaded model is a *choice* and so behaves as a radio,
+// while an absent one is an *acquisition* and is handled by the button on the
+// right. That distinction is the whole reason the row reads at a glance.
+
+export struct ModelData {
+    id: string,
+    name: string,
+    /// "Fastest, least accurate"
+    note: string,
+    /// "142 MB"
+    size: string,
+    /// 1..5, drawn as pips
+    accuracy: int,
+    installed: bool,
+    /// the one this engine will use
+    active: bool,
+    downloading: bool,
+    /// 0..1
+    progress: float,
+    /// "42 MB of 142 MB · 3.1 MB/s"
+    transferred: string,
+    eta: string,
+}
+
+export struct SettingsData {
+    open: bool,
+    /// 0 General, 1 Transcriber, 2 Speech, 3 About
+    tab: int,
+    language: int,
+    /// the transcriber's working language
+    transcribe-language: int,
+    /// "3 installed · 612 MB on disk"
+    disk: string,
+    version: string,
+    engine: string,
+}
+
+// Accuracy, as pips rather than a number: five little bars say "third of five"
+// without the reader having to hold a scale in their head.
+component Pips inherits HorizontalLayout {
+    in property <int> value;
+
+    spacing: 2px;
+
+    for step in 5: Rectangle {
+        width: 3px;
+        height: 10px;
+        border-radius: 1px;
+        background: step < root.value ? Theme.accent : Theme.field-active;
+    }
+}
+
+component ModelRow inherits Rectangle {
+    in property <ModelData> model;
+
+    callback activated();
+    callback download();
+    callback cancel();
+    callback remove();
+
+    border-radius: Theme.r;
+    border-width: 1px;
+    border-color: root.model.active ? Theme.accent
+        : touch.has-hover ? Theme.line-strong
+        : Theme.line;
+    background: root.model.active ? Theme.accent-soft : Theme.raised;
+    // An absent model is dimmer than an installed one, but not so dim it
+    // stops being readable — it is a thing you can have, not a thing denied.
+    opacity: (root.model.installed || root.model.downloading) ? 1.0 : 0.86;
+
+    animate background, border-color { duration: 120ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+
+    touch := TouchArea {
+        // Only an installed model is a choice. An absent one is acquired with
+        // the button on the right, and clicking the row would be ambiguous.
+        enabled: root.model.installed;
+        mouse-cursor: root.model.installed ? pointer : default;
+        clicked => { root.activated(); }
+    }
+
+    VerticalLayout {
+        padding: 10px;
+        spacing: 8px;
+
+        HorizontalLayout {
+            spacing: 10px;
+
+            VerticalLayout {
+                horizontal-stretch: 1;
+                spacing: 1px;
+
+                Text {
+                    text: root.model.name;
+                    color: Theme.fg;
+                    font-size: Theme.fs;
+                    font-weight: Theme.weight-title;
+                    overflow: elide;
+                }
+
+                Text {
+                    text: root.model.note;
+                    color: Theme.fg-dim;
+                    font-size: Theme.fs-sm;
+                    overflow: elide;
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+                Pips { value: root.model.accuracy; }
+            }
+
+            VerticalLayout {
+                alignment: center;
+                Text {
+                    text: root.model.size;
+                    color: Theme.fg-dim;
+                    font-family: Theme.font-technical;
+                    font-size: Theme.fs-sm;
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+
+                if root.model.downloading: Button {
+                    label: "Cancel";
+                    glyph: Glyph.close;
+                    danger: true;
+                    clicked => { root.cancel(); }
+                }
+
+                if !root.model.downloading && root.model.installed: Button {
+                    label: "Remove";
+                    glyph: Glyph.trash;
+                    danger: true;
+                    clicked => { root.remove(); }
+                }
+
+                if !root.model.downloading && !root.model.installed: Button {
+                    label: "Download";
+                    glyph: Glyph.import;
+                    clicked => { root.download(); }
+                }
+            }
+        }
+
+        if root.model.downloading: VerticalLayout {
+            spacing: 6px;
+
+            Progress { value: root.model.progress; }
+
+            HorizontalLayout {
+                spacing: 8px;
+
+                Text {
+                    horizontal-stretch: 1;
+                    text: root.model.transferred;
+                    color: Theme.fg-muted;
+                    font-family: Theme.font-technical;
+                    font-size: Theme.fs-sm;
+                }
+
+                Text {
+                    text: root.model.eta;
+                    color: Theme.fg-muted;
+                    font-family: Theme.font-technical;
+                    font-size: Theme.fs-sm;
+                }
+            }
+        }
+    }
+}
+
+component PageTab inherits Rectangle {
+    in property <string> label;
+    in property <Glyph> glyph;
+    in property <bool> current;
+
+    callback clicked();
+
+    height: 30px;
+    border-radius: Theme.r-sm;
+    background: root.current ? Theme.field-active
+        : touch.has-hover ? Theme.field
+        : Colors.transparent;
+
+    animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        spacing: 8px;
+
+        VerticalLayout {
+            alignment: center;
+            Icon {
+                glyph: root.glyph;
+                size: 13px;
+                tint: root.current ? Theme.fg : Theme.fg-muted;
+            }
+        }
+
+        Text {
+            horizontal-stretch: 1;
+            text: root.label;
+            color: root.current ? Theme.fg : Theme.fg-muted;
+            font-size: Theme.fs;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+component Choice inherits Rectangle {
+    in property <string> label;
+    in property <bool> current;
+
+    callback clicked();
+
+    height: 30px;
+    border-radius: Theme.r-sm;
+    border-width: 1px;
+    border-color: root.current ? Theme.accent : Theme.line;
+    background: root.current ? Theme.accent-soft
+        : touch.has-hover ? Theme.field
+        : Theme.raised;
+
+    animate background, border-color { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+
+        Text {
+            horizontal-stretch: 1;
+            text: root.label;
+            color: root.current ? Theme.fg : Theme.fg-muted;
+            font-size: Theme.fs;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component SettingsDialog inherits Modal {
+    in property <SettingsData> data;
+    in property <[ModelData]> transcribers;
+    in property <[ModelData]> voices;
+    in property <[string]> languages;
+
+    callback page-changed(index: int);
+    callback language-changed(index: int);
+    callback transcribe-language-changed(index: int);
+    callback model-activated(id: string);
+    callback model-download(id: string);
+    callback model-cancel(id: string);
+    callback model-remove(id: string);
+
+    open: root.data.open;
+    title: "Settings";
+    glyph: Glyph.settings;
+    surface-width: 640px;
+    // Fixed rather than fitted: the pages are different lengths and a sheet
+    // that resized as you moved between them would be its own distraction.
+    surface-height: 460px;
+
+    HorizontalLayout {
+        // ── the pages ────────────────────────────────────────────────────
+        Rectangle {
+            width: 164px;
+
+            Rectangle {
+                x: parent.width - 1px;
+                y: 0;
+                width: 1px;
+                height: parent.height;
+                background: Theme.line;
+            }
+
+            VerticalLayout {
+                padding: 8px;
+                spacing: 2px;
+                alignment: start;
+
+                PageTab {
+                    label: "General";
+                    glyph: Glyph.settings;
+                    current: root.data.tab == 0;
+                    clicked => { root.page-changed(0); }
+                }
+                PageTab {
+                    label: "Transcriber";
+                    glyph: Glyph.waveform;
+                    current: root.data.tab == 1;
+                    clicked => { root.page-changed(1); }
+                }
+                PageTab {
+                    label: "Speech";
+                    glyph: Glyph.music;
+                    current: root.data.tab == 2;
+                    clicked => { root.page-changed(2); }
+                }
+                PageTab {
+                    label: "About";
+                    glyph: Glyph.sparkle;
+                    current: root.data.tab == 3;
+                    clicked => { root.page-changed(3); }
+                }
+            }
+        }
+
+        // ── the page ─────────────────────────────────────────────────────
+        PaneScroll {
+            horizontal-stretch: 1;
+
+            if root.data.tab == 0: VerticalLayout {
+                padding: 18px;
+                spacing: 8px;
+
+                DialogHeading { text: "LANGUAGE"; }
+
+                // Native names: whoever is stranded in a language they cannot
+                // read must still recognise their own in this list.
+                for name[index] in root.languages: Choice {
+                    label: name;
+                    current: index == root.data.language;
+                    clicked => { root.language-changed(index); }
+                }
+            }
+
+            if root.data.tab == 1: VerticalLayout {
+                padding: 18px;
+                spacing: 8px;
+
+                DialogHeading { text: "TRANSCRIBE IN"; }
+
+                SegmentedControl {
+                    options: ["Auto", "English", "Chinese"];
+                    current: root.data.transcribe-language;
+                    changed(index) => { root.transcribe-language-changed(index); }
+                }
+
+                Rectangle { height: 6px; }
+
+                DialogHeading { text: "MODELS"; }
+
+                for model in root.transcribers: ModelRow {
+                    model: model;
+                    activated => { root.model-activated(model.id); }
+                    download => { root.model-download(model.id); }
+                    cancel => { root.model-cancel(model.id); }
+                    remove => { root.model-remove(model.id); }
+                }
+
+                HorizontalLayout {
+                    spacing: 8px;
+
+                    Text {
+                        horizontal-stretch: 1;
+                        text: root.data.disk;
+                        color: Theme.fg-muted;
+                        font-family: Theme.font-technical;
+                        font-size: Theme.fs-sm;
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+                        Icon { glyph: Glyph.check; size: 12px; tint: Theme.green; }
+                    }
+
+                    Text {
+                        text: "Runs locally";
+                        color: Theme.green;
+                        font-size: Theme.fs-sm;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+
+            if root.data.tab == 2: VerticalLayout {
+                padding: 18px;
+                spacing: 8px;
+
+                DialogHeading { text: "VOICES"; }
+
+                for model in root.voices: ModelRow {
+                    model: model;
+                    activated => { root.model-activated(model.id); }
+                    download => { root.model-download(model.id); }
+                    cancel => { root.model-cancel(model.id); }
+                    remove => { root.model-remove(model.id); }
+                }
+            }
+
+            if root.data.tab == 3: VerticalLayout {
+                padding: 18px;
+                spacing: 10px;
+
+                DialogHeading { text: "ABOUT"; }
+
+                Text {
+                    text: "WolfCut " + root.data.version;
+                    color: Theme.fg;
+                    font-size: Theme.fs-lg;
+                    font-weight: Theme.weight-title;
+                }
+
+                Text {
+                    text: root.data.engine;
+                    color: Theme.fg-muted;
+                    font-family: Theme.font-technical;
+                    font-size: Theme.fs-sm;
+                }
+
+                Text {
+                    text: "Everything on this machine. Transcription and speech "
+                        + "run against models you download here, and nothing "
+                        + "about a project leaves the device.";
+                    color: Theme.fg-muted;
+                    font-size: Theme.fs;
+                    wrap: word-wrap;
+                }
+            }
+        }
+    }
+}
