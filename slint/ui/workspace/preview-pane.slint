@@ -264,11 +264,14 @@ export component PreviewPane inherits Rectangle {
         // ── the viewport ─────────────────────────────────────────────────
         viewport := Rectangle {
             vertical-stretch: 1;
-            // The pane's own surface, not a well cut into it. web/ sinks its
-            // viewport because its panel is a stop darker than this; here the
-            // panel already *is* that tone, and the stage's ring is what
-            // separates the picture from the ground.
-            background: Theme.panel;
+            // Sunken, and darker than the header and transport either side of
+            // it. This briefly took the panel's own tone, back when the panel
+            // sat at the value web/'s viewport uses; the ladder has moved up a
+            // step since, and a monitor's ground should fall away from the
+            // chrome around it rather than sit level with it — the darker the
+            // surround, the less the picture has to fight to be the brightest
+            // thing in the pane.
+            background: Theme.well;
             clip: true;
 
             property <length> pad: 16px;

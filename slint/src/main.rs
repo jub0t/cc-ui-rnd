@@ -882,18 +882,11 @@ impl Studio {
             rule(),
             action("split", "Split at playhead".into(), Glyph::Split, "S", straddled && !locked),
             rule(),
-            heading("SPEED"),
         ];
-        for (id, rate) in [("speed-half", 0.5_f32), ("speed-one", 1.0), ("speed-two", 2.0)] {
-            rows.push(check(
-                id,
-                &format!("{rate:.2}x"),
-                "",
-                (clip.speed - rate).abs() < 0.001,
-                !locked,
-            ));
-        }
-        rows.push(rule());
+        // No speed group. Three fixed rates is a worse control than the Adjust
+        // tab's rate slider, which covers the engine's whole range, and a
+        // right-click menu earns its length by holding the things that have
+        // nowhere better to live.
         // Mute is the gain, not a flag: there is one number that decides
         // whether a clip is heard, and a second one would have to agree with it.
         rows.push(check("mute", "Mute", "M", clip.volume <= 0.0, !locked && clip.kind != ClipKind::Image));
@@ -2394,17 +2387,6 @@ fn main() -> Result<(), slint::PlatformError> {
                 state.now_mut().clips[index].duration = head;
                 state.now_mut().clips[index].fade_out = 0.0;
                 state.now_mut().clips.push(tail);
-            }
-            "speed-half" | "speed-one" | "speed-two" => {
-                let rate = match action.as_str() {
-                    "speed-half" => 0.5,
-                    "speed-two" => 2.0,
-                    _ => 1.0,
-                };
-                let previous = clip.speed;
-                let target = &mut state.now_mut().clips[index];
-                target.duration = (target.duration * previous / rate).max(MIN_DURATION);
-                target.speed = rate;
             }
             "mute" => {
                 // Restored to unity rather than to whatever it was: the menu

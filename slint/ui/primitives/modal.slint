@@ -67,29 +67,13 @@ export component Modal inherits Rectangle {
                     background: Theme.line;
                 }
 
+                // The note on one edge and the close on the other, so the
+                // centred title has matching weight either side of it rather
+                // than being pushed off true by whichever one is longer.
                 HorizontalLayout {
                     padding-left: 14px;
                     padding-right: 12px;
                     spacing: 8px;
-
-                    VerticalLayout {
-                        alignment: center;
-                        Icon {
-                            glyph: root.glyph;
-                            size: 16px;
-                            tint: Theme.accent;
-                        }
-                    }
-
-                    Text {
-                        text: root.title;
-                        color: Theme.fg;
-                        font-size: Theme.fs-lg;
-                        font-weight: Theme.weight-title;
-                        vertical-alignment: center;
-                    }
-
-                    Rectangle { horizontal-stretch: 1; }
 
                     if root.note != "": Text {
                         text: root.note;
@@ -98,6 +82,8 @@ export component Modal inherits Rectangle {
                         font-size: Theme.fs-sm;
                         vertical-alignment: center;
                     }
+
+                    Rectangle { horizontal-stretch: 1; }
 
                     // Gone, not disabled, while a job is running: there is no
                     // safe answer to pressing it, so it should not be there to
@@ -123,6 +109,35 @@ export component Modal inherits Rectangle {
                                 clicked => { root.closed(); }
                             }
                         }
+                    }
+                }
+
+                // Placed against the whole strip rather than laid out, so it
+                // stays centred in the sheet and not in whatever space the
+                // note and the close button leave over — the same trick the
+                // window's own title bar uses for the project name.
+                centre := HorizontalLayout {
+                    x: (parent.width - self.preferred-width) / 2;
+                    y: 0;
+                    width: self.preferred-width;
+                    height: parent.height;
+                    spacing: 8px;
+
+                    VerticalLayout {
+                        alignment: center;
+                        Icon {
+                            glyph: root.glyph;
+                            size: 16px;
+                            tint: Theme.accent;
+                        }
+                    }
+
+                    Text {
+                        text: root.title;
+                        color: Theme.fg;
+                        font-size: Theme.fs-lg;
+                        font-weight: Theme.weight-title;
+                        vertical-alignment: center;
                     }
                 }
             }
@@ -419,6 +434,11 @@ export component Field inherits Rectangle {
         x: 10px;
         y: (parent.height - self.height) / 2;
         width: parent.width - 20px;
+        // Without this the input takes the whole field's height — a child of a
+        // Rectangle fills it by default — so the centring above resolves to
+        // zero and the text draws hard against the top edge. Same fix, and the
+        // same reason, as SearchField in the inspector.
+        height: self.preferred-height;
         text <=> root.draft;
         color: Theme.fg;
         font-family: root.technical ? Theme.font-technical : Theme.font;
@@ -433,6 +453,7 @@ export component Field inherits Rectangle {
     if root.draft == "" && !input.has-focus: Text {
         x: 10px;
         y: (parent.height - self.height) / 2;
+        height: self.preferred-height;
         text: root.placeholder;
         color: Theme.fg-dim;
         font-size: Theme.fs;
