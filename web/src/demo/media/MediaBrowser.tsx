@@ -138,8 +138,8 @@ function MediaThumb({ item }: { item: BinItem }) {
       {item.kind !== 'video' && (
         <span
           className={cn(
-            'absolute top-1.5 left-1.5 grid size-[19px] place-items-center rounded-sm text-white',
-            item.kind === 'audio' ? 'bg-warn' : 'bg-accent',
+            'absolute top-1.5 left-1.5 grid size-[19px] place-items-center rounded-sm',
+            item.kind === 'audio' ? 'bg-warn text-white' : 'bg-accent text-onaccent',
           )}
         >
           {item.kind === 'audio' ? <AudioLines size={12} /> : <ImageIcon size={12} />}
@@ -156,7 +156,7 @@ function MediaThumb({ item }: { item: BinItem }) {
             className="pointer-events-none absolute inset-y-0 w-px bg-white shadow-[0_0_4px_rgb(0_0_0/0.8)]"
             style={{ left: `${scrub * 100}%` }}
           />
-          <span className="absolute bottom-1.5 left-1.5 rounded-sm bg-accent px-1.5 py-px text-[10px] tabular-nums text-white">
+          <span className="absolute bottom-1.5 left-1.5 rounded-sm bg-accent px-1.5 py-px text-[10px] tabular-nums text-onaccent">
             {timecode(item.seconds * scrub)}
           </span>
         </>
@@ -195,7 +195,7 @@ function Card({
       >
         {children}
         {selected && (
-          <span className="absolute top-1.5 right-1.5 grid size-[18px] place-items-center rounded-full bg-accent text-white shadow-[0_1px_3px_rgb(0_0_0/0.5)]">
+          <span className="absolute top-1.5 right-1.5 grid size-[18px] place-items-center rounded-full bg-accent text-onaccent shadow-[0_1px_3px_rgb(0_0_0/0.5)]">
             <Check size={12} strokeWidth={3} />
           </span>
         )}

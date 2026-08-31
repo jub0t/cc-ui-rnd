@@ -344,7 +344,7 @@ export function KeyframeTrack() {
                   <polyline
                     points={curvePath(prop)}
                     fill="none"
-                    stroke="#0a84ff"
+                    stroke="var(--cp-accent)"
                     strokeWidth={1.5}
                     vectorEffect="non-scaling-stroke"
                   />
@@ -366,7 +366,7 @@ export function KeyframeTrack() {
                     className={cn(
                       'absolute top-1/2 z-10 size-[11px] -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[1.5px] transition-colors',
                       key.id === selectedId
-                        ? 'scale-[1.15] bg-[#0a84ff]'
+                        ? 'scale-[1.15] bg-accent'
                         : 'bg-[#8b8b8b] hover:bg-[#ededed]',
                     )}
                   />
@@ -398,7 +398,7 @@ export function KeyframeTrack() {
                     className={cn(
                       'h-6 rounded border px-2 text-[11px] transition-colors disabled:opacity-35',
                       active
-                        ? 'border-[#0a84ff] bg-[#0a84ff]/15 text-[#ededed]'
+                        ? 'border-accent bg-accent/15 text-[#ededed]'
                         : 'border-[#232323] bg-[#1f1f1f] text-[#8b8b8b] hover:enabled:text-[#ededed]',
                     )}
                   >

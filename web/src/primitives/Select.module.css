@@ -97,7 +97,7 @@
 
 .option[data-active='true'] {
   background: var(--cp-accent);
-  color: #fff;
+  color: var(--cp-on-accent);
 }
 
 .option[data-active='true'] .icon,

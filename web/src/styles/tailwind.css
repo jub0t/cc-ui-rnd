@@ -23,8 +23,10 @@
   --color-inkmute: #8b8b8b;
   --color-inkdim: #5c5c5c;
 
-  --color-accent: #0a84ff;
-  --color-accenthi: #3d9bff;
+  --color-accent: #cbf53f;
+  --color-accenthi: #d9ff63;
+  /* ink for anything sitting on the accent — see tokens.css */
+  --color-onaccent: #15220a;
   --color-success: #30d158;
   --color-warn: #e07b33;
 

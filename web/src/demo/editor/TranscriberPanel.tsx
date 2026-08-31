@@ -132,7 +132,7 @@ export function TranscriberPanel() {
                   <span className="flex items-center gap-1.5 text-[12.5px] font-medium text-ink">
                     {model.name}
                     {isActive && (
-                      <span className="rounded-full bg-accent px-1.5 py-px text-[10px] font-semibold text-white">
+                      <span className="rounded-full bg-accent px-1.5 py-px text-[10px] font-semibold text-onaccent">
                         In use
                       </span>
                     )}

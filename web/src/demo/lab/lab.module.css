@@ -170,8 +170,8 @@
   width: 3px;
   height: 18px;
   margin-top: -9px;
-  border-left: 1px solid rgb(255 255 255 / 0.7);
-  border-right: 1px solid rgb(255 255 255 / 0.7);
+  border-left: 1px solid rgb(21 34 10 / 0.55);
+  border-right: 1px solid rgb(21 34 10 / 0.55);
 }
 
 .handleIn { border-radius: var(--cp-r) 0 0 var(--cp-r); }

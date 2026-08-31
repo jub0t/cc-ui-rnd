@@ -58,7 +58,7 @@
   height: 20px;
   border-radius: var(--cp-r-sm);
   background: var(--cp-accent);
-  color: #fff;
+  color: var(--cp-on-accent);
 }
 
 .chipBadgeAudio { background: var(--cp-green); color: #06210f; }

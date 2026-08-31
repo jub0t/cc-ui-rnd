@@ -143,5 +143,5 @@
 .iconButtonOn,
 .iconButtonOn:hover:not(:disabled) {
   background: var(--cp-accent);
-  color: #fff;
+  color: var(--cp-on-accent);
 }

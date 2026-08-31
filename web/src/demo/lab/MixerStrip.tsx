@@ -95,7 +95,7 @@ function Fader({ db, onChange }: { db: number; onChange: (db: number) => void })
       {/* cap: a wide flat blade, the way a console fader reads */}
       <span
         style={{ bottom: capBottom }}
-        className="pointer-events-none absolute left-0 h-[7px] w-[18px] -translate-y-1/2 rounded-[2px] bg-white shadow-[0_1px_3px_rgb(0_0_0/0.7)] transition-[height] duration-100 group-hover:h-[9px] group-focus-visible:ring-2 group-focus-visible:ring-[#0a84ff]"
+        className="pointer-events-none absolute left-0 h-[7px] w-[18px] -translate-y-1/2 rounded-[2px] bg-white shadow-[0_1px_3px_rgb(0_0_0/0.7)] transition-[height] duration-100 group-hover:h-[9px] group-focus-visible:ring-2 group-focus-visible:ring-accent"
       />
     </div>
   )

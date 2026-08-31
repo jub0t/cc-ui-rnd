@@ -170,20 +170,17 @@
 }
 
 /* The one control you reach for without looking, so it is the one control
-   that carries a colour — the reference's lime, which reads as "transport"
-   rather than as the success green the tokens use for state. Named here
-   rather than in tokens.css: that palette is shared, this is one panel. */
+   that carries a colour. It used to hold a private lime because the palette
+   was blue; now the palette IS this lime, so it reads from the token. */
 .play {
-  --transport: #cbf53f;
-
   width: 32px;
   height: 30px;
-  color: var(--transport);
+  color: var(--cp-accent);
 }
 
 .play:hover:not(:disabled) {
-  background: rgb(203 245 63 / 0.14);
-  color: #d9ff63;
+  background: var(--cp-accent-soft);
+  color: var(--cp-accent-hover);
 }
 
 .pickers {

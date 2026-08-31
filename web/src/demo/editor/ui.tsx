@@ -203,7 +203,7 @@ export const button = cva(
     variants: {
       variant: {
         default: 'border border-line bg-field text-ink hover:border-edge hover:bg-fieldhi',
-        primary: 'border border-accent bg-accent text-white hover:border-accenthi hover:bg-accenthi',
+        primary: 'border border-accent bg-accent text-onaccent hover:border-accenthi hover:bg-accenthi',
         ghost: 'text-inkmute hover:bg-field hover:text-ink',
         danger: 'border border-line bg-field text-ink hover:border-[#5a2b28] hover:bg-[#2a1614]',
       },

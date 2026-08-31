@@ -117,7 +117,7 @@ function AssetCard({ asset, selected, onToggle }: { asset: Asset; selected: bool
         )}
 
         {selected && (
-          <span className="absolute top-1.5 right-1.5 grid size-[18px] place-items-center rounded-full bg-accent text-white">
+          <span className="absolute top-1.5 right-1.5 grid size-[18px] place-items-center rounded-full bg-accent text-onaccent">
             <Check size={12} strokeWidth={2.8} />
           </span>
         )}
@@ -129,7 +129,7 @@ function AssetCard({ asset, selected, onToggle }: { asset: Asset; selected: bool
         ) : (
           <>
             <span className="pointer-events-none absolute inset-y-0 w-px bg-white" style={{ left: `${scrub * 100}%` }} />
-            <span className="absolute bottom-1.5 left-1.5 rounded-sm bg-accent px-1.5 py-px text-[10px] tabular-nums text-white">
+            <span className="absolute bottom-1.5 left-1.5 rounded-sm bg-accent px-1.5 py-px text-[10px] tabular-nums text-onaccent">
               {timecode(asset.seconds * scrub)}
             </span>
           </>
