@@ -525,6 +525,15 @@ component MediaCard inherits Rectangle {
 // at compile time, which a model cannot do.
 component MediaGrid inherits Rectangle {
     in property <[MediaItemData]> items;
+    /// A floor under the grid's own height, so the empty page below the last
+    /// row still belongs to it.
+    ///
+    /// Without it the grid is exactly as tall as its cards, and the only
+    /// pixels left to press are the 8px seams between them — a marquee you
+    /// have to thread a needle to start, which is no marquee at all. The
+    /// timeline has this for free: its lanes run the width of the pane and
+    /// most of one is empty. This is the bin's version of that empty lane.
+    in property <length> page-floor;
 
     callback clicked(id: int, additive: bool);
     callback activated(id: int);
@@ -553,7 +562,10 @@ component MediaGrid inherits Rectangle {
     property <length> col-pitch: root.card-w + root.gap;
     property <length> row-pitch: root.card-h + root.gap;
 
-    height: root.rows > 0 ? root.rows * root.row-pitch - root.gap : 0px;
+    property <length> cards-h:
+        root.rows > 0 ? root.rows * root.row-pitch - root.gap : 0px;
+
+    height: Math.max(root.cards-h, root.page-floor);
 
     // Which cards a band's edges touch. The reference asks every card for its
     // rect and tests them one by one; the grid here is arithmetic, so the
@@ -589,6 +601,10 @@ component MediaGrid inherits Rectangle {
     // space and clears the selection — the same event doing the same job, so
     // there is no second handler that could disagree with this one about what
     // a press on the background means.
+    //
+    // It fills the root, which is why `page-floor` exists: the surface this
+    // gesture is made on is the grid's box, and a box drawn tight around the
+    // cards has nothing in it but seams.
     band := TouchArea {
         property <bool> drawing;
         property <bool> additive;
@@ -1395,7 +1411,7 @@ export component MediaPane inherits Rectangle {
                 }
             }
 
-            PaneScroll {
+            pages := PaneScroll {
                 x: root.sidebar + 1px;
                 width: Math.max(0px, parent.width - root.sidebar - 1px);
                 height: parent.height;
@@ -1476,6 +1492,14 @@ export component MediaPane inherits Rectangle {
                     MediaGrid {
                         horizontal-stretch: 1;
                         items: root.items;
+                        // Whatever the page has left after the rows above it:
+                        // the import row is 8 + 36 + 8, the delete strip 28
+                        // and its own 8, and this row keeps 8 under itself.
+                        // Counted rather than measured, because reading a
+                        // sibling's laid-out height from inside the layout
+                        // that assigns it is a binding loop waiting to happen.
+                        page-floor: Math.max(0px, pages.height - 52px
+                            - (root.selected-count > 1 ? 36px : 0px) - 8px);
 
                         clicked(id, additive) => { root.select(id, additive); }
                         activated(id) => { root.activate(id); }
