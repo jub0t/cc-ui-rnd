@@ -9,8 +9,16 @@ import { ThinScrollbar } from "../primitives/scrollbar.slint";
 // so nothing in here may set a width or a height — every size is inherited
 // from the parent and every child stretches to fill it.
 export component Pane inherits Rectangle {
+    /// A hairline all the way round. Off by default: the panes float on a
+    /// ground several stops darker than they are, so the gutters already draw
+    /// every edge — and an outline on top of that reads as a box around
+    /// something rather than as the edge of a surface. What is left where a
+    /// pane does need an edge is a single rule on the one side that needs it,
+    /// which is what the timeline does across its top.
+    in property <bool> outlined: false;
+
     background: Theme.panel;
-    border-width: 1px;
+    border-width: root.outlined ? 1px : 0px;
     border-color: Theme.line;
     border-radius: Theme.r-lg;
     // Rounded corners only cut the pane's own fill; the body has to be clipped
@@ -27,7 +35,13 @@ export component Pane inherits Rectangle {
 export component PaneHeader inherits Rectangle {
     in property <string> title;
 
-    height: 36px;
+    // 44px, which is the library pane's tab strip — the tallest of the three
+    // top bars, because that one has a row of chips in it and the other two
+    // have a line of text. One height across all three is worth more than
+    // each pane's own minimum: the three panes sit side by side, and a header
+    // that steps down twice across the top of the window reads as three
+    // panels bolted together rather than as one shell.
+    height: 44px;
 
     // Hairline on the bottom edge rather than a border on the body, so the
     // line runs the full width of the pane and not the width of the content.

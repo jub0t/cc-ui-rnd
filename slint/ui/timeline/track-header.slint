@@ -1,6 +1,7 @@
 import { Theme } from "../theme.slint";
 import { Glyph, Icon } from "../icons.slint";
 import { IconButton } from "../primitives/panel.slint";
+import { ThinScrollbar } from "../primitives/scrollbar.slint";
 import { TrackData, TrackSize } from "model.slint";
 
 // The lane labels, in a fixed column beside the lanes.
@@ -12,6 +13,11 @@ import { TrackData, TrackSize } from "model.slint";
 // The column scrolls with the lanes rather than on its own: the offset is the
 // caller's `track-scroll`, so the labels and the lanes cannot drift apart.
 // There is one source of truth for how far down the stack we are.
+//
+// The bar that drives it lives here, at the leading edge of this column — the
+// reference gets one for free by making the header column a real scroll
+// container, and this is the same bar in the one place a stack of lanes can
+// carry one without landing on top of a clip.
 
 // The row-height dropdown, one per lane.
 //
@@ -297,6 +303,13 @@ export component TrackHeaders inherits Rectangle {
     in property <[TrackData]> tracks;
     in property <length> ruler-height: 28px;
     in property <length> track-scroll;
+    /// How much taller the stack is than the room it has. Handed down rather
+    /// than measured here: the pane already works it out to clamp the offset,
+    /// and two answers to one question is one answer too many.
+    in property <length> overflow;
+
+    /// The bar was dragged. Absolute, and already inside 0..overflow.
+    callback scrolled(offset: length);
 
     callback flag-changed(index: int, visible: bool, muted: bool, locked: bool);
     callback sized(index: int, size: TrackSize);
@@ -323,6 +336,25 @@ export component TrackHeaders inherits Rectangle {
         sized(size) => { root.sized(index, size); }
         removed => { root.removed(index); }
         renamed(name) => { root.renamed(index, name); }
+    }
+
+    // The bar, over the rows and under the corner. On the trailing edge,
+    // where the stack it scrolls ends and where a scroll container puts one —
+    // the reference gets exactly this bar there by making the header column a
+    // real one. Short and inset rather than full-height: a stack that
+    // overflows by a row would otherwise draw a thumb the length of the
+    // column, and a mark that long stops reading as something you can take
+    // hold of.
+    ThinScrollbar {
+        x: parent.width - self.width - 1px;
+        y: root.ruler-height + 4px;
+        height: Math.max(0px, root.height - root.ruler-height - 8px);
+        viewport: self.height;
+        content: self.height + root.overflow;
+        offset: root.track-scroll;
+        min-thumb: 16px;
+        max-thumb: 0.5;
+        scrolled(to) => { root.scrolled(to); }
     }
 
     // The ruler corner: opposite the ruler, and not part of the scrolling

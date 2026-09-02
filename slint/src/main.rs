@@ -1741,6 +1741,126 @@ fn wave_path(media: &str, source_start: f32, duration: f32, gain: f32) -> String
     path
 }
 
+/// The mark a drag chip wears, by kind — lucide's own path data, the same
+/// source as ui/icons.slint. Duplicated rather than reached for because the
+/// glyphs live in the Slint tree as `Path` elements, and an element cannot be
+/// read back out as a string.
+fn chip_glyph(kind: ClipKind) -> &'static str {
+    match kind {
+        // lucide/film
+        ClipKind::Video => "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z \
+                            M7 3v18 M3 7.5h4 M3 12h18 M3 16.5h4 M17 3v18 M17 7.5h4 M17 16.5h4",
+        // lucide/music
+        ClipKind::Audio => "M9 18V5l12-2v13 M3 18a3 3 0 1 0 6 0a3 3 0 1 0 -6 0 \
+                            M15 16a3 3 0 1 0 6 0a3 3 0 1 0 -6 0",
+        // lucide/image
+        ClipKind::Image => "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z \
+                            M7 9a2 2 0 1 0 4 0a2 2 0 1 0 -4 0 M21 15l-3.086-3.086a2 2 0 0 0-2.828 0L6 21",
+        // lucide/type
+        ClipKind::Text => "M12 4v16 M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2 M9 20h6",
+        // lucide/audio-lines
+        ClipKind::Filter => "M2 10v3 M6 6v11 M10 3v18 M14 8v7 M18 5v13 M22 10v3",
+    }
+}
+
+/// `&`, `<` and `>` out of a name that is going into an SVG document.
+fn xml_escaped(text: &str) -> String {
+    text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+}
+
+/// The chip that hangs off the cursor while something is dragged out of the
+/// library, as an SVG document.
+///
+/// SVG rather than a pixel buffer, and for two reasons. Slint rasterises one
+/// through the window's own font collection — so the name on the chip is set
+/// in the same Inter the cards are, from the face this binary already
+/// embeds — and the drag overlay draws it at the window's scale factor rather
+/// than at whatever resolution a buffer was baked at.
+///
+/// Sized in logical points, because that is how the overlay reads it back:
+/// `render_drag_image_overlay` takes the image's own size as its size on
+/// screen. `PAD` is the margin the drop shadow needs to fall into; the visible
+/// chip is inset by it, which is why the offsets the DragAreas pass are that
+/// much larger than the gap they want.
+fn drag_chip_svg(
+    kind: ClipKind,
+    label: &str,
+    wave: &str,
+    mark: slint::Color,
+    well: slint::Color,
+    ground: slint::Color,
+    ink: slint::Color,
+) -> String {
+    /// Room for the shadow to fall into, on every side.
+    const PAD: f32 = 5.0;
+    const CHIP_H: f32 = 32.0;
+    /// The badge, and the glyph centred in it.
+    const BADGE: f32 = 22.0;
+    const MARK: f32 = 16.0;
+    /// Inter's average advance at 12px, rounded up. A chip a few points wider
+    /// than its text is a chip; one a few points narrower is a bug.
+    const ADVANCE: f32 = 6.4;
+    /// Long enough for a take name, short enough not to become a banner.
+    const MAX_CHARS: usize = 26;
+
+    let label: String = if label.chars().count() > MAX_CHARS {
+        label.chars().take(MAX_CHARS - 1).collect::<String>() + "\u{2026}"
+    } else {
+        label.to_string()
+    };
+    let text_x = PAD + 10.0 + BADGE;
+    let chip_w = (text_x - PAD + label.chars().count() as f32 * ADVANCE + 12.0).clamp(96.0, 268.0);
+    let (width, height) = (chip_w + 2.0 * PAD, CHIP_H + 2.0 * PAD);
+
+    // The badge holds the file's own envelope when there is one, and the
+    // kind's mark otherwise — the same rule the bin card follows, so what is
+    // in the air looks like the card it came off.
+    let badge_art = if wave.is_empty() {
+        format!(
+            r#"<g transform="translate({x} {y}) scale({scale})" fill="none" stroke="{mark}"
+stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="{glyph}"/></g>"#,
+            x = PAD + 5.0 + (BADGE - MARK) / 2.0,
+            y = PAD + 5.0 + (BADGE - MARK) / 2.0,
+            scale = MARK / 24.0,
+            mark = hex_of(mark),
+            glyph = chip_glyph(kind),
+        )
+    } else {
+        format!(
+            r#"<g transform="translate({x} {y}) scale({BADGE})"><path d="{wave}" fill="{mark}"/></g>"#,
+            x = PAD + 5.0,
+            y = PAD + 5.0,
+            mark = hex_of(mark),
+        )
+    };
+
+    format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">
+<filter id="drop" x="-30%" y="-30%" width="170%" height="170%">
+<feDropShadow dx="0" dy="1.5" stdDeviation="2" flood-color="#000000" flood-opacity="0.55"/></filter>
+<rect x="{cx}" y="{cy}" width="{cw}" height="{ch}" rx="8" fill="{ground}" stroke="{mark}" stroke-opacity="0.65" filter="url(#drop)"/>
+<rect x="{bx}" y="{by}" width="{BADGE}" height="{BADGE}" rx="6" fill="{well}"/>
+{badge_art}
+<text x="{tx}" y="{ty}" font-family="Inter" font-size="12" fill="{ink}">{label}</text>
+</svg>"##,
+        cx = PAD + 0.5,
+        cy = PAD + 0.5,
+        cw = chip_w - 1.0,
+        ch = CHIP_H - 1.0,
+        bx = PAD + 5.0,
+        by = PAD + 5.0,
+        tx = text_x,
+        // The baseline, not the middle: usvg honours `dominant-baseline`
+        // unevenly, and a number here is one fewer thing to be surprised by.
+        ty = PAD + CHIP_H / 2.0 + 4.2,
+        ground = hex_of(ground),
+        mark = hex_of(mark),
+        well = hex_of(well),
+        ink = hex_of(ink),
+        label = xml_escaped(&label),
+    )
+}
+
 /// The top edge of a row, measured down the stack from the first lane.
 fn row_top(heights: &[f32], row: i32) -> f32 {
     heights.iter().take(row.max(0) as usize).sum()
@@ -3382,6 +3502,63 @@ fn main() -> Result<(), slint::PlatformError> {
     app.global::<Payload>().on_of(DataTransfer::from);
     app.global::<Payload>()
         .on_text(|payload| payload.plain_text().unwrap_or_default());
+
+    // The picture the cursor carries. Resolved through the same `incoming`
+    // the drop does, so the chip and the clip it would leave are one answer
+    // to one question — a chip that named a different thing than the ghost
+    // would be a bug you could only find by looking very hard at a drag.
+    //
+    // Memoised by payload: the property is read once per source element, and
+    // there are as many of those as there are cards in the bin. Rasterising is
+    // the renderer's problem and happens once, for the one that is actually in
+    // flight; this only builds and parses the document.
+    app.global::<Payload>().on_preview({
+        let weak = app.as_weak();
+        let library = library.clone();
+        let chips: RefCell<std::collections::HashMap<String, slint::Image>> =
+            RefCell::new(std::collections::HashMap::new());
+        move |payload| {
+            let Some(app) = weak.upgrade() else { return slint::Image::default() };
+            if let Some(chip) = chips.borrow().get(payload.as_str()) {
+                return chip.clone();
+            }
+            // An empty payload is a card that opted out of dragging, and an
+            // unreadable one is a drag this tree did not start. Both get the
+            // empty image, which the overlay skips.
+            let Some(plan) = Studio::incoming(payload.as_str(), &library) else {
+                return slint::Image::default();
+            };
+            let theme = app.global::<Theme>();
+            let (mark, well) = match plan.kind {
+                ClipKind::Video => (theme.get_kind_video(), theme.get_kind_video_well()),
+                ClipKind::Audio => (theme.get_kind_audio(), theme.get_kind_audio_well()),
+                ClipKind::Image => (theme.get_kind_image(), theme.get_kind_image_well()),
+                ClipKind::Text => (theme.get_kind_text(), theme.get_kind_text_well()),
+                ClipKind::Filter => (theme.get_kind_filter(), theme.get_kind_filter_well()),
+            };
+            // The envelope the bin card draws, for the one kind that has one.
+            let wave = plan
+                .media
+                .strip_prefix('m')
+                .and_then(|id| id.parse().ok())
+                .and_then(|id| library.item(id))
+                .map(|item| item.wave.to_string())
+                .unwrap_or_default();
+            let document = drag_chip_svg(
+                plan.kind,
+                &plan.label,
+                &wave,
+                mark,
+                well,
+                theme.get_raised(),
+                theme.get_fg(),
+            );
+            let chip = slint::Image::load_from_svg_data(document.as_bytes())
+                .unwrap_or_default();
+            chips.borrow_mut().insert(payload.to_string(), chip.clone());
+            chip
+        }
+    });
 
     // --- simulated programme level ---------------------------------------
     //

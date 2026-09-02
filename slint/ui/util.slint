@@ -96,6 +96,22 @@ export global Payload {
     /// Read one back in a DropArea. Empty for a drag from another application,
     /// which is how the timeline rejects one.
     pure callback text(payload: data-transfer) -> string;
+
+    /// The picture that hangs off the cursor while one of these is in flight.
+    ///
+    /// A `DragArea` with no `drag-image` gives the pointer nothing but a
+    /// cursor, and the cursor spends most of a drag saying "no drop here" —
+    /// which is true of the panel you started in and of every pane between it
+    /// and the lanes, and reads as the drag having failed rather than as being
+    /// under way. So each source hands over a chip naming what it is carrying.
+    ///
+    /// Built in Rust, and for the same reason the ghost is: the payload names
+    /// a row of the bin or an entry of a catalogue, and this side has neither.
+    /// It comes back as an SVG image — Slint rasterises those through the
+    /// window's own font collection, so the name on the chip is set in the
+    /// same Inter the cards are. Unbound it returns an empty image, which
+    /// draws nothing: the drag still works, it just goes back to bare cursors.
+    pure callback preview(text: string) -> image;
 }
 
 export global Geom {

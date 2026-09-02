@@ -22,6 +22,7 @@ import { ContextMenu, MenuItemData, MenuRow } from "primitives/context-menu.slin
 import { ExportData, ExportDialog, ExportPhase } from "dialogs/export.slint";
 import { ModelData, SettingsData, SettingsDialog } from "dialogs/settings.slint";
 import { TitleBar } from "title-bar.slint";
+import { TooltipLayer } from "primitives/tooltip.slint";
 import { Workspace } from "workspace/workspace.slint";
 import {
     ClipData, ClipField, ClipKind, ClipTextField, DropData, SelectedClipData,
@@ -425,6 +426,18 @@ export component App inherits Window {
         model-download(id) => { root.model-download(id); }
         model-cancel(id) => { root.model-cancel(id); }
         model-remove(id) => { root.model-remove(id); }
+    }
+
+    // Over the workspace and both sheets, under the menus. A tooltip has to
+    // clear the pane it belongs to — panes clip — and it has no business over
+    // an open menu, which is the one surface that would rather not be
+    // explained at. A PopupWindow is its own layer above all of this anyway,
+    // so the menus win without having to be declared after it.
+    TooltipLayer {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
     }
 
     // Above the dialogs as well as the workspace. A PopupWindow is its own

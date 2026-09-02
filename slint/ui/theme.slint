@@ -138,26 +138,29 @@ export global Theme {
     // stretches read as content. `lane-alt` is the banded neighbour that keeps
     // a stack of eight tracks countable without a rule between every pair.
     //
-    // The lanes are pitch black, and structure comes from a grid rather than
-    // from banding: a vertical rule on every ruler tick, the lane hairlines
-    // across. Black is the right ground for a timeline — the clips are the
-    // only saturated thing in the window and they sit on it the way a picture
-    // sits on a mount — and a grid is easier to read a position off than
-    // alternating stripes, which only ever answer "which lane".
-    out property <color> lane: #000000;
-    out property <color> lane-alt: #000000;
-    // The ruler sits between the two: darker than the pane it is inside, so
-    // it reads as part of the timeline rather than as chrome bolted on top;
-    // lighter than the lanes, so the strip carrying the timestamps is its own
-    // surface and not the first row of the grid. It followed `raised` before,
-    // which put it above the panel and made it the brightest thing in the
-    // pane — the opposite of what a ruler should be.
-    out property <color> ruler: #0d0d0d;
+    // Two tones, alternating, and neither of them black. Pitch black made the
+    // grid do all of the work: it answers "where in time" but never "which
+    // lane", so an eight-track stack had to be counted from the headers every
+    // time. Banding answers the second question for free, and the grid keeps
+    // answering the first — they are different axes and both are wanted.
+    //
+    // Black also cost the clips their mount. A dark neutral a few steps up
+    // still reads as a well cut into the pane, and a clip's own dark ground
+    // now sits *on* something rather than floating in a hole. Both stay well
+    // under `panel`, or the empty stretches would read as content.
+    out property <color> lane: #0c0c0d;
+    out property <color> lane-alt: #131314;
+    // The ruler is its own surface, not the first row of the stack: a step
+    // under the darker lane, so the strip carrying the timestamps reads as
+    // the floor of the pane and the banding starts below it. It followed
+    // `raised` before, which put it above the panel and made it the brightest
+    // thing in the pane — the opposite of what a ruler should be.
+    out property <color> ruler: #08080a;
     /// The vertical rules. 6% white was set against a lane that was still a
-    /// dark grey; on pure black it all but disappeared, which is a grid that
-    /// costs elements and reads as nothing. 14% clears the ground while
-    /// staying under `line-strong`, so the rules place a clip without
-    /// competing with it.
+    /// dark grey, and all but vanished when the lanes went black — a grid that
+    /// costs elements and reads as nothing. 14% clears both of the tones the
+    /// lanes now carry while staying under `line-strong`, so the rules place a
+    /// clip without competing with it.
     out property <color> grid: #ffffff24;
     // Red, and used for nothing else. A playhead that shared the accent would
     // be one more blue line among the selection outlines.

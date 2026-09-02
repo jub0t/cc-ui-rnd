@@ -1,5 +1,6 @@
 import { Theme, Fmt, Glyph, Icon, Payload } from "../primitives/primitives.slint";
 import { Pane, PaneScroll } from "pane.slint";
+import { HairlineSplitter } from "splitter.slint";
 
 // The library pane: a strip of pages across the top, then a narrow category
 // sidebar and the browsing area beside it. Ported from the reference editor's
@@ -78,6 +79,9 @@ component LibraryTab inherits Rectangle {
         // The one style there is, so the payload names no preset — only what
         // the drop should build.
         data: Payload.of("text:default:Title");
+        drag-image: Payload.preview("text:default:Title");
+        drag-image-offset-x: -8;
+        drag-image-offset-y: -4;
         allow-copy: true;
 
         touch := TouchArea {
@@ -216,16 +220,31 @@ component ImportButton inherits Rectangle {
 
     callback clicked();
 
-    property <int> dashes-h: 14;
-    property <int> dashes-v: 3;
     /// where the straight runs start, i.e. clear of the rounded corners
     property <length> inset: Theme.r;
-    property <length> pitch-h: (root.width - 2 * root.inset) / root.dashes-h;
-    property <length> pitch-v: (root.height - 2 * root.inset) / root.dashes-v;
-    // Half the pitch at most: dragged narrow enough, a fixed 4px bite would
-    // meet the next one and erase the border rather than dash it.
-    property <length> bite-h: Math.min(4px, root.pitch-h / 2);
-    property <length> bite-v: Math.min(4px, root.pitch-v / 2);
+    property <length> run-h: Math.max(0px, root.width - 2 * root.inset);
+    property <length> run-v: Math.max(0px, root.height - 2 * root.inset);
+
+    /// A dash and the gap after it, in pixels — the rhythm the whole outline
+    /// is cut to.
+    ///
+    /// Derived from it rather than fixed: the counts used to be constants, 14
+    /// across and 3 down, so the pitch was whatever the button's width made
+    /// it. On a 300px button that is a 4px gap every 20px across and a 3.7px
+    /// gap every 7.3px down — two different dashed lines meeting at the
+    /// corners, which is what made the outline read as a mistake rather than
+    /// as a style. Counting instead of spacing puts both axes on one rhythm,
+    /// and the rounding spreads the remainder evenly over the run rather than
+    /// leaving it all at one end.
+    property <length> pitch: 8px;
+    property <int> dashes-h: Math.max(1, Math.round(root.run-h / root.pitch));
+    property <int> dashes-v: Math.max(1, Math.round(root.run-v / root.pitch));
+    property <length> pitch-h: root.run-h / root.dashes-h;
+    property <length> pitch-v: root.run-v / root.dashes-v;
+    // Half of it, so dash and gap are the same length on both axes — which is
+    // the whole of what "even" means in a dashed line.
+    property <length> bite-h: root.pitch-h / 2;
+    property <length> bite-v: root.pitch-v / 2;
     property <brush> ground: (touch.has-hover && !root.busy) ? Theme.field : Theme.panel;
 
     height: 36px;
@@ -337,6 +356,15 @@ component MediaCard inherits Rectangle {
         // Copy, not move: the bin keeps the file. A DragArea whose data is
         // empty never starts a drag, which is the whole of the opt-out.
         data: Payload.of("media:\{root.item.id}");
+        // The chip under the cursor. Same payload as the data, so what is
+        // drawn and what would be dropped cannot come apart.
+        drag-image: Payload.preview("media:\{root.item.id}");
+        // Below and right of the cursor, not under it: the hot spot is where
+        // the drop lands, and a chip centred on it would cover the very lane
+        // edge you are aiming at. Negative, because the offset is measured
+        // into the image — see the DragArea docs.
+        drag-image-offset-x: -8;
+        drag-image-offset-y: -4;
         allow-copy: true;
 
         // Everything is *inside* the card's TouchArea rather than beside it. A
@@ -578,6 +606,12 @@ component CatalogueCard inherits Rectangle {
 
     drag := DragArea {
         data: Payload.of(root.payload);
+        // Empty on a click-only page, where it resolves to an empty image and
+        // draws nothing — the same one property that decides whether the card
+        // drags at all.
+        drag-image: Payload.preview(root.payload);
+        drag-image-offset-x: -8;
+        drag-image-offset-y: -4;
         allow-copy: true;
 
         card := TouchArea {
@@ -725,6 +759,9 @@ component TextPage inherits Rectangle {
         // The one title style there is, so the payload names no preset — only
         // what the drop should build, and what to call it.
         data: Payload.of("text:default:Title");
+        drag-image: Payload.preview("text:default:Title");
+        drag-image-offset-x: -8;
+        drag-image-offset-y: -4;
         allow-copy: true;
 
         touch := TouchArea {
@@ -845,7 +882,14 @@ export component MediaPane inherits Rectangle {
     property <int> effect-category;
     /// 0 = Voice, 1 = Tone, 2 = Space — the inspector's filter shelves
     property <int> filter-category;
-    property <length> sidebar-w: 104px;
+    /// The category column. In-out, because it is dragged.
+    in-out property <length> sidebar-w: 104px;
+    /// Narrow enough to be a real squeeze, wide enough that a category name
+    /// still says which category.
+    in property <length> min-sidebar: 76px;
+    /// Where the column was when the divider went down. A drag is one pointer,
+    /// so one slot is enough.
+    property <length> press-sidebar;
 
     // The catalogues, mirrored from lib/effects.ts in the reference: same ids
     // (they are written into project files there — pick them like you mean
@@ -1014,10 +1058,25 @@ export component MediaPane inherits Rectangle {
         body := Rectangle {
             vertical-stretch: 1;
 
-            Rectangle {
+            // The divider is the grab handle, exactly as it is between the
+            // track column and the lanes. The sidebar is the only fixed
+            // column in the window that could not be resized, and it is the
+            // one carrying the longest labels — "Transitions", a category
+            // name — so it was also the one most likely to be wrong for a
+            // given page at a given window width.
+            HairlineSplitter {
                 x: root.sidebar-w;
-                width: 1px;
-                background: Theme.line;
+                y: 0;
+                height: parent.height;
+
+                pressed => { root.press-sidebar = root.sidebar-w; }
+                moved(delta) => {
+                    // Floored so the labels keep their room, and capped at
+                    // half the pane so the grid it is squeezing always has
+                    // more of the pane than the list of what to put in it.
+                    root.sidebar-w = Math.max(root.min-sidebar,
+                        Math.min(parent.width / 2, root.press-sidebar + delta));
+                }
             }
 
             Rectangle {

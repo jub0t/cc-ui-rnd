@@ -175,7 +175,8 @@ export component ConfigPane inherits Rectangle {
     Pane {
         // ── details ──────────────────────────────────────────────────────
         if !root.has-selection: Rectangle {
-            height: 48px;
+            // The same 44px as the panes either side of it; see PaneHeader.
+            height: 44px;
 
             Rectangle {
                 x: 0;
@@ -191,9 +192,16 @@ export component ConfigPane inherits Rectangle {
                 Text {
                     text: "DETAILS";
                     color: Theme.fg-muted;
-                    font-size: Theme.fs;
+                    // The small size, not the body one. Caps at 12px with a
+                    // point and a half of tracking is nearly as wide as the
+                    // Preview pane's 13px title and reads heavier than it —
+                    // which puts the loudest thing in the column on the one
+                    // panel that has nothing to say. It is a section label,
+                    // so it takes the same size and tracking as the FactHeadings
+                    // under it.
+                    font-size: Theme.fs-sm;
                     font-weight: Theme.weight-title;
-                    letter-spacing: 1.5px;
+                    letter-spacing: 1px;
                     vertical-alignment: center;
                 }
             }
@@ -241,10 +249,12 @@ export component ConfigPane inherits Rectangle {
                 y: (parent.height - self.height) / 2;
                 width: modify-label.width + 30px;
                 height: 30px;
-                // The roundest of the named radii, matching the pane's own
-                // corners: this is the one button in the panel and it should
-                // read as a button rather than as another field.
-                border-radius: Theme.r-lg;
+                // The control radius, not the pane's. It was the roundest of
+                // the named radii on the theory that the one button in the
+                // panel should stand apart from the fields; at 30px tall that
+                // is most of the way to a pill, and it stood apart from every
+                // other button in the window instead.
+                border-radius: Theme.r;
                 background: modify-touch.has-hover ? Theme.field-hover : Theme.field;
 
                 animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
@@ -267,7 +277,9 @@ export component ConfigPane inherits Rectangle {
 
         // ── the clip inspector ───────────────────────────────────────────
         if root.has-selection: Rectangle {
-            height: 48px;
+            // Matched to the Details bar above, or the top of the column
+            // would jump by four pixels every time a clip was selected.
+            height: 44px;
 
             Rectangle {
                 x: 0;
@@ -285,9 +297,9 @@ export component ConfigPane inherits Rectangle {
                 if root.single: Text {
                     text: root.tabs[0];
                     color: Theme.fg-muted;
-                    font-size: Theme.fs;
+                    font-size: Theme.fs-sm;
                     font-weight: Theme.weight-title;
-                    letter-spacing: 1.5px;
+                    letter-spacing: 1px;
                     vertical-alignment: center;
                 }
 

@@ -1,6 +1,7 @@
 import { Theme } from "../theme.slint";
 import { Glyph, Icon } from "../icons.slint";
 import { FocusRing } from "focus-ring.slint";
+import { Tip } from "tooltip.slint";
 
 // The floating inspector shell.
 export component Panel inherits Rectangle {
@@ -275,6 +276,16 @@ export component IconButton inherits Rectangle {
                 fs.focus();
                 root.clicked();
             }
+        }
+
+        // `label` was already the accessible name and already said it was
+        // "what a tooltip would show". This is that tooltip. Hover is taken
+        // from the TouchArea rather than from `enabled`, so a greyed-out
+        // button still explains itself — which is the moment the explanation
+        // is worth most.
+        Tip {
+            text: root.label;
+            active: touch.has-hover;
         }
 
         FocusRing {

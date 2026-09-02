@@ -114,6 +114,19 @@ export component TimelinePane inherits Rectangle {
     property <length> at: Math.max(0px, Math.min(root.overflow, root.track-scroll));
 
     Pane {
+        // The one edge kept when the outlines came off. The timeline sits
+        // under the three panes above it rather than beside anything, so its
+        // top is the only pane edge in the window that a gutter does not
+        // already draw against a darker ground — and the tab strip runs right
+        // up to it, which without a rule reads as tabs hanging off nothing.
+        //
+        // Inside the Pane and above the tabs, so the layout gives it a row of
+        // its own and nothing has to be nudged down by a pixel to make room.
+        Rectangle {
+            height: 1px;
+            background: Theme.line;
+        }
+
         TimelineTabs {
             tabs: root.tabs;
             current: root.current-tab;
@@ -186,7 +199,9 @@ export component TimelinePane inherits Rectangle {
                 tracks: root.tracks;
                 ruler-height: root.ruler-height;
                 track-scroll: root.at;
+                overflow: root.overflow;
 
+                scrolled(to) => { root.track-scroll = to; }
                 flag-changed(index, visible, muted, locked) => {
                     root.track-flag-changed(index, visible, muted, locked);
                 }
