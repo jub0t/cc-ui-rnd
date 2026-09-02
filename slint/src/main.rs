@@ -2539,6 +2539,16 @@ fn main() -> Result<(), slint::PlatformError> {
         use slint::winit_030::winit::platform::macos::WindowAttributesExtMacOS;
         slint::BackendSelector::new()
             .backend_name("winit".into())
+            // Metal, by name. Skia picks its surface from a cfg chain — vulkan,
+            // opengl, metal, softbuffer — and on macOS that already lands on
+            // metal_surface, so this changes nothing about which one is used.
+            // What it changes is what happens when it cannot be had: the chain
+            // walks on to Skia's CPU rasteriser and the app runs, slowly and
+            // silently, at a fraction of the frame rate on a machine that has
+            // a GPU. Requiring it turns that into a refusal to start, which is
+            // a fault you can see. Same reason Windows requires D3D below,
+            // though there it is also the only way to reach it.
+            .require_metal()
             .with_winit_window_attributes_hook(|attributes| {
                 attributes
                     .with_titlebar_transparent(true)

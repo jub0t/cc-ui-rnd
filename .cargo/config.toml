@@ -1,0 +1,25 @@
+# Build flags for this tree.
+#
+# Discovered from the directory cargo is *run in*, not from the manifest — so
+# this lives at the repository root, because the documented way to build is
+# `cargo build --manifest-path slint/Cargo.toml` from here.
+
+[build]
+# Compile for the machine doing the compiling.
+#
+# Without this, rustc targets the baseline of the architecture: x86-64 means
+# roughly a 2003 CPU, and aarch64-apple-darwin means the oldest Apple Silicon.
+# Every instruction the host has learnt since — the wide vector units Skia's
+# rasteriser and the blend paths lean on hardest — is left on the table.
+#
+# The cost is that the binary runs on this machine and machines like it, and
+# crashes with an illegal instruction on anything older. That is the right
+# trade for a research tree that is built where it is run, and the wrong one
+# for anything shipped: delete this file, or override it, before building
+# something for somebody else.
+#
+#     RUSTFLAGS="" cargo build --release --manifest-path slint/Cargo.toml
+#
+# It also invalidates the whole build cache when the file changes, and again
+# on a different machine, so expect one full rebuild after adding it.
+rustflags = ["-C", "target-cpu=native"]

@@ -61,6 +61,32 @@ slint-build = "1.17"
 # Every knob here is set for the fastest possible binary, and each one costs
 # build time. Measured on an M5: clean build 74.5s -> 105.4s, binary 21.1MB
 # -> 12.6MB. No runtime win was ever demonstrated; the UI is vsync-locked.
+#
+# Two more levers live outside this block, because they are not profile
+# settings:
+#
+#   - `-C target-cpu=native`, in ../.cargo/config.toml. The one flag here that
+#     can change generated code rather than just how hard it is optimised, and
+#     the one that makes the binary local-only. See that file.
+#   - `require_metal()` / `require_d3d()`, in main.rs. Not a speed-up: they
+#     stop the renderer from *silently* falling back to Skia's CPU rasteriser,
+#     which is the only performance cliff in this application big enough to
+#     see, and the only one that can happen without anyone noticing.
+#
+# What is deliberately not done, so nobody goes looking for it twice:
+#
+#   - No alternative allocator. It is the usual next suggestion and it is a
+#     dependency for a win nobody here has measured; the profile above was
+#     written under the same rule.
+#   - `renderer-software` stays in the feature list. It is dead weight on
+#     macOS and Windows now that both require a GPU surface by name, and it is
+#     the last resort on a Linux box without one. Removing it is a decision
+#     about what to ship, not about how fast this runs.
+#   - Skia's partial rendering is still off, and cannot be turned on from
+#     here: `use_partial_rendering()` defaults to false and only
+#     software_surface.rs overrides it, so every dirty property redraws the
+#     whole window on every GPU surface. That is the shape of this
+#     application's frame cost, and no flag in this file changes it.
 opt-level = 3
 # Fat LTO: re-optimise the whole dependency graph — slint, femtovg, winit and
 # this crate — as one unit, so calls across crate boundaries inline. Thin LTO
