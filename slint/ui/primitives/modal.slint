@@ -1,4 +1,4 @@
-import { Theme } from "../theme.slint";
+import { Theme } from "../theme/theme.slint";
 import { Glyph, Icon } from "../icons.slint";
 
 // The dialog layer this tree did not have.
@@ -28,7 +28,7 @@ export component Modal inherits Rectangle {
     visible: root.open;
     // Dark rather than blurred: Slint has no backdrop filter, and a scrim that
     // only dims is honest about that where a fake blur would not be.
-    background: #00000099;
+    background: Theme.overlay;
 
     // Declared first, so the surface and everything in it sits above and takes
     // its own presses. A click that lands here landed outside the dialog.
@@ -48,7 +48,7 @@ export component Modal inherits Rectangle {
         background: Theme.panel;
         border-width: 1px;
         border-color: Theme.line-strong;
-        border-radius: 16px;
+        border-radius: Theme.r-xl;
         clip: true;
 
         // Swallows presses that land on the dialog, so they do not reach the
@@ -173,8 +173,8 @@ export component Button inherits Rectangle {
     property <length> mark: root.glyph == Glyph.none ? 0px : 14px;
     property <bool> lit: touch.has-hover && root.enabled;
     /// the red the danger tone hovers into — a dark wash, not a fill
-    property <color> danger-wash: #2a1614;
-    property <color> danger-edge: #5a2b28;
+    property <color> danger-wash: Theme.danger-wash;
+    property <color> danger-edge: Theme.danger-edge;
 
     min-height: root.large ? 34px : 28px;
     max-height: root.large ? 34px : 28px;

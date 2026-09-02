@@ -1,4 +1,4 @@
-import { Theme } from "../theme.slint";
+import { Theme } from "../theme/theme.slint";
 import { Fmt } from "../util.slint";
 
 // Cubic-bezier curve editor. The endpoints are pinned at (0,0) and (1,1); the
@@ -193,7 +193,7 @@ export component BezierEditor inherits Rectangle {
         border-radius: self.width / 2;
         background: Theme.accent;
         border-width: 1.5px;
-        border-color: fs1.has-focus ? #ffffff : Theme.panel;
+        border-color: fs1.has-focus ? Theme.clip-ink : Theme.panel;
         animate width { duration: 120ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
     }
     Rectangle {
@@ -205,7 +205,7 @@ export component BezierEditor inherits Rectangle {
         border-radius: self.width / 2;
         background: Theme.accent;
         border-width: 1.5px;
-        border-color: fs2.has-focus ? #ffffff : Theme.panel;
+        border-color: fs2.has-focus ? Theme.clip-ink : Theme.panel;
         animate width { duration: 120ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
     }
 

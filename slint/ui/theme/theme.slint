@@ -1,0 +1,29 @@
+// The theme, and the one line that chooses it.
+//
+// Everything the interface is made of — every colour, every radius, every
+// metric, every step of the type scale — lives in the palette this file
+// re-exports, and nowhere else. Nothing outside this directory names a colour.
+// So retheming the app is editing one file, and shipping a second theme is
+// writing a second one and changing the line below.
+//
+//     export { Theme } from "dark.slint";
+//
+// To fork the look: copy `dark.slint`, change its values, point this at it.
+// The palette's own header says what each group is for and what the rules
+// between them are — which surface floats on which, what may sit on the
+// accent, why the lanes are darker than the pane they are in. A palette that
+// keeps those relationships will look like a theme; one that only swaps hues
+// will look like a recolour.
+//
+// Two things are deliberately *not* here:
+//
+//   - The effect previews in ui/assets, which are photographs of what an
+//     effect does rather than anything a theme decides.
+//   - Anything the *document* is made of that is not also a colour choice —
+//     a clip's own text, its opacity, a fade's length. The colours a title
+//     can be *are* here, under `content`, because a fork that retones the
+//     interface will want the shelf beside it to agree.
+//
+// There is one palette today. The seam is the point: a light theme is a file
+// next to this one, not a rewrite of forty others.
+export { Theme } from "dark.slint";

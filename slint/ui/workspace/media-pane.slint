@@ -184,7 +184,7 @@ component CategoryRow inherits Rectangle {
             text: "\{root.count}";
             color: Theme.fg-dim;
             font-family: Theme.font-technical;
-            font-size: 10px;
+            font-size: Theme.fs-xs;
             vertical-alignment: center;
         }
     }
@@ -469,7 +469,7 @@ component MediaCard inherits Rectangle {
                             : Fmt.short-duration(root.item.duration);
                         color: Theme.on-scrim;
                         font-family: Theme.font-technical;
-                        font-size: 10px;
+                        font-size: Theme.fs-xs;
                     }
                 }
 
@@ -660,7 +660,7 @@ component CatalogueCard inherits Rectangle {
                         y: (parent.height - self.height) / 2;
                         text: "Soon";
                         color: Theme.on-scrim;
-                        font-size: 10px;
+                        font-size: Theme.fs-xs;
                     }
                 }
 
@@ -788,8 +788,11 @@ component TextPage inherits Rectangle {
                     y: (parent.height - self.height) / 2;
                     text: "Aa";
                     color: Theme.kind-text;
+                    // A mark drawn as type rather than a line of text, so it
+                    // is sized to the tile it sits in like the kind glyphs on
+                    // every other card are.
                     font-size: 20px;
-                    font-weight: 600;
+                    font-weight: Theme.weight-display;
                 }
             }
 

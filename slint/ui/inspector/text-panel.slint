@@ -1,4 +1,4 @@
-import { Theme } from "../theme.slint";
+import { Theme } from "../theme/theme.slint";
 import { Section, SectionHeader, Row } from "../primitives/panel.slint";
 import { SegmentedControl } from "../primitives/segmented-control.slint";
 import { Select } from "../primitives/select.slint";
@@ -224,7 +224,7 @@ export component TextPanel inherits VerticalLayout {
                 // A plate is a colour, not a flag: turning it off is clearing
                 // it. Fully transparent is what "no plate" is stored as.
                 root.set-colour(ClipTextField.background,
-                    on ? #000000cc : #00000000);
+                    on ? Theme.plate-on : Colors.transparent);
                 root.commit();
             }
         }

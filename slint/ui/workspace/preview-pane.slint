@@ -1,4 +1,4 @@
-import { Theme } from "../theme.slint";
+import { Theme } from "../theme/theme.slint";
 import { Fmt } from "../util.slint";
 import { Glyph, Icon } from "../icons.slint";
 import { IconButton } from "../primitives/panel.slint";
@@ -312,7 +312,7 @@ export component PreviewPane inherits Rectangle {
                 y: (parent.height - self.height) / 2;
                 width: viewport.stage-w;
                 height: self.width / root.aspect;
-                background: #000000;
+                background: Theme.stage;
                 // web/ lifts the stage off the well with a 1px ring and a soft
                 // drop shadow. Slint has no box-shadow, so the ring does the
                 // work alone — which is also why it is `line-strong` and not
@@ -352,7 +352,7 @@ export component PreviewPane inherits Rectangle {
                     y: parent.height - self.height - 8px;
                     width: parent.width - 16px;
                     text: root.clip-name;
-                    color: #ffffff6b;
+                    color: Theme.on-stage-dim;
                     font-size: Theme.fs-sm;
                     overflow: elide;
                 }

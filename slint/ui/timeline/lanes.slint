@@ -1,4 +1,4 @@
-import { Theme } from "../theme.slint";
+import { Theme } from "../theme/theme.slint";
 import { Fmt, Payload } from "../util.slint";
 import { Glyph, Icon } from "../icons.slint";
 import { ClipData, ClipKind, DropData, TimelineTool, TrackData } from "model.slint";
@@ -129,7 +129,7 @@ component Clip inherits Rectangle {
             y: (parent.height - 1px) / 2;
             width: parent.width;
             height: 1px;
-            background: #ffffff2e;
+            background: Theme.wave-centre;
         }
 
         // A title has no media to draw, so the body shows the words — also the
@@ -140,7 +140,7 @@ component Clip inherits Rectangle {
             width: parent.width - 14px;
             height: parent.height;
             text: root.item.text-body;
-            color: #ffe4b2b8;
+            color: Theme.clip-body;
             font-size: Theme.fs-sm;
             vertical-alignment: center;
             overflow: elide;
@@ -176,7 +176,7 @@ component Clip inherits Rectangle {
                 viewbox-width: 1;
                 viewbox-height: 1;
                 fit: fill;
-                fill: #00000073;
+                fill: Theme.fade-shade;
                 commands: "M 0 0 L 1 0 L 0 1 Z";
             }
             Path {
@@ -185,7 +185,7 @@ component Clip inherits Rectangle {
                 viewbox-width: 1;
                 viewbox-height: 1;
                 fit: fill;
-                stroke: #ffffffa6;
+                stroke: Theme.fade-edge;
                 stroke-width: 1px;
                 commands: "M 0 1 L 1 0";
             }
@@ -203,7 +203,7 @@ component Clip inherits Rectangle {
                 viewbox-width: 1;
                 viewbox-height: 1;
                 fit: fill;
-                fill: #00000073;
+                fill: Theme.fade-shade;
                 commands: "M 0 0 L 1 0 L 1 1 Z";
             }
             Path {
@@ -212,7 +212,7 @@ component Clip inherits Rectangle {
                 viewbox-width: 1;
                 viewbox-height: 1;
                 fit: fill;
-                stroke: #ffffffa6;
+                stroke: Theme.fade-edge;
                 stroke-width: 1px;
                 commands: "M 0 0 L 1 1";
             }
@@ -232,7 +232,7 @@ component Clip inherits Rectangle {
                 viewbox-width: 1;
                 viewbox-height: 1;
                 fit: fill;
-                fill: #ffffffcc;
+                fill: Theme.transition-in;
                 commands: "M 0 0 L 1 0.5 L 0 1 Z";
             }
             Path {
@@ -241,7 +241,7 @@ component Clip inherits Rectangle {
                 viewbox-width: 1;
                 viewbox-height: 1;
                 fit: fill;
-                fill: #ffffff73;
+                fill: Theme.transition-out;
                 commands: "M 1 0 L 0 0.5 L 1 1 Z";
             }
         }
@@ -261,7 +261,7 @@ component Clip inherits Rectangle {
             width: parent.width - 14px - (root.item.fx && root.width > 60px ? 20px : 0px);
             height: parent.height;
             text: root.item.name;
-            color: #ffffff;
+            color: Theme.clip-ink;
             font-size: Theme.fs-sm;
             vertical-alignment: center;
             overflow: elide;
@@ -275,7 +275,7 @@ component Clip inherits Rectangle {
             width: 14px;
             height: parent.height - 5px;
             border-radius: Theme.r-xs;
-            background: #00000059;
+            background: Theme.clip-chip;
 
             Text {
                 x: 0;
@@ -283,7 +283,10 @@ component Clip inherits Rectangle {
                 width: parent.width;
                 height: parent.height;
                 text: "fx";
-                color: #ffffff;
+                color: Theme.clip-ink;
+                // Not a step of the scale: it is sized to the 12px chip it is
+                // centred in, the way a glyph is, and moves with that and not
+                // with the type.
                 font-size: 9px;
                 horizontal-alignment: center;
                 vertical-alignment: center;
@@ -668,7 +671,7 @@ export component Lanes inherits Rectangle {
                     width: parent.width - 14px;
                     height: parent.height;
                     text: root.drop.label;
-                    color: #ffffff;
+                    color: Theme.clip-ink;
                     font-size: Theme.fs-sm;
                     vertical-alignment: center;
                     overflow: elide;
@@ -733,7 +736,7 @@ export component Lanes inherits Rectangle {
                     height: parent.height - 7px;
                     text: Fmt.frames-timecode(parent.seconds, root.frame-rate);
                     color: Theme.fg-dim;
-                    font-size: 10px;
+                    font-size: Theme.fs-xs;
                     vertical-alignment: center;
                 }
             }

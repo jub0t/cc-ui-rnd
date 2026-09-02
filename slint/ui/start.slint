@@ -1,4 +1,4 @@
-import { Theme } from "theme.slint";
+import { Theme } from "theme/theme.slint";
 import { Glyph, Icon } from "icons.slint";
 import { SegmentedControl } from "primitives/segmented-control.slint";
 import { ThinScrollbar } from "primitives/scrollbar.slint";
@@ -107,7 +107,7 @@ component Field inherits Rectangle {
 component PlainInput inherits Rectangle {
     in property <string> text;
     in property <string> placeholder;
-    in property <length> size: 15px;
+    in property <length> size: Theme.fs-input;
     in property <string> face: Theme.font;
     in property <bool> enabled: true;
     /// Takes the caret when the screen opens, and selects what is there — so
@@ -261,7 +261,7 @@ component RecentRow inherits Rectangle {
             Text {
                 text: root.project.name;
                 color: Theme.fg;
-                font-size: 14px;
+                font-size: Theme.fs-xl;
                 overflow: elide;
             }
 
@@ -426,8 +426,8 @@ export component StartScreen inherits Rectangle {
                         // tree bundles two, so the interface face carries it at
                         // its heaviest weight and the reference's own tight
                         // tracking — -0.03em, which at 34px is a point.
-                        font-size: 34px;
-                        font-weight: 600;
+                        font-size: Theme.fs-display;
+                        font-weight: Theme.weight-display;
                         letter-spacing: -1px;
                     }
 
@@ -436,7 +436,7 @@ export component StartScreen inherits Rectangle {
                     Text {
                         text: "These settings apply to the whole edit and cannot be changed later.";
                         color: Theme.fg-muted;
-                        font-size: 14px;
+                        font-size: Theme.fs-xl;
                         wrap: word-wrap;
                     }
 
@@ -617,7 +617,7 @@ export component StartScreen inherits Rectangle {
                                 y: (parent.height - self.height) / 2;
                                 text: root.data.busy ? "Creating…" : "Create";
                                 color: Theme.on-accent;
-                                font-size: 14px;
+                                font-size: Theme.fs-xl;
                                 font-weight: Theme.weight-title;
                             }
 

@@ -1,4 +1,4 @@
-import { Theme } from "theme.slint";
+import { Theme } from "theme/theme.slint";
 import { Glyph, Icon } from "icons.slint";
 import { AddPaneButton, PaneKind } from "workspace/pane-switcher.slint";
 
@@ -143,7 +143,7 @@ export component TitleBar inherits Rectangle {
                 text: "WolfCut";
                 color: Theme.fg;
                 font-size: Theme.fs-lg;
-                font-weight: 600;
+                font-weight: Theme.weight-display;
             }
         }
 
@@ -264,7 +264,7 @@ export component TitleBar inherits Rectangle {
             Text {
                 text: root.status;
                 color: Theme.fg-dim;
-                font-size: 10px;
+                font-size: Theme.fs-xs;
             }
         }
     }

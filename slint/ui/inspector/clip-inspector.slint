@@ -1,4 +1,4 @@
-import { Theme } from "../theme.slint";
+import { Theme } from "../theme/theme.slint";
 import { Glyph, Icon } from "../icons.slint";
 import { IconButton, Row, Section, SectionHeader } from "../primitives/panel.slint";
 import { SegmentedControl } from "../primitives/segmented-control.slint";
@@ -257,7 +257,7 @@ export component PresetStack inherits VerticalLayout {
                     if row.in-chain: Text {
                         text: "in chain";
                         color: Theme.fg-dim;
-                        font-size: 10px;
+                        font-size: Theme.fs-xs;
                         vertical-alignment: center;
                     }
                 }

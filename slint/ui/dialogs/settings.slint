@@ -1,4 +1,4 @@
-import { Theme } from "../theme.slint";
+import { Theme } from "../theme/theme.slint";
 import { Glyph, Icon } from "../icons.slint";
 import { Button, DialogSection, Modal, Progress } from "../primitives/modal.slint";
 import { SegmentedControl } from "../primitives/segmented-control.slint";
@@ -145,8 +145,8 @@ component ModelRow inherits Rectangle {
                             y: (parent.height - self.height) / 2;
                             text: "In use";
                             color: Theme.on-accent;
-                            font-size: 10px;
-                            font-weight: 600;
+                            font-size: Theme.fs-xs;
+                            font-weight: Theme.weight-display;
                         }
                     }
                 }

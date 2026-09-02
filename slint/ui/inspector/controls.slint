@@ -1,4 +1,4 @@
-import { Theme } from "../theme.slint";
+import { Theme } from "../theme/theme.slint";
 import { Fmt } from "../util.slint";
 import { Glyph, Icon } from "../icons.slint";
 import { NumberField } from "../primitives/number-field.slint";
@@ -362,7 +362,7 @@ export component HelpButton inherits Rectangle {
         y: (parent.height - self.height) / 2;
         text: "?";
         color: root.open ? Theme.accent : Theme.fg-muted;
-        font-size: 10px;
+        font-size: Theme.fs-xs;
         font-weight: Theme.weight-title;
     }
 
@@ -486,11 +486,9 @@ export component ColourField inherits HorizontalLayout {
 
     callback changed(value: color);
 
-    property <[color]> shelf: [
-        #ffffff, #f5f5f7, #a1a1a6, #6e6e73, #15220a, #000000,
-        #cbf53f, #30d158, #ffd60a, #f09e2f, #ff453a, #e8355e,
-        #8b5cf6, #4d8df6, #34c759, #142640,
-    ];
+    /// The colours a title can be. In the theme rather than here, so a fork
+    /// that retones the window retones this with it — see `swatches`.
+    property <[color]> shelf: Theme.swatches;
 
     padding-left: Theme.pad;
     padding-right: Theme.pad;
