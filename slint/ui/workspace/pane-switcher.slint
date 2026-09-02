@@ -79,7 +79,10 @@ component SwitchRow inherits Rectangle {
         y: 0;
         width: parent.width - 8px;
         height: parent.height;
-        border-radius: Theme.r-xs;
+        // Inset 4px inside a surface rounded to 7, so 5 keeps the two curves
+        // concentric — the same pairing the library's page strip uses for a
+        // selected tab inside its track.
+        border-radius: Theme.r-sm;
         background: touch.has-hover ? Theme.field-hover : Colors.transparent;
 
         HorizontalLayout {
@@ -153,7 +156,7 @@ component RemoveRow inherits Rectangle {
         y: 0;
         width: parent.width - 8px;
         height: parent.height;
-        border-radius: Theme.r-xs;
+        border-radius: Theme.r-sm;
         background: (touch.has-hover && root.enabled) ? Theme.danger-soft
             : Colors.transparent;
 
@@ -251,7 +254,11 @@ export component PaneSwitcher inherits Rectangle {
         chip := Rectangle {
             width: parent.width;
             height: parent.height;
-            border-radius: Theme.r-xs;
+            // The radius every other input in the window carries — a number
+            // field, a dialog button, a text field. This wore the chip radius,
+            // which is for marks *inside* a control (the fx badge on a clip, a
+            // swatch in a row) and reads as barely rounded at 24px tall.
+            border-radius: Theme.r;
             // Filled at rest, unlike every other icon button in this window,
             // which idles transparent and only takes a ground when the pointer
             // finds it. Those are actions, and a tray of them wants to read as a
