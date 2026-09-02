@@ -1,16 +1,7 @@
 import { Theme } from "../theme.slint";
-import { EffectData } from "../demo/effects-panel.slint";
 import { ColSplitter, RowSplitter } from "splitter.slint";
-import { MenuItemData } from "../primitives/context-menu.slint";
-import { ConfigPane } from "config-pane.slint";
-import { MediaFilter, MediaItemData, MediaPane } from "media-pane.slint";
 import { PaneKind } from "pane-switcher.slint";
-import { PreviewPane } from "preview-pane.slint";
-import { TimelinePane } from "timeline-pane.slint";
-import {
-    ClipData, ClipField, ClipTextField, DropData, SelectedClipData,
-    TimelineTabData, TimelineTool, TrackData, TrackSize,
-} from "../timeline/model.slint";
+import { Seat } from "seat.slint";
 
 // The editor shell: three seats across the top and one along the bottom, every
 // edge draggable, and any of the four views in any seat — see pane-switcher.
@@ -25,119 +16,6 @@ import {
 // keeps the proportions the user dragged instead of dumping every pixel into
 // one pane.
 export component Workspace inherits Rectangle {
-    // forwarded to the library column
-    in property <[MediaItemData]> media;
-    in property <int> media-count-all;
-    in property <int> media-count-video;
-    in property <int> media-count-audio;
-    in property <int> media-count-images;
-    in property <int> media-selected-count;
-    in property <bool> importing;
-
-    callback import-media();
-    callback media-filter-changed(filter: MediaFilter);
-    callback media-select(id: int, additive: bool);
-    callback media-clear-selection();
-    callback media-remove(id: int);
-    callback media-remove-selected();
-    callback media-activate(id: int);
-
-    // library catalogue pages
-    callback library-add-text();
-    callback library-apply-effect(effect-id: string);
-    callback library-apply-transition(transition-id: string);
-    callback library-apply-filter(filter-id: string, label: string);
-    callback library-save-template();
-
-    // forwarded to the inspector column
-    in property <SelectedClipData> selected-clip;
-    callback clip-set(field: ClipField, value: float);
-    callback clip-set-text(field: ClipTextField, value: string);
-    callback clip-set-colour(field: ClipTextField, value: color);
-    callback clip-commit();
-
-    in property <[EffectData]> video-effects;
-    in property <[EffectData]> audio-effects;
-    in property <float> level;
-    in property <float> peak;
-    out property <bool> muted: config.muted;
-    out property <bool> meter-hovered: config.meter-hovered;
-    callback add-effect(audio: bool);
-    callback remove-effect(id: int);
-
-    // forwarded to the monitor
-    in property <int> output-width;
-    in property <int> output-height;
-    in property <int> ratio-index;
-    in property <int> quality-index;
-    in property <bool> playing;
-    in property <bool> has-picture;
-    in property <string> preview-clip-name;
-    in property <float> preview-duration;
-
-    callback play-toggled();
-    callback seek(seconds: float);
-    callback step-frames(frames: float);
-    callback ratio-changed(index: int);
-    callback quality-changed(index: int);
-
-    // forwarded to the timeline
-    in property <[TimelineTabData]> timeline-tabs;
-    in property <int> timeline-current-tab;
-    in property <[TrackData]> tracks;
-    in property <[ClipData]> clips;
-    in property <TimelineTool> tool;
-    in property <bool> snap;
-    in property <int> selected-count;
-    in property <string> merge-blocked-because;
-    in property <bool> has-av-tools;
-    in property <float> playhead;
-    in property <float> frame-rate;
-    in property <float> scroll-left;
-    in property <float> seconds-per-pixel;
-
-    callback tab-selected(index: int);
-    callback tab-renamed(index: int, name: string);
-    callback tab-close-requested(index: int);
-    callback tab-added();
-    callback tool-changed(tool: TimelineTool);
-    callback snap-changed(snap: bool);
-    callback split();
-    callback merge();
-    callback delete-selected();
-    callback av-tools();
-    in property <[MenuItemData]> av-items;
-    in property <length> av-height;
-    in property <int> av-token;
-    callback av-selected(id: string);
-    callback add-track();
-    callback zoom-to-fit(width: length);
-    callback zoom(factor: float, anchor-seconds: float);
-    callback scrubbed(seconds: float);
-    callback clip-pressed(id: string, additive: bool, edge: int);
-    callback clip-dragged(seconds: float, pixels: length);
-    callback clip-released();
-    callback razored(id: string, seconds: float);
-    in property <[MenuItemData]> menu-items;
-    in property <length> menu-height;
-    in property <int> menu-token;
-    callback clip-context(id: string);
-    callback menu-selected(id: string);
-
-    callback band-selected(from-seconds: float, to-seconds: float,
-        from-y: length, to-y: length, additive: bool);
-    callback scrolled(seconds: float);
-
-    /// A library card dragged onto the lanes. See DropData in the timeline's
-    /// model: the ghost is Rust's answer to the hover, not the panel's guess.
-    in property <DropData> drop;
-    callback drag-hovered(payload: string, seconds: float, y: length);
-    callback dropped(payload: string, seconds: float, y: length);
-    callback track-flag-changed(index: int, visible: bool, muted: bool, locked: bool);
-    callback track-sized(index: int, size: TrackSize);
-    callback track-removed(index: int);
-    callback track-renamed(index: int, name: string);
-
     // One value for the margin and the gutters, so the border around the
     // workspace and the space between any two panes read as the same gap.
     // 8px, matching the reference exactly: its resizers are `w-2`/`h-2` and
@@ -148,9 +26,9 @@ export component Workspace inherits Rectangle {
     ///
     /// One floor for both, where the inspector used to carry its own 280px.
     /// A minimum belonged to a pane while a pane belonged to a column; now
-    /// that any view can sit in any seat, a per-view floor would mean the
-    /// gutter jumping the moment two views swapped. 240 is between the two
-    /// numbers this had, and above the 220 the bin was happy at.
+    /// that any view can sit in any seat — and in two of them — a per-view
+    /// floor has nothing to attach to. 240 is between the two numbers this
+    /// had, and above the 220 the bin was happy at.
     in property <length> min-col: 240px;
     /// smallest a row may be dragged to
     in property <length> min-row: 140px;
@@ -159,53 +37,23 @@ export component Workspace inherits Rectangle {
     //
     // The layout is four boxes — three across the top and one along the
     // bottom — and which editor is in which is a property rather than a fact
-    // about the file. Every pane below is declared exactly once and takes its
-    // geometry from whichever seat currently holds it, so moving one is
-    // assigning an enum and not re-parenting a subtree. Declaring each pane
-    // four times, once per seat, is the other way to do this, and it is forty
-    // properties of wiring duplicated four times over.
+    // about the file.
+    //
+    // Each seat builds its own view — see Seat — so the same view can be up in
+    // two of them at once: a second monitor beside the first, or the library
+    // on the left and again along the bottom. Picking is therefore an
+    // assignment and not a swap, and a view can also be absent entirely, which
+    // is why nothing outside this file may assume one exists.
     in-out property <PaneKind> seat-left: PaneKind.media;
     in-out property <PaneKind> seat-centre: PaneKind.preview;
     in-out property <PaneKind> seat-right: PaneKind.inspector;
     in-out property <PaneKind> seat-bottom: PaneKind.timeline;
-
-    /// Which seat a view is in: 0 left, 1 centre, 2 right, 3 bottom. Every
-    /// view is always in exactly one, which is what `show` below preserves.
-    pure function seat-of(kind: PaneKind) -> int {
-        return root.seat-left == kind ? 0
-            : root.seat-centre == kind ? 1
-            : root.seat-right == kind ? 2
-            : 3;
-    }
-
-    pure function seat-holds(seat: int) -> PaneKind {
-        return seat == 0 ? root.seat-left
-            : seat == 1 ? root.seat-centre
-            : seat == 2 ? root.seat-right
-            : root.seat-bottom;
-    }
-
-    /// Scratch for `show`: the expression language has no local bindings, and
-    /// a swap needs to remember what it is displacing before it displaces it.
-    property <PaneKind> displaced;
-    property <int> vacated;
 
     function put(seat: int, kind: PaneKind) {
         if (seat == 0) { root.seat-left = kind; }
         if (seat == 1) { root.seat-centre = kind; }
         if (seat == 2) { root.seat-right = kind; }
         if (seat == 3) { root.seat-bottom = kind; }
-    }
-
-    /// Put a view in a seat, and the view that was there where it came from.
-    public function show(seat: int, kind: PaneKind) {
-        if (root.seat-holds(seat) == kind) {
-            return;
-        }
-        root.displaced = root.seat-holds(seat);
-        root.vacated = root.seat-of(kind);
-        root.put(seat, kind);
-        root.put(root.vacated, root.displaced);
     }
 
     // Shares of the usable box. The middle column and the bottom row are the
@@ -266,12 +114,6 @@ export component Workspace inherits Rectangle {
         return seat == 3 ? root.bottom-h : root.top-h;
     }
 
-    // Resolved once each rather than at every one of the four dimensions.
-    property <int> media-seat: root.seat-of(PaneKind.media);
-    property <int> preview-seat: root.seat-of(PaneKind.preview);
-    property <int> inspector-seat: root.seat-of(PaneKind.inspector);
-    property <int> timeline-seat: root.seat-of(PaneKind.timeline);
-
     // A drag is one pointer, so one slot holds whichever share went down.
     property <float> press-share;
 
@@ -284,147 +126,40 @@ export component Workspace inherits Rectangle {
 
     background: Theme.page;
 
-    MediaPane {
-        x: root.seat-x(root.media-seat);
-        y: root.seat-y(root.media-seat);
-        width: root.seat-w(root.media-seat);
-        height: root.seat-h(root.media-seat);
-
-        pane-picked(kind) => { root.show(root.media-seat, kind); }
-
-        items: root.media;
-        count-all: root.media-count-all;
-        count-video: root.media-count-video;
-        count-audio: root.media-count-audio;
-        count-images: root.media-count-images;
-        selected-count: root.media-selected-count;
-        importing: root.importing;
-
-        import-media => { root.import-media(); }
-        filter-changed(filter) => { root.media-filter-changed(filter); }
-        select(id, additive) => { root.media-select(id, additive); }
-        clear-selection => { root.media-clear-selection(); }
-        remove(id) => { root.media-remove(id); }
-        remove-selected => { root.media-remove-selected(); }
-        activate(id) => { root.media-activate(id); }
-
-        add-text => { root.library-add-text(); }
-        apply-effect(id) => { root.library-apply-effect(id); }
-        apply-transition(id) => { root.library-apply-transition(id); }
-        apply-filter(id, label) => { root.library-apply-filter(id, label); }
-        save-template => { root.library-save-template(); }
+    Seat {
+        x: root.seat-x(0);
+        y: root.seat-y(0);
+        width: root.seat-w(0);
+        height: root.seat-h(0);
+        kind: root.seat-left;
+        picked(kind) => { root.put(0, kind); }
     }
 
-    PreviewPane {
-        x: root.seat-x(root.preview-seat);
-        y: root.seat-y(root.preview-seat);
-        width: root.seat-w(root.preview-seat);
-        height: root.seat-h(root.preview-seat);
-
-        pane-picked(kind) => { root.show(root.preview-seat, kind); }
-
-        output-width: root.output-width;
-        output-height: root.output-height;
-        frame-rate: root.frame-rate;
-        ratio-index: root.ratio-index;
-        quality-index: root.quality-index;
-        playhead: root.playhead;
-        duration: root.preview-duration;
-        playing: root.playing;
-        has-picture: root.has-picture;
-        clip-name: root.preview-clip-name;
-
-        play-toggled => { root.play-toggled(); }
-        seek(seconds) => { root.seek(seconds); }
-        step(frames) => { root.step-frames(frames); }
-        ratio-changed(index) => { root.ratio-changed(index); }
-        quality-changed(index) => { root.quality-changed(index); }
+    Seat {
+        x: root.seat-x(1);
+        y: root.seat-y(1);
+        width: root.seat-w(1);
+        height: root.seat-h(1);
+        kind: root.seat-centre;
+        picked(kind) => { root.put(1, kind); }
     }
 
-    config := ConfigPane {
-        x: root.seat-x(root.inspector-seat);
-        y: root.seat-y(root.inspector-seat);
-        width: root.seat-w(root.inspector-seat);
-        height: root.seat-h(root.inspector-seat);
-
-        pane-picked(kind) => { root.show(root.inspector-seat, kind); }
-
-        video-effects: root.video-effects;
-        audio-effects: root.audio-effects;
-        level: root.level;
-        peak: root.peak;
-        add-effect(audio) => { root.add-effect(audio); }
-        remove-effect(id) => { root.remove-effect(id); }
-
-        selected: root.selected-clip;
-        clip-set(field, value) => { root.clip-set(field, value); }
-        clip-set-text(field, value) => { root.clip-set-text(field, value); }
-        clip-set-colour(field, value) => { root.clip-set-colour(field, value); }
-        clip-commit => { root.clip-commit(); }
+    Seat {
+        x: root.seat-x(2);
+        y: root.seat-y(2);
+        width: root.seat-w(2);
+        height: root.seat-h(2);
+        kind: root.seat-right;
+        picked(kind) => { root.put(2, kind); }
     }
 
-    TimelinePane {
-        x: root.seat-x(root.timeline-seat);
-        y: root.seat-y(root.timeline-seat);
-        width: root.seat-w(root.timeline-seat);
-        height: root.seat-h(root.timeline-seat);
-
-        pane-picked(kind) => { root.show(root.timeline-seat, kind); }
-
-        tabs: root.timeline-tabs;
-        current-tab: root.timeline-current-tab;
-        tracks: root.tracks;
-        clips: root.clips;
-        tool: root.tool;
-        snap: root.snap;
-        selected-count: root.selected-count;
-        merge-blocked-because: root.merge-blocked-because;
-        has-av-tools: root.has-av-tools;
-        playhead: root.playhead;
-        frame-rate: root.frame-rate;
-        scroll-left: root.scroll-left;
-        seconds-per-pixel: root.seconds-per-pixel;
-
-        tab-selected(index) => { root.tab-selected(index); }
-        tab-renamed(index, name) => { root.tab-renamed(index, name); }
-        tab-close-requested(index) => { root.tab-close-requested(index); }
-        tab-added => { root.tab-added(); }
-        tool-changed(tool) => { root.tool-changed(tool); }
-        snap-changed(snap) => { root.snap-changed(snap); }
-        split => { root.split(); }
-        merge => { root.merge(); }
-        delete-selected => { root.delete-selected(); }
-        av-tools => { root.av-tools(); }
-        av-items: root.av-items;
-        av-height: root.av-height;
-        av-token: root.av-token;
-        av-selected(id) => { root.av-selected(id); }
-        add-track => { root.add-track(); }
-        zoom-to-fit(width) => { root.zoom-to-fit(width); }
-        zoom(factor, anchor) => { root.zoom(factor, anchor); }
-        scrubbed(seconds) => { root.scrubbed(seconds); }
-        clip-pressed(id, additive, edge) => { root.clip-pressed(id, additive, edge); }
-        clip-dragged(seconds, pixels) => { root.clip-dragged(seconds, pixels); }
-        clip-released => { root.clip-released(); }
-        razored(id, seconds) => { root.razored(id, seconds); }
-        menu-items: root.menu-items;
-        menu-height: root.menu-height;
-        menu-token: root.menu-token;
-        clip-context(id) => { root.clip-context(id); }
-        menu-selected(id) => { root.menu-selected(id); }
-        band-selected(a, b, c, d, additive) => { root.band-selected(a, b, c, d, additive); }
-        scrolled(seconds) => { root.scrolled(seconds); }
-        drop: root.drop;
-        drag-hovered(payload, seconds, row) => {
-            root.drag-hovered(payload, seconds, row);
-        }
-        dropped(payload, seconds, row) => { root.dropped(payload, seconds, row); }
-        track-flag-changed(index, visible, muted, locked) => {
-            root.track-flag-changed(index, visible, muted, locked);
-        }
-        track-sized(index, size) => { root.track-sized(index, size); }
-        track-removed(index) => { root.track-removed(index); }
-        track-renamed(index, name) => { root.track-renamed(index, name); }
+    Seat {
+        x: root.seat-x(3);
+        y: root.seat-y(3);
+        width: root.seat-w(3);
+        height: root.seat-h(3);
+        kind: root.seat-bottom;
+        picked(kind) => { root.put(3, kind); }
     }
 
     // Left | centre: the drag moves the left seat's trailing edge, and the

@@ -171,11 +171,12 @@ impl Library {
                 .collect(),
         );
 
-        app.set_media_count_all(items.len() as i32);
-        app.set_media_count_video(self.count(MediaKind::Video));
-        app.set_media_count_audio(self.count(MediaKind::Audio));
-        app.set_media_count_images(self.count(MediaKind::Image));
-        app.set_media_selected_count(
+        let editor = app.global::<Editor>();
+        editor.set_media_count_all(items.len() as i32);
+        editor.set_media_count_video(self.count(MediaKind::Video));
+        editor.set_media_count_audio(self.count(MediaKind::Audio));
+        editor.set_media_count_images(self.count(MediaKind::Image));
+        editor.set_media_selected_count(
             items.iter().filter(|item| item.selected).count() as i32
         );
     }
@@ -1493,6 +1494,7 @@ impl Studio {
     /// both engine lists — is what made the playhead trail the pointer and
     /// then catch up in a jump.
     fn publish_lanes(&self, app: &App, models: &Models) {
+        let editor = app.global::<Editor>();
         sync(
             &models.tabs,
             self.timelines
@@ -1573,17 +1575,17 @@ impl Studio {
                     && self.playhead < clip.end()
             })
             .max_by_key(|clip| self.row_of(&clip.track) * -1);
-        app.set_has_picture(showing.is_some());
-        app.set_preview_clip_name(
+        editor.set_has_picture(showing.is_some());
+        editor.set_preview_clip_name(
             showing.map(|clip| clip.name.as_str()).unwrap_or_default().into(),
         );
-        app.set_preview_duration(self.duration());
-        app.set_playing(self.playing);
+        editor.set_preview_duration(self.duration());
+        editor.set_playing(self.playing);
 
         // The ghost. Published as a whole rather than as an `active` flag
         // beside five stale numbers: the lanes draw it or they do not, and a
         // half-updated one would draw the last drag in the place of this one.
-        app.set_drop(match &self.drop {
+        editor.set_drop(match &self.drop {
             Some(plan) => DropData {
                 active: true,
                 kind: plan.kind,
@@ -1595,17 +1597,17 @@ impl Studio {
             None => DropData::default(),
         });
 
-        app.set_selected_clip(self.selected());
-        app.set_timeline_current_tab(self.active as i32);
-        app.set_playhead(self.playhead);
-        app.set_scroll_left(self.scroll_left);
-        app.set_seconds_per_pixel(self.seconds_per_pixel);
-        app.set_frame_rate(self.frame_rate);
-        app.set_tool(self.tool);
-        app.set_snap(self.snap);
-        app.set_selected_count(self.selection.len() as i32);
-        app.set_has_av_tools(self.has_av_tools());
-        app.set_merge_blocked_because(match self.merge_blocked() {
+        editor.set_selected_clip(self.selected());
+        editor.set_timeline_current_tab(self.active as i32);
+        editor.set_playhead(self.playhead);
+        editor.set_scroll_left(self.scroll_left);
+        editor.set_seconds_per_pixel(self.seconds_per_pixel);
+        editor.set_frame_rate(self.frame_rate);
+        editor.set_tool(self.tool);
+        editor.set_snap(self.snap);
+        editor.set_selected_count(self.selection.len() as i32);
+        editor.set_has_av_tools(self.has_av_tools());
+        editor.set_merge_blocked_because(match self.merge_blocked() {
             Some(reason) => reason.into(),
             None => SharedString::new(),
         });
@@ -1617,16 +1619,17 @@ impl Studio {
     /// one goes through the full `publish` — so the rows are always rebuilt
     /// before the surface that shows them appears.
     fn publish_chrome(&self, app: &App, models: &Models) {
+        let editor = app.global::<Editor>();
         let (width, height) = OUTPUTS[self.ratio.min(OUTPUTS.len() - 1)];
-        app.set_output_width(width);
-        app.set_output_height(height);
-        app.set_ratio_index(self.ratio as i32);
-        app.set_quality_index(self.quality as i32);
+        editor.set_output_width(width);
+        editor.set_output_height(height);
+        editor.set_ratio_index(self.ratio as i32);
+        editor.set_quality_index(self.quality as i32);
 
         let rows = self.menu();
-        app.set_menu_height(Studio::menu_height(&rows));
+        editor.set_menu_height(Studio::menu_height(&rows));
         sync(&models.menu, rows);
-        app.set_menu_token(self.menu_token);
+        editor.set_menu_token(self.menu_token);
 
         app.set_export(self.export_data());
         app.set_settings(SettingsData {
@@ -1657,9 +1660,9 @@ impl Studio {
         sync(&models.voices, Studio::model_rows(&self.voices));
 
         let av = self.av_menu();
-        app.set_av_height(Studio::menu_height(&av));
+        editor.set_av_height(Studio::menu_height(&av));
         sync(&models.av, av);
-        app.set_av_token(self.av_token);
+        editor.set_av_token(self.av_token);
 
         let bar = self.menu_bar();
         app.set_app_menu_height(Studio::menu_height(&bar));
@@ -2098,6 +2101,12 @@ fn main() -> Result<(), slint::PlatformError> {
     let app = App::new()?;
     app.set_macos(cfg!(target_os = "macos"));
 
+    // One handle for the whole of main. Everything the editor's views read and
+    // report lives on this global rather than on the window — see
+    // ui/editor.slint — and `global()` only borrows, so it can be held across
+    // every binding below.
+    let editor = app.global::<Editor>();
+
     // The strip's drag region and double-click. Only the winit window can do
     // either; the scene graph forwards the gestures here.
     app.on_titlebar_begin_drag({
@@ -2135,12 +2144,12 @@ fn main() -> Result<(), slint::PlatformError> {
         EffectData { id: 5, name: SharedString::from("Denoiser"), audio: true },
     ]));
 
-    app.set_video_effects(ModelRc::from(video.clone()));
-    app.set_audio_effects(ModelRc::from(audio.clone()));
+    editor.set_video_effects(ModelRc::from(video.clone()));
+    editor.set_audio_effects(ModelRc::from(audio.clone()));
 
     let next_id = Rc::new(Cell::new(6));
 
-    app.on_add_effect({
+    editor.on_add_effect({
         let video = video.clone();
         let audio = audio.clone();
         let next_id = next_id.clone();
@@ -2157,7 +2166,7 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     });
 
-    app.on_remove_effect({
+    editor.on_remove_effect({
         let video = video.clone();
         let audio = audio.clone();
         move |id| {
@@ -2173,12 +2182,12 @@ fn main() -> Result<(), slint::PlatformError> {
     // --- the bin ---------------------------------------------------------
     let library = Rc::new(Library::new(demo_library()));
     let view = Rc::new(VecModel::<MediaItemData>::default());
-    app.set_media(ModelRc::from(view.clone()));
+    editor.set_media(ModelRc::from(view.clone()));
     library.publish(&app, &view);
 
     // Every one of these ends in the same republish, so there is one place
     // where the panel's idea of the bin can go wrong.
-    app.on_media_filter_changed({
+    editor.on_media_filter_changed({
         let weak = app.as_weak();
         let library = library.clone();
         let view = view.clone();
@@ -2189,7 +2198,7 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     });
 
-    app.on_media_select({
+    editor.on_media_select({
         let weak = app.as_weak();
         let library = library.clone();
         let view = view.clone();
@@ -2208,7 +2217,7 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     });
 
-    app.on_media_clear_selection({
+    editor.on_media_clear_selection({
         let weak = app.as_weak();
         let library = library.clone();
         let view = view.clone();
@@ -2221,7 +2230,7 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     });
 
-    app.on_media_remove({
+    editor.on_media_remove({
         let weak = app.as_weak();
         let library = library.clone();
         let view = view.clone();
@@ -2232,7 +2241,7 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     });
 
-    app.on_media_remove_selected({
+    editor.on_media_remove_selected({
         let weak = app.as_weak();
         let library = library.clone();
         let view = view.clone();
@@ -2248,7 +2257,7 @@ fn main() -> Result<(), slint::PlatformError> {
     // panel. The callback exists so the panel is wired to something the day
     // one lands. (`media-activate` is handled with the timeline's own drops,
     // further down: it needs the studio a double-click puts a clip into.)
-    app.on_import_media(|| {});
+    editor.on_import_media(|| {});
 
 
     // --- the timeline ----------------------------------------------------
@@ -2272,11 +2281,11 @@ fn main() -> Result<(), slint::PlatformError> {
     });
     // Handed over once, here, and never replaced: a fresh model is a reset,
     // and a reset rebuilds every row that hangs off it.
-    app.set_timeline_tabs(ModelRc::from(models.tabs.clone()));
-    app.set_tracks(ModelRc::from(models.tracks.clone()));
-    app.set_clips(ModelRc::from(models.clips.clone()));
-    app.set_menu_items(ModelRc::from(models.menu.clone()));
-    app.set_av_items(ModelRc::from(models.av.clone()));
+    editor.set_timeline_tabs(ModelRc::from(models.tabs.clone()));
+    editor.set_tracks(ModelRc::from(models.tracks.clone()));
+    editor.set_clips(ModelRc::from(models.clips.clone()));
+    editor.set_menu_items(ModelRc::from(models.menu.clone()));
+    editor.set_av_items(ModelRc::from(models.av.clone()));
     app.set_app_menu_items(ModelRc::from(models.bar.clone()));
     app.set_transcribers(ModelRc::from(models.transcribers.clone()));
     app.set_voices(ModelRc::from(models.voices.clone()));
@@ -2313,7 +2322,7 @@ fn main() -> Result<(), slint::PlatformError> {
     }
 
     // ── tabs ──
-    app.on_tab_selected(on_timeline!(|state, index: i32| {
+    editor.on_tab_selected(on_timeline!(|state, index: i32| {
         if index >= 0 && (index as usize) < state.timelines.len() {
             state.active = index as usize;
             // A selection is a set of clip ids on *this* timeline; carrying it
@@ -2322,7 +2331,7 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     }));
 
-    app.on_tab_renamed(on_timeline!(|state, index: i32, name: SharedString| {
+    editor.on_tab_renamed(on_timeline!(|state, index: i32, name: SharedString| {
         let trimmed = name.trim().to_string();
         // Renames to whitespace are ignored, so a tab is never blank.
         if !trimmed.is_empty() {
@@ -2332,7 +2341,7 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     }));
 
-    app.on_tab_added(on_timeline!(|state| {
+    editor.on_tab_added(on_timeline!(|state| {
         let id = state.mint("TL");
         let lane = state.mint("T");
         let number = state.timelines.len() + 1;
@@ -2349,7 +2358,7 @@ fn main() -> Result<(), slint::PlatformError> {
     // Deleting a timeline throws away every clip on it. The reference asks
     // first, through a confirm dialog this tree has not grown yet — so the
     // floor of one timeline is enforced and the confirm is the gap.
-    app.on_tab_close_requested(on_timeline!(|state, index: i32| {
+    editor.on_tab_close_requested(on_timeline!(|state, index: i32| {
         if state.timelines.len() > 1 && (index as usize) < state.timelines.len() {
             state.timelines.remove(index as usize);
             state.active = state.active.min(state.timelines.len() - 1);
@@ -2358,15 +2367,15 @@ fn main() -> Result<(), slint::PlatformError> {
     }));
 
     // ── the tray ──
-    app.on_tool_changed(on_timeline!(|state, tool: TimelineTool| {
+    editor.on_tool_changed(on_timeline!(|state, tool: TimelineTool| {
         state.tool = tool;
     }));
 
-    app.on_snap_changed(on_timeline!(|state, snap: bool| {
+    editor.on_snap_changed(on_timeline!(|state, snap: bool| {
         state.snap = snap;
     }));
 
-    app.on_add_track(on_timeline!(|state| {
+    editor.on_add_track(on_timeline!(|state| {
         let id = state.mint("T");
         let name = state.next_track_name();
         // Pushed, not inserted: the model runs bottom-up, so the end of the
@@ -2374,7 +2383,7 @@ fn main() -> Result<(), slint::PlatformError> {
         state.now_mut().tracks.push(track(&id, &name));
     }));
 
-    app.on_delete_selected(on_timeline!(|state| {
+    editor.on_delete_selected(on_timeline!(|state| {
         let doomed = state.selection.clone();
         state.now_mut().clips.retain(|clip| !doomed.contains(&clip.id));
         state.selection.clear();
@@ -2383,7 +2392,7 @@ fn main() -> Result<(), slint::PlatformError> {
     // Split at the playhead: every selected clip the playhead runs through, or
     // every clip at all when nothing is selected — which is what a split with
     // no selection means in an editor.
-    app.on_split(on_timeline!(|state| {
+    editor.on_split(on_timeline!(|state| {
         let at = state.playhead;
         let selection = state.selection.clone();
         let victims: Vec<String> = state
@@ -2426,7 +2435,7 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     }));
 
-    app.on_merge(on_timeline!(|state| {
+    editor.on_merge(on_timeline!(|state| {
         if state.merge_blocked().is_some() {
             return;
         }
@@ -2452,15 +2461,15 @@ fn main() -> Result<(), slint::PlatformError> {
     }));
 
     // ── the view ──
-    app.on_scrubbed(on_lanes!(|state, seconds: f32| {
+    editor.on_scrubbed(on_lanes!(|state, seconds: f32| {
         state.playhead = seconds.max(0.0);
     }));
 
-    app.on_scrolled(on_lanes!(|state, seconds: f32| {
+    editor.on_scrolled(on_lanes!(|state, seconds: f32| {
         state.scroll_left = seconds.max(0.0);
     }));
 
-    app.on_zoom(on_lanes!(|state, factor: f32, anchor: f32| {
+    editor.on_zoom(on_lanes!(|state, factor: f32, anchor: f32| {
         let before = state.seconds_per_pixel;
         // Floored at a frame across two pixels and capped at ten minutes to
         // the pane, which is as far either way as the ruler stays legible.
@@ -2473,7 +2482,7 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     }));
 
-    app.on_zoom_to_fit(on_lanes!(|state, width: f32| {
+    editor.on_zoom_to_fit(on_lanes!(|state, width: f32| {
         // A little air past the end, so the last clip is not flush against the
         // right edge, and a floor so an empty timeline does not divide by zero.
         let span = state.duration().max(1.0) * 1.05;
@@ -2484,7 +2493,7 @@ fn main() -> Result<(), slint::PlatformError> {
     }));
 
     // ── lanes ──
-    app.on_track_flag_changed(on_timeline!(
+    editor.on_track_flag_changed(on_timeline!(
         |state, row: i32, visible: bool, muted: bool, locked: bool| {
             let Some(id) = state.row_track(row).map(|track| track.id.clone()) else { return };
             if let Some(track) = state.now_mut().tracks.iter_mut().find(|track| track.id == id) {
@@ -2507,7 +2516,7 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     ));
 
-    app.on_track_renamed(on_timeline!(|state, row: i32, name: SharedString| {
+    editor.on_track_renamed(on_timeline!(|state, row: i32, name: SharedString| {
         let trimmed = name.trim().to_string();
         if trimmed.is_empty() {
             return;
@@ -2519,14 +2528,14 @@ fn main() -> Result<(), slint::PlatformError> {
     }));
 
     // Removing a lane takes its clips with it, and keeps a floor of one.
-    app.on_track_sized(on_timeline!(|state, row: i32, size: TrackSize| {
+    editor.on_track_sized(on_timeline!(|state, row: i32, size: TrackSize| {
         let Some(id) = state.row_track(row).map(|lane| lane.id.clone()) else { return };
         if let Some(lane) = state.now_mut().tracks.iter_mut().find(|lane| lane.id == id) {
             lane.size = size;
         }
     }));
 
-    app.on_track_removed(on_timeline!(|state, row: i32| {
+    editor.on_track_removed(on_timeline!(|state, row: i32| {
         if state.now().tracks.len() <= 1 {
             return;
         }
@@ -2543,7 +2552,7 @@ fn main() -> Result<(), slint::PlatformError> {
     // A press resolves the selection before anything moves, so a drag that
     // starts on an already-selected clip carries the whole set rather than
     // collapsing to the one clip touched.
-    app.on_clip_pressed(on_lanes!(|state, id: SharedString, additive: bool, edge: i32| {
+    editor.on_clip_pressed(on_lanes!(|state, id: SharedString, additive: bool, edge: i32| {
         let id = id.to_string();
         let Some(clip) = state.clip(&id).cloned() else { return };
         // A locked lane takes no presses at all — not even to select. Half a
@@ -2600,7 +2609,7 @@ fn main() -> Result<(), slint::PlatformError> {
         state.gesture = Gesture::Move { primary: id, origins, lanes: state.lane_heights() };
     }));
 
-    app.on_clip_dragged(on_lanes!(|state, seconds: f32, pixels: f32| {
+    editor.on_clip_dragged(on_lanes!(|state, seconds: f32, pixels: f32| {
         // Lifted out rather than matched in place: every arm goes on to mutate
         // the clips, which cannot happen while the gesture is borrowed out of
         // the same struct. It goes back at the end, so a drag survives.
@@ -2682,7 +2691,7 @@ fn main() -> Result<(), slint::PlatformError> {
     // Releasing is what would make a move or a trim real: the reference echoes
     // it locally and turns the whole gesture into one undoable command here.
     // There is no command stack in this tree, so this only ends the gesture.
-    app.on_clip_released(on_lanes!(|state| {
+    editor.on_clip_released(on_lanes!(|state| {
         state.gesture = Gesture::None;
     }));
 
@@ -2694,7 +2703,7 @@ fn main() -> Result<(), slint::PlatformError> {
     // trusting the last hover is deliberate: the release carries its own
     // position, and a drop that landed a pixel from where the ghost was would
     // be a bug nobody could see.
-    app.on_drag_hovered({
+    editor.on_drag_hovered({
         let weak = app.as_weak();
         let studio = studio.clone();
         let models = models.clone();
@@ -2711,7 +2720,7 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     });
 
-    app.on_dropped({
+    editor.on_dropped({
         let weak = app.as_weak();
         let studio = studio.clone();
         let models = models.clone();
@@ -2735,7 +2744,7 @@ fn main() -> Result<(), slint::PlatformError> {
     // Every card is still clickable, and a click has no pointer over the
     // lanes to name a place — so these land at the playhead, on the topmost
     // lane with room for them.
-    app.on_media_activate({
+    editor.on_media_activate({
         let weak = app.as_weak();
         let studio = studio.clone();
         let models = models.clone();
@@ -2752,7 +2761,7 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     });
 
-    app.on_library_add_text({
+    editor.on_library_add_text({
         let weak = app.as_weak();
         let studio = studio.clone();
         let models = models.clone();
@@ -2769,7 +2778,7 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     });
 
-    app.on_library_apply_filter({
+    editor.on_library_apply_filter({
         let weak = app.as_weak();
         let studio = studio.clone();
         let models = models.clone();
@@ -2791,7 +2800,7 @@ fn main() -> Result<(), slint::PlatformError> {
     // carries exactly one fact about that — whether any are live. Which
     // effect it was needs the applied-effect chain the inspector's stack is
     // drawn for, and nothing on this side owns one yet.
-    app.on_library_apply_effect(on_timeline!(|state, _id: SharedString| {
+    editor.on_library_apply_effect(on_timeline!(|state, _id: SharedString| {
         let Some(id) = state.selection.first().cloned() else { return };
         let has_picture = state
             .clip(&id)
@@ -2804,7 +2813,7 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     }));
 
-    app.on_razored(on_timeline!(|state, id: SharedString, seconds: f32| {
+    editor.on_razored(on_timeline!(|state, id: SharedString, seconds: f32| {
         let id = id.to_string();
         let Some(index) = state.now().clips.iter().position(|clip| clip.id == id) else { return };
         let source = state.now().clips[index].clone();
@@ -2831,7 +2840,7 @@ fn main() -> Result<(), slint::PlatformError> {
         state.selection = vec![id];
     }));
 
-    app.on_band_selected(on_lanes!(
+    editor.on_band_selected(on_lanes!(
         |state, from: f32, to: f32, from_y: f32, to_y: f32, additive: bool| {
             // The band arrives as two corners in pixels down the stack, and
             // the rows are resolved here for the reason the drops are: the
@@ -2871,7 +2880,7 @@ fn main() -> Result<(), slint::PlatformError> {
     // One field and one number rather than a patch of the whole clip: a patch
     // is "everything, with one thing different", and a late-arriving one
     // overwrites whatever landed while it was in flight.
-    app.on_clip_set(on_lanes!(|state, field: ClipField, value: f32| {
+    editor.on_clip_set(on_lanes!(|state, field: ClipField, value: f32| {
         let Some(id) = state.selection.first().cloned() else { return };
         let Some(index) = state.now().clips.iter().position(|clip| clip.id == id) else {
             return;
@@ -2919,7 +2928,7 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     }));
 
-    app.on_clip_set_text(on_lanes!(|state, field: ClipTextField, value: SharedString| {
+    editor.on_clip_set_text(on_lanes!(|state, field: ClipTextField, value: SharedString| {
         let Some(id) = state.selection.first().cloned() else { return };
         let Some(index) = state.now().clips.iter().position(|clip| clip.id == id) else {
             return;
@@ -2941,7 +2950,7 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     }));
 
-    app.on_clip_set_colour(on_lanes!(|state, field: ClipTextField, value: slint::Color| {
+    editor.on_clip_set_colour(on_lanes!(|state, field: ClipTextField, value: slint::Color| {
         let Some(id) = state.selection.first().cloned() else { return };
         let Some(index) = state.now().clips.iter().position(|clip| clip.id == id) else {
             return;
@@ -2958,7 +2967,7 @@ fn main() -> Result<(), slint::PlatformError> {
     // The gesture is over. The reference turns everything it accumulated into
     // one undoable command here; there is no command stack in this tree yet,
     // so the seam is the callback.
-    app.on_clip_commit(|| {});
+    editor.on_clip_commit(|| {});
 
 
     // ── the monitor ──
@@ -2966,12 +2975,12 @@ fn main() -> Result<(), slint::PlatformError> {
     // The transport moves the timeline's playhead rather than a second copy of
     // it: the programme position is one number, and a monitor that kept its
     // own would drift from the lanes the moment either moved.
-    app.on_seek(on_lanes!(|state, seconds: f32| {
+    editor.on_seek(on_lanes!(|state, seconds: f32| {
         state.playing = false;
         state.playhead = seconds.clamp(0.0, state.duration());
     }));
 
-    app.on_step_frames(on_lanes!(|state, frames: f32| {
+    editor.on_step_frames(on_lanes!(|state, frames: f32| {
         state.playing = false;
         // Stepped on the frame grid, not by adding a fraction of a second:
         // repeated steps off-grid would accumulate a drift that shows up as a
@@ -2981,7 +2990,7 @@ fn main() -> Result<(), slint::PlatformError> {
         state.playhead = (at / fps).clamp(0.0, state.duration());
     }));
 
-    app.on_ratio_changed(on_timeline!(|state, index: i32| {
+    editor.on_ratio_changed(on_timeline!(|state, index: i32| {
         state.ratio = (index.max(0) as usize).min(OUTPUTS.len() - 1);
     }));
 
@@ -2989,7 +2998,7 @@ fn main() -> Result<(), slint::PlatformError> {
     // the monitor. It changes nothing on screen here — nothing composites yet
     // — but it is a project setting rather than a view one, so it lives with
     // the rest of them.
-    app.on_quality_changed(on_timeline!(|state, index: i32| {
+    editor.on_quality_changed(on_timeline!(|state, index: i32| {
         state.quality = (index.max(0) as usize).min(2);
     }));
 
@@ -3000,7 +3009,7 @@ fn main() -> Result<(), slint::PlatformError> {
     // this one is self-limiting — a transport that is not running produces no
     // frames, and reaching the tail stops it.
     let playback = Rc::new(Timer::default());
-    app.on_play_toggled({
+    editor.on_play_toggled({
         let weak = app.as_weak();
         let studio = studio.clone();
         let models = models.clone();
@@ -3060,7 +3069,7 @@ fn main() -> Result<(), slint::PlatformError> {
 
 
     // ── the context menu ──
-    app.on_clip_context(on_timeline!(|state, id: SharedString| {
+    editor.on_clip_context(on_timeline!(|state, id: SharedString| {
         let id = id.to_string();
         if state.clip(&id).is_none() {
             return;
@@ -3074,7 +3083,7 @@ fn main() -> Result<(), slint::PlatformError> {
         state.menu_token += 1;
     }));
 
-    app.on_menu_selected(on_timeline!(|state, action: SharedString| {
+    editor.on_menu_selected(on_timeline!(|state, action: SharedString| {
         let Some(id) = state.menu_target.clone() else { return };
         let Some(index) = state.now().clips.iter().position(|clip| clip.id == id) else {
             return;
@@ -3336,9 +3345,9 @@ fn main() -> Result<(), slint::PlatformError> {
     });
 
     // ── the tray's A/V menu ──
-    app.on_av_tools(on_timeline!(|state| { state.av_token += 1; }));
+    editor.on_av_tools(on_timeline!(|state| { state.av_token += 1; }));
 
-    app.on_av_selected(on_timeline!(|state, action: SharedString| {
+    editor.on_av_selected(on_timeline!(|state, action: SharedString| {
         let Some(id) = state.selection.first().cloned() else { return };
         let Some(index) = state.now().clips.iter().position(|clip| clip.id == id) else {
             return;
@@ -3589,8 +3598,8 @@ fn main() -> Result<(), slint::PlatformError> {
                 // the left edge is just debris.
                 level_timer.stop();
                 sim.reset();
-                app.set_level(0.0);
-                app.set_peak(-1.0);
+                app.global::<Editor>().set_level(0.0);
+                app.global::<Editor>().set_peak(-1.0);
                 return;
             }
             level_timer.start(
@@ -3603,13 +3612,13 @@ fn main() -> Result<(), slint::PlatformError> {
                         let Some(app) = weak.upgrade() else { return };
                         if app.get_muted() {
                             sim.reset();
-                            app.set_level(0.0);
-                            app.set_peak(0.0);
+                            app.global::<Editor>().set_level(0.0);
+                            app.global::<Editor>().set_peak(0.0);
                             return;
                         }
                         let (level, peak) = sim.tick(0.033);
-                        app.set_level(level);
-                        app.set_peak(peak);
+                        app.global::<Editor>().set_level(level);
+                        app.global::<Editor>().set_peak(peak);
                     }
                 },
             );

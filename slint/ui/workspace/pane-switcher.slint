@@ -11,12 +11,17 @@ import { Tip } from "../primitives/tooltip.slint";
 // what lets someone who lives in the timeline give it the whole top of the
 // screen — and it is the half that does not need a new layout engine.
 //
-// Picking a view that is already on screen *swaps* the two seats rather than
-// showing it twice. Two copies of one editor is a thing Blender allows and an
-// editor with one document does not want: two inspectors would both be
-// describing the same clip, and one of them would be occupying the seat the
-// preview was in. Swapping means the four views are always all present, and
-// re-arranging them is picking the one you want where you want it.
+// A view can be up in more than one seat at once, as it can in Blender. Each
+// seat builds its own instance, and they all read the same Editor global — so
+// two monitors show one playhead and two libraries show one bin, while each
+// keeps its own local state: which catalogue page is open, how wide its
+// sidebar is, where it is scrolled to. Picking is an assignment and nothing
+// else; nothing is taken away from anywhere.
+//
+// The corollary is that a view can also be absent — set all four seats to the
+// library and there is no timeline on screen. That is the user's business, and
+// the state it was showing is untouched: it is in the global, not in the pane
+// that was drawing it.
 export enum PaneKind {
     /// the bin and the catalogues
     media,
