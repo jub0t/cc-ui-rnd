@@ -1,242 +1,76 @@
 import { Theme } from "../theme.slint";
+import { Editor } from "../editor.slint";
 import { ColSplitter, RowSplitter } from "splitter.slint";
-import { PaneKind } from "pane-switcher.slint";
 import { Seat } from "seat.slint";
 
-// The editor shell: three seats across the top and one along the bottom, every
-// edge draggable, and any of the four views in any seat — see pane-switcher.
+// The editor shell: whatever arrangement of views the layout tree currently
+// describes, drawn out of the two lists Rust publishes.
 //
-// Positioned by hand rather than with nested layouts. A layout would give the
-// same picture, but the splitters need the one thing a layout hides — the
-// pixel the boundary is currently at — and a HorizontalLayout inside a
-// VerticalLayout has no name for "the edge between the second and third
-// child". Four rectangles and two divisions are cheaper than fighting that.
+// This file used to hold the arrangement itself — three boxes across the top
+// and one along the bottom, with two shares and a splitter for each boundary.
+// That is one layout, and hard-coding it is what made it the only one. The
+// arrangement is a tree now (see dock.slint), it lives in Rust because Slint
+// has no recursion to walk one with, and what arrives here is that tree
+// already walked: a box per view, a box per gutter.
 //
-// Sizes are stored as shares of the usable box, not pixels, so a window resize
-// keeps the proportions the user dragged instead of dumping every pixel into
-// one pane.
+// So there is nothing to lay out here and nothing to arbitrate. The one thing
+// this side knows and Rust does not is how big it is, which is why it says so.
 export component Workspace inherits Rectangle {
     // One value for the margin and the gutters, so the border around the
     // workspace and the space between any two panes read as the same gap.
     // 8px, matching the reference exactly: its resizers are `w-2`/`h-2` and
     // the layout around them is `p-2`, which is the same single value said
     // twice. 12px here read as loose beside it.
-    in property <length> gap: 8px;
-    /// Smallest a side column may be dragged to.
-    ///
-    /// One floor for both, where the inspector used to carry its own 280px.
-    /// A minimum belonged to a pane while a pane belonged to a column; now
-    /// that any view can sit in any seat — and in two of them — a per-view
-    /// floor has nothing to attach to. 240 is between the two numbers this
-    /// had, and above the 220 the bin was happy at.
-    in property <length> min-col: 240px;
-    /// smallest a row may be dragged to
-    in property <length> min-row: 140px;
-
-    // ── the four seats ───────────────────────────────────────────────────
     //
-    // The layout is four boxes — three across the top and one along the
-    // bottom — and which editor is in which is a property rather than a fact
-    // about the file.
-    //
-    // Each seat builds its own view — see Seat — so the same view can be up in
-    // two of them at once: a second monitor beside the first, or the library
-    // on the left and again along the bottom. Picking is therefore an
-    // assignment and not a swap, and a view can also be absent entirely, which
-    // is why nothing outside this file may assume one exists.
-    in-out property <PaneKind> seat-left: PaneKind.media;
-    in-out property <PaneKind> seat-centre: PaneKind.preview;
-    in-out property <PaneKind> seat-right: PaneKind.inspector;
-    in-out property <PaneKind> seat-bottom: PaneKind.timeline;
-
-    /// Scratch for `trade`: the expression language has no local bindings,
-    /// and a swap has to remember what it is displacing.
-    property <PaneKind> displaced;
-
-    /// Two seats change places. This is the drag, and only the drag: picking
-    /// from the dropdown is a plain assignment and leaves the other seat
-    /// alone, because picking says "show me this here" and dragging says "put
-    /// this there" — and the second one has somewhere for the incumbent to go.
-    function trade(a: int, b: int) {
-        root.displaced = root.holds(a);
-        root.put(a, root.holds(b));
-        root.put(b, root.displaced);
-    }
-
-    pure function holds(seat: int) -> PaneKind {
-        return seat == 0 ? root.seat-left
-            : seat == 1 ? root.seat-centre
-            : seat == 2 ? root.seat-right
-            : root.seat-bottom;
-    }
-
-    function put(seat: int, kind: PaneKind) {
-        if (seat == 0) { root.seat-left = kind; }
-        if (seat == 1) { root.seat-centre = kind; }
-        if (seat == 2) { root.seat-right = kind; }
-        if (seat == 3) { root.seat-bottom = kind; }
-    }
-
-    // Shares of the usable box. The middle column and the bottom row are the
-    // remainder, so the three columns always sum to the width exactly — no
-    // rounding crumb left over at the right edge.
-    //
-    // The reference opens at 420px of library and 300px of inspector, which at
-    // this window's preferred 1400px is 0.31 and 0.22 of the usable track. The
-    // left column is the wider of the two because it opens on the bin, which
-    // is a grid of cards, while the right opens on a column of rows: one needs
-    // width to show anything at all, the other only enough not to elide its
-    // labels. They are properties of the *seat* now rather than of the pane,
-    // so swapping two views keeps the shape of the window and changes what is
-    // in it — which is the point.
-    in-out property <float> left-share: 0.31;
-    in-out property <float> right-share: 0.22;
-    // The reference opens with 340px of timeline, which at this window's
-    // preferred 900px is a fraction under 0.6 of the usable track. 0.66 left
-    // the lanes cramped enough that a four-track stack needed scrolling before
-    // anything had been added to it.
-    in-out property <float> top-share: 0.6;
-
-    // Usable box: the pane widths and heights, with the margins and gutters
-    // already taken out. Four gaps across (two margins, two gutters), three
-    // down (two margins, one gutter).
-    property <length> track-w: Math.max(1px, root.width - 4 * root.gap);
-    property <length> track-h: Math.max(1px, root.height - 3 * root.gap);
-
-    // The minimums are enforced here and not only on the drag, because a share
-    // is a share: shrink the window far enough and a column that was legal
-    // when it was dragged is not any more. The centre column and the bottom
-    // row take the remainder, so they are the ones that give.
-    property <length> left-w: Math.max(root.min-col, root.track-w * root.left-share);
-    property <length> right-w: Math.max(root.min-col, root.track-w * root.right-share);
-    property <length> centre-w: Math.max(0px, root.track-w - root.left-w - root.right-w);
-    property <length> top-h: Math.min(Math.max(root.min-row, root.track-h * root.top-share),
-        Math.max(root.min-row, root.track-h - root.min-row));
-    property <length> bottom-h: root.track-h - root.top-h;
-
-    // A seat's box. Four functions rather than four sets of properties,
-    // because each pane asks for its own and the answer depends on where that
-    // pane happens to be sitting this second.
-    pure function seat-x(seat: int) -> length {
-        return seat == 1 ? 2 * root.gap + root.left-w
-            : seat == 2 ? 3 * root.gap + root.left-w + root.centre-w
-            : root.gap;
-    }
-    pure function seat-y(seat: int) -> length {
-        return seat == 3 ? 2 * root.gap + root.top-h : root.gap;
-    }
-    pure function seat-w(seat: int) -> length {
-        return seat == 0 ? root.left-w
-            : seat == 1 ? root.centre-w
-            : seat == 2 ? root.right-w
-            : root.width - 2 * root.gap;
-    }
-    pure function seat-h(seat: int) -> length {
-        return seat == 3 ? root.bottom-h : root.top-h;
-    }
-
-    // A drag is one pointer, so one slot holds whichever share went down.
-    property <float> press-share;
-
-    // Math.clamp with the range guarded: on a window too small to honour the
-    // minimums the range inverts, and an unguarded clamp would snap the pane
-    // to the wrong end of it.
-    pure function fit(value: float, low: float, high: float) -> float {
-        return Math.min(Math.max(value, low), Math.max(low, high));
-    }
+    // Applied on the Rust side rather than here: the gutters are between the
+    // halves of a split, at whatever depth, and only the side walking the tree
+    // knows where those are.
 
     background: Theme.page;
 
-    Seat {
-        x: root.seat-x(0);
-        y: root.seat-y(0);
-        width: root.seat-w(0);
-        height: root.seat-h(0);
-        kind: root.seat-left;
-        index: 0;
-        picked(kind) => { root.put(0, kind); }
-        swapped(from) => { root.trade(from, 0); }
+    // The box, on the way up. `init` as well as the two `changed` handlers,
+    // because a window that opens and is never resized still has to be laid
+    // out once — and the first layout is exactly when nothing has changed yet.
+    init => { Editor.workspace-resized(root.width, root.height); }
+    changed width => { Editor.workspace-resized(root.width, root.height); }
+    changed height => { Editor.workspace-resized(root.width, root.height); }
+
+    for seat in Editor.seats: Seat {
+        x: seat.x;
+        y: seat.y;
+        width: seat.width;
+        height: seat.height;
+        kind: seat.kind;
+        index: seat.index;
+
+        picked(kind) => { Editor.dock-set(seat.index, kind); }
+        dropped-on(from, side) => { Editor.dock-dropped(from, seat.index, side); }
     }
 
-    Seat {
-        x: root.seat-x(1);
-        y: root.seat-y(1);
-        width: root.seat-w(1);
-        height: root.seat-h(1);
-        kind: root.seat-centre;
-        index: 1;
-        picked(kind) => { root.put(1, kind); }
-        swapped(from) => { root.trade(from, 1); }
-    }
+    // Declared after the seats so a gutter is hit before the panes either side
+    // of it. The two orientations are the same two handles the fixed layout
+    // used; which one a gutter gets is a fact about its split, so it comes
+    // down with the box rather than being decided here.
+    for divider in Editor.dividers: Rectangle {
+        x: divider.x;
+        y: divider.y;
+        width: divider.width;
+        height: divider.height;
 
-    Seat {
-        x: root.seat-x(2);
-        y: root.seat-y(2);
-        width: root.seat-w(2);
-        height: root.seat-h(2);
-        kind: root.seat-right;
-        index: 2;
-        picked(kind) => { root.put(2, kind); }
-        swapped(from) => { root.trade(from, 2); }
-    }
+        if divider.columns: ColSplitter {
+            width: parent.width;
+            height: parent.height;
 
-    Seat {
-        x: root.seat-x(3);
-        y: root.seat-y(3);
-        width: root.seat-w(3);
-        height: root.seat-h(3);
-        kind: root.seat-bottom;
-        index: 3;
-        picked(kind) => { root.put(3, kind); }
-        swapped(from) => { root.trade(from, 3); }
-    }
-
-    // Left | centre: the drag moves the left seat's trailing edge, and the
-    // centre absorbs it. Named for the seats and not for what is in them —
-    // the gutter between the first and second columns is the same gutter
-    // whichever two views are either side of it.
-    ColSplitter {
-        x: root.gap + root.left-w;
-        y: root.gap;
-        width: root.gap;
-        height: root.top-h;
-
-        pressed => { root.press-share = root.left-share; }
-        moved(delta) => {
-            root.left-share = root.fit(root.press-share + delta / root.track-w,
-                root.min-col / root.track-w,
-                1 - (root.right-w + root.min-col) / root.track-w);
+            pressed => { Editor.divider-pressed(divider.index); }
+            moved(delta) => { Editor.divider-dragged(divider.index, delta); }
         }
-    }
 
-    // Centre | right: the same drag the other way round, since it is the
-    // right seat's leading edge that moves.
-    ColSplitter {
-        x: 2 * root.gap + root.left-w + root.centre-w;
-        y: root.gap;
-        width: root.gap;
-        height: root.top-h;
+        if !divider.columns: RowSplitter {
+            width: parent.width;
+            height: parent.height;
 
-        pressed => { root.press-share = root.right-share; }
-        moved(delta) => {
-            root.right-share = root.fit(root.press-share - delta / root.track-w,
-                root.min-col / root.track-w,
-                1 - (root.left-w + root.min-col) / root.track-w);
-        }
-    }
-
-    // Top row | Timeline.
-    RowSplitter {
-        x: root.gap;
-        y: root.gap + root.top-h;
-        width: root.width - 2 * root.gap;
-        height: root.gap;
-
-        pressed => { root.press-share = root.top-share; }
-        moved(delta) => {
-            root.top-share = root.fit(root.press-share + delta / root.track-h,
-                root.min-row / root.track-h,
-                1 - root.min-row / root.track-h);
+            pressed => { Editor.divider-pressed(divider.index); }
+            moved(delta) => { Editor.divider-dragged(divider.index, delta); }
         }
     }
 }

@@ -21,7 +21,9 @@ import { MediaFilter, MediaItemData, MediaKind } from "workspace/media-pane.slin
 import { ContextMenu, MenuItemData, MenuRow } from "primitives/context-menu.slint";
 import { ExportData, ExportDialog, ExportPhase } from "dialogs/export.slint";
 import { ModelData, SettingsData, SettingsDialog } from "dialogs/settings.slint";
+import { DockDivider, DockSide, SeatBox } from "dock.slint";
 import { Editor } from "editor.slint";
+import { PaneKind } from "workspace/pane-switcher.slint";
 import { TitleBar } from "title-bar.slint";
 import { TooltipLayer } from "primitives/tooltip.slint";
 import { Workspace } from "workspace/workspace.slint";
@@ -32,7 +34,9 @@ import {
 
 // Re-exported so main.rs can reach the globals and the struct.
 export {
-    Curves, Editor, Fmt, Payload, Theme, Bezier, EffectData, MediaFilter, MediaItemData, MediaKind,
+    Curves, Fmt, Payload, Theme, Bezier, Editor,
+    DockDivider, DockSide, PaneKind, SeatBox,
+    EffectData, MediaFilter, MediaItemData, MediaKind,
     ClipData, ClipField, ClipKind, ClipTextField, DropData, SelectedClipData,
     TextAlignment, TimelineTabData, TimelineTool, TrackData, TrackSize,
     MenuItemData, MenuRow, ExportData, ExportPhase, ModelData, SettingsData,

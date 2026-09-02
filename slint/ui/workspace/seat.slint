@@ -1,5 +1,6 @@
 import { Theme } from "../theme.slint";
 import { Payload } from "../util.slint";
+import { DockSide } from "../dock.slint";
 import { PaneKind } from "pane-switcher.slint";
 import { Editor } from "../editor.slint";
 import { ConfigPane } from "config-pane.slint";
@@ -27,8 +28,33 @@ export component Seat inherits Rectangle {
 
     /// Its corner button was used.
     callback picked(kind: PaneKind);
-    /// A panel was dropped here from another seat. The two trade places.
-    callback swapped(from: int);
+    /// A panel was dropped here from another seat, on this part of it.
+    callback dropped-on(from: int, side: DockSide);
+
+    /// How much of a seat's edge is that edge's own.
+    ///
+    /// A quarter, but never more than 72px: on a wide seat a flat quarter is
+    /// two hundred pixels of "left", which makes the middle hard to hit; on a
+    /// narrow one a flat 72 is the entire seat and the middle disappears. The
+    /// quarter is what keeps a small seat usable and the cap is what keeps a
+    /// large one from being all edge.
+    property <length> margin-x: Math.min(72px, root.width / 4);
+    property <length> margin-y: Math.min(72px, root.height / 4);
+
+    /// Which part of the seat a point is in.
+    ///
+    /// The nearer edge wins where two overlap, so a corner belongs to whichever
+    /// of its two sides the pointer is further into — which is what makes the
+    /// corners feel like they have a rule rather than a coin toss.
+    pure function side-at(x: length, y: length) -> DockSide {
+        return x >= root.margin-x && x <= root.width - root.margin-x
+            && y >= root.margin-y && y <= root.height - root.margin-y
+            ? DockSide.centre
+            : Math.min(x, root.width - x) / root.margin-x
+                <= Math.min(y, root.height - y) / root.margin-y
+            ? (x < root.width / 2 ? DockSide.left : DockSide.right)
+            : (y < root.height / 2 ? DockSide.top : DockSide.bottom);
+    }
 
     if root.kind == PaneKind.media: MediaPane {
             x: 0;
@@ -124,16 +150,25 @@ export component Seat inherits Rectangle {
         width: root.width;
         height: root.height;
 
+        /// Where the pointer is now, as a side. Kept so the outline below can
+        /// draw the shape the drop would leave without asking again.
+        property <DockSide> side;
+
         can-drop(event) => {
-            // Its own seat is not a target: dropping a panel where it already
-            // is should read as nothing happening, not as a move of zero.
+            self.side = root.side-at(event.position.x, event.position.y);
+            // Never its own seat, on any part of it. The middle would be a
+            // trade with itself, and an edge would split a seat and then take
+            // the panel out of the very seat being split — both of which are
+            // "nothing happens", and a target that lights up and then does
+            // nothing is worse than one that never lit up.
             return Payload.pane-seat(Payload.text(event.data)) >= 0
                 && Payload.pane-seat(Payload.text(event.data)) != root.index
                 ? DragAction.move : DragAction.none;
         }
 
         dropped(event) => {
-            root.swapped(Payload.pane-seat(Payload.text(event.data)));
+            root.dropped-on(Payload.pane-seat(Payload.text(event.data)),
+                root.side-at(event.position.x, event.position.y));
             return DragAction.move;
         }
     }
@@ -203,20 +238,30 @@ export component Seat inherits Rectangle {
             track-renamed(index, name) => { Editor.track-renamed(index, name); }
         }
 
-    // What says the drop will land here. Over the view rather than under it,
-    // and an outline rather than a wash: a pane full of cards or lanes has no
-    // spare contrast to tint, and the accent is what every other target in
-    // this window — a selected clip, a band, the timeline's own ghost — is
-    // drawn in. Nothing in it is hit-testable, so it takes nothing from the
-    // DropArea underneath.
+    // What says where the drop will land — and, on an edge, how much of the
+    // seat the panel is about to take. Half the box, on the side the pointer
+    // is in, is the shape the split will actually make: a preview of the
+    // layout rather than a light on the target.
+    //
+    // Over the view rather than under it, and the accent, which is what every
+    // other target in this window is drawn in — a selected clip, a band, the
+    // timeline's own ghost. Nothing in it is hit-testable, so it takes nothing
+    // from the DropArea underneath.
     if landing.has-drag: Rectangle {
-        x: 0;
-        y: 0;
-        width: root.width;
-        height: root.height;
+        x: landing.side == DockSide.right ? root.width / 2 : 0;
+        y: landing.side == DockSide.bottom ? root.height / 2 : 0;
+        width: (landing.side == DockSide.left || landing.side == DockSide.right)
+            ? root.width / 2 : root.width;
+        height: (landing.side == DockSide.top || landing.side == DockSide.bottom)
+            ? root.height / 2 : root.height;
         border-radius: Theme.r-lg;
         background: Theme.accent-soft;
         border-width: 2px;
         border-color: Theme.accent;
+
+        animate x, y, width, height {
+            duration: 90ms;
+            easing: cubic-bezier(0.4, 0, 0.2, 1);
+        }
     }
 }

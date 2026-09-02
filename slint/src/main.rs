@@ -658,6 +658,15 @@ struct Studio {
     /// selection because the menu outlives the press that opened it.
     menu_target: Option<String>,
     menu_token: i32,
+    /// The workspace's arrangement, and the box it is arranged in. The box
+    /// comes up from Slint — see `Editor.workspace-resized`; it is the one
+    /// thing about the layout this side cannot work out for itself.
+    dock: Dock,
+    workspace: (f32, f32),
+    /// The gutter a pointer has hold of: which split, the ratio it was at when
+    /// the press landed, and the extent that ratio is a fraction of. A drag is
+    /// one pointer, so one slot is enough.
+    divider_press: Option<(usize, f32, f32)>,
     gesture: Gesture,
     /// The drag from the library that is over the lanes, already resolved
     /// into the clip it would leave. None when nothing is hovering.
@@ -703,6 +712,9 @@ struct Models {
     /// The two engine lists in Settings.
     transcribers: Rc<VecModel<ModelData>>,
     voices: Rc<VecModel<ModelData>>,
+    /// The workspace's arrangement, walked flat.
+    seats: Rc<VecModel<SeatBox>>,
+    dividers: Rc<VecModel<DockDivider>>,
 }
 
 /// Republish a list into a live model without resetting it.
@@ -1482,6 +1494,54 @@ impl Studio {
     fn publish(&self, app: &App, models: &Models) {
         self.publish_lanes(app, models);
         self.publish_chrome(app, models);
+        self.publish_dock(app, models);
+    }
+
+    /// The workspace's arrangement, walked into boxes.
+    ///
+    /// Its own publisher, like the lanes, and for the same reason in reverse:
+    /// dragging a gutter runs at pointer rate and changes nothing but this,
+    /// while everything else in the window — the clips, the menus, the
+    /// dialogs — changes without moving a single seat.
+    fn publish_dock(&self, _app: &App, models: &Models) {
+        let mut out = DockLayout::default();
+        let (width, height) = self.workspace;
+        if width > SEAT_GAP * 2.0 && height > SEAT_GAP * 2.0 {
+            lay_out(
+                &self.dock,
+                (
+                    SEAT_GAP,
+                    SEAT_GAP,
+                    width - 2.0 * SEAT_GAP,
+                    height - 2.0 * SEAT_GAP,
+                ),
+                &mut out,
+            );
+        }
+        sync(&models.seats, out.seats);
+        sync(&models.dividers, out.dividers);
+    }
+
+    /// The usable extent of one split, from a fresh walk. Only a press needs
+    /// it, and a press is not a hot path — cheaper than keeping the last
+    /// layout's copy in step with a tree that can change under it.
+    fn split_extent(&self, index: usize) -> Option<f32> {
+        let mut out = DockLayout::default();
+        let (width, height) = self.workspace;
+        lay_out(
+            &self.dock,
+            (SEAT_GAP, SEAT_GAP, width - 2.0 * SEAT_GAP, height - 2.0 * SEAT_GAP),
+            &mut out,
+        );
+        out.extents.get(index).copied()
+    }
+
+    /// The ratio a split is currently at.
+    fn split_ratio(&self, index: usize) -> Option<f32> {
+        match self.dock.at(&self.dock.split_path(index)?) {
+            Dock::Split { ratio, .. } => Some(*ratio),
+            _ => None,
+        }
     }
 
     /// The timeline and the readouts that follow it.
@@ -1882,6 +1942,250 @@ stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="{glyp
     )
 }
 
+// ── the workspace layout ─────────────────────────────────────────────────────
+//
+// The arrangement of views is a tree: a node is either one view or a split of
+// two nodes, side by side or one over the other. Dropping a panel on the edge
+// of a seat turns that seat into a split with the panel on the named side,
+// which is how a layout gets a shape the window did not start with — and it
+// can happen again inside either half, to any depth.
+//
+// It lives here rather than in Slint because Slint has no recursion: a
+// component cannot contain itself, so a nested layout cannot be drawn by
+// descending one. What crosses the boundary is this tree already walked flat —
+// see `lay_out`, and SeatBox/DockDivider in ui/dock.slint.
+
+/// Smallest a seat may be squeezed to by a divider drag. The old fixed layout
+/// carried the same two numbers as `min-col` and `min-row`.
+const SEAT_MIN_W: f32 = 240.0;
+const SEAT_MIN_H: f32 = 140.0;
+/// The gutter between the halves of a split, and the margin round the lot.
+const SEAT_GAP: f32 = 8.0;
+
+enum Dock {
+    /// One view, filling its box.
+    Leaf(PaneKind),
+    /// Two nodes and the gutter between them. `columns` means side by side,
+    /// which is a vertical gutter dragged left and right; `ratio` is the share
+    /// of the usable extent — the box less the gutter — that the first takes.
+    Split { columns: bool, ratio: f32, first: Box<Dock>, second: Box<Dock> },
+}
+
+impl Dock {
+    fn leaf(kind: PaneKind) -> Box<Dock> {
+        Box::new(Dock::Leaf(kind))
+    }
+
+    /// The node a path names, following each step into the first branch or the
+    /// second. A path that runs past a leaf stops there, which cannot happen
+    /// for a path this module produced.
+    fn at(&self, path: &[bool]) -> &Dock {
+        let Some((step, rest)) = path.split_first() else { return self };
+        match self {
+            Dock::Split { first, second, .. } => {
+                if *step { second.at(rest) } else { first.at(rest) }
+            }
+            leaf => leaf,
+        }
+    }
+
+    fn at_mut(&mut self, path: &[bool]) -> &mut Dock {
+        let Some((step, rest)) = path.split_first() else { return self };
+        match self {
+            Dock::Split { first, second, .. } => {
+                if *step { second.at_mut(rest) } else { first.at_mut(rest) }
+            }
+            leaf => leaf,
+        }
+    }
+
+    /// The path to the nth leaf, counted in the same walk `lay_out` uses — so
+    /// the number a seat carries and the number a drop reports are the same
+    /// number. Paths rather than indices for the editing below, because an
+    /// index is invalidated by a change elsewhere in the tree and a path is
+    /// only invalidated by a change on its own way down.
+    fn leaf_path(&self, index: usize) -> Option<Vec<bool>> {
+        fn walk(node: &Dock, want: usize, seen: &mut usize, path: &mut Vec<bool>) -> bool {
+            match node {
+                Dock::Leaf(_) => {
+                    if *seen == want {
+                        return true;
+                    }
+                    *seen += 1;
+                    false
+                }
+                Dock::Split { first, second, .. } => {
+                    path.push(false);
+                    if walk(first, want, seen, path) {
+                        return true;
+                    }
+                    path.pop();
+                    path.push(true);
+                    if walk(second, want, seen, path) {
+                        return true;
+                    }
+                    path.pop();
+                    false
+                }
+            }
+        }
+        let (mut seen, mut path) = (0, Vec::new());
+        walk(self, index, &mut seen, &mut path).then_some(path)
+    }
+
+    /// The same for the nth split — parent before children, which is the order
+    /// `lay_out` numbers the gutters in.
+    fn split_path(&self, index: usize) -> Option<Vec<bool>> {
+        fn walk(node: &Dock, want: usize, seen: &mut usize, path: &mut Vec<bool>) -> bool {
+            let Dock::Split { first, second, .. } = node else { return false };
+            if *seen == want {
+                return true;
+            }
+            *seen += 1;
+            path.push(false);
+            if walk(first, want, seen, path) {
+                return true;
+            }
+            path.pop();
+            path.push(true);
+            if walk(second, want, seen, path) {
+                return true;
+            }
+            path.pop();
+            false
+        }
+        let (mut seen, mut path) = (0, Vec::new());
+        walk(self, index, &mut seen, &mut path).then_some(path)
+    }
+
+    fn kind_at(&self, index: usize) -> Option<PaneKind> {
+        match self.at(&self.leaf_path(index)?) {
+            Dock::Leaf(kind) => Some(*kind),
+            _ => None,
+        }
+    }
+
+    /// Turn one leaf into a split, with a new view on the named side of it.
+    /// Half and half: the seat being split is the only thing that knows how
+    /// much room there is, and half of it is the answer that needs no rule.
+    fn split_leaf(&mut self, path: &[bool], kind: PaneKind, side: DockSide) {
+        let node = self.at_mut(path);
+        let existing = Box::new(std::mem::replace(node, Dock::Leaf(kind)));
+        let (columns, first, second) = match side {
+            DockSide::Left => (true, Dock::leaf(kind), existing),
+            DockSide::Right => (true, existing, Dock::leaf(kind)),
+            DockSide::Top => (false, Dock::leaf(kind), existing),
+            _ => (false, existing, Dock::leaf(kind)),
+        };
+        *node = Dock::Split { columns, ratio: 0.5, first, second };
+    }
+
+    /// Take a leaf out, and let its sibling take the space — the split it was
+    /// half of stops existing. A path with nothing above it is the whole tree,
+    /// which cannot be removed: a window with no seats has nowhere to put
+    /// anything back.
+    fn remove_leaf(&mut self, path: &[bool]) {
+        let Some((last, above)) = path.split_last() else { return };
+        let parent = self.at_mut(above);
+        let survivor = match parent {
+            Dock::Split { first, second, .. } => {
+                let keep = if *last { first } else { second };
+                std::mem::replace(keep.as_mut(), Dock::Leaf(PaneKind::Media))
+            }
+            _ => return,
+        };
+        *parent = survivor;
+    }
+}
+
+/// The tree walked flat: a box per view, a box per gutter.
+#[derive(Default)]
+struct DockLayout {
+    seats: Vec<SeatBox>,
+    dividers: Vec<DockDivider>,
+    /// The usable extent of each split — its box less the gutter — in the same
+    /// order as `dividers`. A divider drag is a delta in pixels and a ratio is
+    /// a fraction, and this is what converts between them.
+    extents: Vec<f32>,
+}
+
+fn lay_out(node: &Dock, (x, y, w, h): (f32, f32, f32, f32), out: &mut DockLayout) {
+    match node {
+        Dock::Leaf(kind) => out.seats.push(SeatBox {
+            index: out.seats.len() as i32,
+            kind: *kind,
+            x,
+            y,
+            width: w.max(0.0),
+            height: h.max(0.0),
+        }),
+        Dock::Split { columns, ratio, first, second } => {
+            // The slot is taken before the children are walked, so a gutter's
+            // number is its split's position in a parent-first walk — which is
+            // what `split_path` counts and what a drag reports back.
+            let index = out.dividers.len();
+            out.dividers.push(DockDivider::default());
+            out.extents.push(0.0);
+
+            let along = if *columns { w } else { h };
+            let usable = (along - SEAT_GAP).max(0.0);
+            let head = (usable * ratio).clamp(0.0, usable);
+            out.extents[index] = usable;
+            out.dividers[index] = if *columns {
+                DockDivider {
+                    index: index as i32,
+                    columns: true,
+                    x: x + head,
+                    y,
+                    width: SEAT_GAP,
+                    height: h.max(0.0),
+                }
+            } else {
+                DockDivider {
+                    index: index as i32,
+                    columns: false,
+                    x,
+                    y: y + head,
+                    width: w.max(0.0),
+                    height: SEAT_GAP,
+                }
+            };
+
+            if *columns {
+                lay_out(first, (x, y, head, h), out);
+                lay_out(second, (x + head + SEAT_GAP, y, usable - head, h), out);
+            } else {
+                lay_out(first, (x, y, w, head), out);
+                lay_out(second, (x, y + head + SEAT_GAP, w, usable - head), out);
+            }
+        }
+    }
+}
+
+/// The arrangement the editor opens with: the library, the monitor and the
+/// inspector across the top, the timeline along the bottom. The same three
+/// shares the fixed layout carried, re-expressed as a tree — 0.31 of the width
+/// to the library and 0.22 to the inspector, which is 0.319 of what is left
+/// once the library has had its share.
+fn demo_dock() -> Dock {
+    Dock::Split {
+        columns: false,
+        ratio: 0.6,
+        first: Box::new(Dock::Split {
+            columns: true,
+            ratio: 0.31,
+            first: Dock::leaf(PaneKind::Media),
+            second: Box::new(Dock::Split {
+                columns: true,
+                ratio: 0.681,
+                first: Dock::leaf(PaneKind::Preview),
+                second: Dock::leaf(PaneKind::Inspector),
+            }),
+        }),
+        second: Dock::leaf(PaneKind::Timeline),
+    }
+}
+
 /// The top edge of a row, measured down the stack from the first lane.
 fn row_top(heights: &[f32], row: i32) -> f32 {
     heights.iter().take(row.max(0) as usize).sum()
@@ -2072,6 +2376,12 @@ fn demo_studio() -> Studio {
         menu_bar_token: 0,
         menu_target: None,
         menu_token: 0,
+        dock: demo_dock(),
+        // Nothing until Slint says otherwise, which it does on its first
+        // layout. Publishing an empty workspace until then is right: there is
+        // no box to put a seat in yet.
+        workspace: (0.0, 0.0),
+        divider_press: None,
         gesture: Gesture::None,
         drop: None,
         next_id: 100,
@@ -2296,6 +2606,8 @@ fn main() -> Result<(), slint::PlatformError> {
         bar: Rc::new(VecModel::default()),
         transcribers: Rc::new(VecModel::default()),
         voices: Rc::new(VecModel::default()),
+        seats: Rc::new(VecModel::default()),
+        dividers: Rc::new(VecModel::default()),
     });
     // Handed over once, here, and never replaced: a fresh model is a reset,
     // and a reset rebuilds every row that hangs off it.
@@ -2307,6 +2619,8 @@ fn main() -> Result<(), slint::PlatformError> {
     app.set_app_menu_items(ModelRc::from(models.bar.clone()));
     app.set_transcribers(ModelRc::from(models.transcribers.clone()));
     app.set_voices(ModelRc::from(models.voices.clone()));
+    editor.set_seats(ModelRc::from(models.seats.clone()));
+    editor.set_dividers(ModelRc::from(models.dividers.clone()));
 
     // Mutate, then republish. Handed the weak handle rather than the app so a
     // callback outliving the window is a no-op instead of a panic.
@@ -2338,6 +2652,90 @@ fn main() -> Result<(), slint::PlatformError> {
     macro_rules! on_lanes {
         ($($handler:tt)*) => { publishing!(publish_lanes, $($handler)*) };
     }
+
+    // ── the workspace's arrangement ──
+    //
+    // Its own publisher rather than the full one: nothing a seat does can
+    // change a clip, a menu or a dialog, and a gutter drag runs at pointer
+    // rate. See `publish_dock`.
+    macro_rules! on_dock {
+        ($($handler:tt)*) => { publishing!(publish_dock, $($handler)*) };
+    }
+
+    editor.on_workspace_resized(on_dock!(|state, width: f32, height: f32| {
+        state.workspace = (width, height);
+    }));
+
+    // Picking from a seat's dropdown. An assignment and nothing else: the view
+    // that was here is simply not here any more, and the same view may now be
+    // in two seats at once. That is the difference between this and a drop —
+    // see below, where there is somewhere for the incumbent to go.
+    editor.on_dock_set(on_dock!(|state, seat: i32, kind: PaneKind| {
+        let Some(path) = state.dock.leaf_path(seat.max(0) as usize) else { return };
+        if let Dock::Leaf(held) = state.dock.at_mut(&path) {
+            *held = kind;
+        }
+    }));
+
+    // A panel dropped on a seat. The middle trades the two views; an edge
+    // splits the seat it landed on and takes that side of it.
+    editor.on_dock_dropped(on_dock!(|state, from: i32, onto: i32, side: DockSide| {
+        let (from, onto) = (from.max(0) as usize, onto.max(0) as usize);
+        if from == onto {
+            return;
+        }
+        let (Some(taken), Some(displaced)) =
+            (state.dock.kind_at(from), state.dock.kind_at(onto))
+        else {
+            return;
+        };
+
+        if side == DockSide::Centre {
+            for (index, kind) in [(from, displaced), (onto, taken)] {
+                let Some(path) = state.dock.leaf_path(index) else { continue };
+                if let Dock::Leaf(held) = state.dock.at_mut(&path) {
+                    *held = kind;
+                }
+            }
+            return;
+        }
+
+        // Both paths before either edit. Splitting `onto` only lengthens the
+        // paths that run through `onto`, and `from` is a different leaf, so
+        // its path survives the split — which is the whole reason these are
+        // paths and not the indices they came in as.
+        let (Some(onto_path), Some(from_path)) =
+            (state.dock.leaf_path(onto), state.dock.leaf_path(from))
+        else {
+            return;
+        };
+        state.dock.split_leaf(&onto_path, taken, side);
+        state.dock.remove_leaf(&from_path);
+    }));
+
+    editor.on_divider_pressed(on_dock!(|state, index: i32| {
+        let index = index.max(0) as usize;
+        state.divider_press = match (state.split_ratio(index), state.split_extent(index)) {
+            (Some(ratio), Some(extent)) => Some((index, ratio, extent)),
+            _ => None,
+        };
+    }));
+
+    editor.on_divider_dragged(on_dock!(|state, index: i32, delta: f32| {
+        let Some((held, from, extent)) = state.divider_press else { return };
+        if held != index.max(0) as usize || extent <= 0.0 {
+            return;
+        }
+        let Some(path) = state.dock.split_path(held) else { return };
+        let Dock::Split { columns, ratio, .. } = state.dock.at_mut(&path) else { return };
+        // The floor is in pixels and the ratio is a fraction, so the clamp is
+        // the floor divided by the extent — and guarded, because on a split
+        // too small to honour it twice the range inverts and an unguarded
+        // clamp snaps the gutter to the wrong end.
+        let floor = if *columns { SEAT_MIN_W } else { SEAT_MIN_H } / extent;
+        let (low, high) = (floor.min(0.5), (1.0 - floor).max(0.5));
+        *ratio = (from + delta / extent).clamp(low.min(high), high.max(low));
+    }));
 
     // ── tabs ──
     editor.on_tab_selected(on_timeline!(|state, index: i32| {
