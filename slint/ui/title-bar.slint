@@ -71,6 +71,11 @@ export component TitleBar inherits Rectangle {
     /// Leaves room for the traffic lights and drops nothing else; on other
     /// platforms the strip starts at the left edge.
     in property <bool> macos: true;
+    /// The launch screen's face: the wordmark and the theme toggle, and
+    /// nothing else. The menus act on a project, the panel picker and Export
+    /// act on an edit, and on this screen there is neither — a strip of
+    /// controls that all refuse is worse than a strip without them.
+    in property <bool> minimal;
 
     callback begin-drag();
     callback toggle-maximize();
@@ -145,21 +150,21 @@ export component TitleBar inherits Rectangle {
         // Each label reports its own position rather than a fixed one: they
         // are sized from their text, so where "View" starts depends on how
         // long "File" and "Edit" are.
-        file := MenuLabel {
+        if !root.minimal: file := MenuLabel {
             label: "File";
             current: root.menu == 0;
             clicked => {
                 root.menu-opened(0, file.absolute-position.x - root.absolute-position.x);
             }
         }
-        edit := MenuLabel {
+        if !root.minimal: edit := MenuLabel {
             label: "Edit";
             current: root.menu == 1;
             clicked => {
                 root.menu-opened(1, edit.absolute-position.x - root.absolute-position.x);
             }
         }
-        view := MenuLabel {
+        if !root.minimal: view := MenuLabel {
             label: "View";
             current: root.menu == 2;
             clicked => {
@@ -174,14 +179,14 @@ export component TitleBar inherits Rectangle {
         // it through. A seat's own corner button changes or closes that seat;
         // this is the only place a seat can be brought into existence, which
         // is why it lives on the window and not in a pane.
-        VerticalLayout {
+        if !root.minimal: VerticalLayout {
             alignment: center;
             AddPaneButton {
                 added(kind) => { root.add-pane(kind); }
             }
         }
 
-        VerticalLayout {
+        if !root.minimal: VerticalLayout {
             alignment: center;
             HeaderIconButton {
                 glyph: Glyph.settings;
@@ -197,7 +202,7 @@ export component TitleBar inherits Rectangle {
             }
         }
 
-        VerticalLayout {
+        if !root.minimal: VerticalLayout {
             alignment: center;
             padding-left: 4px;
 
@@ -238,6 +243,7 @@ export component TitleBar inherits Rectangle {
     // laid out, so it stays centred in the window and not in whatever space
     // the menus leave over.
     centre := HorizontalLayout {
+        visible: !root.minimal;
         x: (parent.width - self.preferred-width) / 2;
         y: 0;
         width: self.preferred-width;

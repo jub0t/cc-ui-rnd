@@ -658,6 +658,15 @@ struct Studio {
     /// selection because the menu outlives the press that opened it.
     menu_target: Option<String>,
     menu_token: i32,
+    /// The launch screen: whether it is up, the form on it, and the projects
+    /// it offers to reopen. Held with the rest because what it makes is the
+    /// project — the frame rate it chooses is the timeline's frame rate, and
+    /// the name it chooses is what the title bar says for the rest of the run.
+    on_start: bool,
+    start: StartState,
+    recents: Vec<RecentProject>,
+    project_name: String,
+
     /// The workspace's arrangement, and the box it is arranged in. The box
     /// comes up from Slint — see `Editor.workspace-resized`; it is the one
     /// thing about the layout this side cannot work out for itself.
@@ -715,6 +724,8 @@ struct Models {
     /// The workspace's arrangement, walked flat.
     seats: Rc<VecModel<SeatBox>>,
     dividers: Rc<VecModel<DockDivider>>,
+    /// The launch screen's list of projects to go back to.
+    recents: Rc<VecModel<RecentProjectData>>,
 }
 
 /// Republish a list into a live model without resetting it.
@@ -1677,6 +1688,43 @@ impl Studio {
     /// before the surface that shows them appears.
     fn publish_chrome(&self, app: &App, models: &Models) {
         let editor = app.global::<Editor>();
+
+        app.set_on_start(self.on_start);
+        app.set_project_name(self.project_name.as_str().into());
+        let (_, width, height) = RESOLUTIONS[self.start.resolution.min(RESOLUTIONS.len() - 1)];
+        let (_, num, den) = START_RATES[self.start.rate.min(START_RATES.len() - 1)];
+        app.set_start(StartData {
+            name: self.start.name.as_str().into(),
+            location: self.start.location.as_str().into(),
+            resolution: self.start.resolution as i32,
+            rate: self.start.rate as i32,
+            size_readout: format!("{width} x {height}").into(),
+            rate_readout: format!("{num}/{den} fps").into(),
+            busy: self.start.busy,
+            error: self.start.error.as_str().into(),
+        });
+        sync(
+            &models.recents,
+            self.recents
+                .iter()
+                .map(|project| RecentProjectData {
+                    path: project.path.as_str().into(),
+                    name: project.name.as_str().into(),
+                    detail: format!(
+                        "{} x {} · {:.2} fps",
+                        project.width,
+                        project.height,
+                        project.rate_num as f32 / project.rate_den as f32
+                    )
+                    .into(),
+                    when: project.when.as_str().into(),
+                    // No decoder here, so no poster: the row falls back to its
+                    // film mark, which is what the reference does for a project
+                    // with nothing visual on it or whose media has moved.
+                    ..Default::default()
+                })
+                .collect(),
+        );
         let (width, height) = OUTPUTS[self.ratio.min(OUTPUTS.len() - 1)];
         editor.set_output_width(width);
         editor.set_output_height(height);
@@ -1937,6 +1985,93 @@ stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="{glyp
         ink = hex_of(ink),
         label = xml_escaped(&label),
     )
+}
+
+// ── the launch screen ────────────────────────────────────────────────────────
+
+/// The frame sizes the launch screen offers, and what each label means.
+/// The labels are the only half Slint sees; everything that has to be a number
+/// stays here, so there is one place that knows 4K is 3840 x 2160.
+const RESOLUTIONS: [(&str, i32, i32); 4] = [
+    ("1080p", 1920, 1080),
+    ("720p", 1280, 720),
+    ("4K", 3840, 2160),
+    ("Vertical", 1080, 1920),
+];
+
+/// The frame rates, as exact fractions. 29.97 is 30000/1001 and never anything
+/// else — a decimal is for reading, and export must never be handed one.
+const START_RATES: [(&str, i32, i32); 5] = [
+    ("24", 24, 1),
+    ("25", 25, 1),
+    ("29.97", 30000, 1001),
+    ("30", 30, 1),
+    ("60", 60, 1),
+];
+
+/// The form on the launch screen.
+struct StartState {
+    name: String,
+    location: String,
+    resolution: usize,
+    rate: usize,
+    busy: bool,
+    error: String,
+}
+
+impl Default for StartState {
+    fn default() -> Self {
+        Self {
+            name: "Untitled project".into(),
+            // Desktop/WolfCut, the way the reference resolves it. Failing to
+            // find a home directory is not worth surfacing: the field starts
+            // empty, Create stays refused until something is typed, and
+            // Choose would fill it in on a build that has a picker.
+            location: std::env::var("HOME")
+                .map(|home| format!("{home}/Desktop/WolfCut"))
+                .unwrap_or_default(),
+            resolution: 0,
+            rate: 3,
+            busy: false,
+            error: String::new(),
+        }
+    }
+}
+
+/// A project that has been open before.
+///
+/// No store behind it in this tree, so `when` is a string rather than a
+/// timestamp: with nothing writing the list there is nothing for a clock to
+/// measure against, and the row wants a coarse phrase either way.
+struct RecentProject {
+    path: String,
+    name: String,
+    width: i32,
+    height: i32,
+    rate_num: i32,
+    rate_den: i32,
+    when: String,
+}
+
+fn recent(path: &str, name: &str, width: i32, height: i32, when: &str) -> RecentProject {
+    RecentProject {
+        path: path.into(),
+        name: name.into(),
+        width,
+        height,
+        rate_num: 30,
+        rate_den: 1,
+        when: when.into(),
+    }
+}
+
+fn demo_recents() -> Vec<RecentProject> {
+    vec![
+        recent("~/Desktop/WolfCut/untitled-project", "Untitled project", 1080, 1920, "yesterday"),
+        recent("~/Desktop/WolfCut/untitled-project-2", "Untitled project", 1080, 1920, "4 days ago"),
+        recent("~/Desktop/WolfCut/untitled-project-3", "Untitled project", 1920, 1080, "4 days ago"),
+        recent("~/Desktop/WolfCut/untitled-project-4", "Untitled project", 1920, 1080, "5 days ago"),
+    ]
 }
 
 // ── the workspace layout ─────────────────────────────────────────────────────
@@ -2377,6 +2512,10 @@ fn demo_studio() -> Studio {
         menu_bar_token: 0,
         menu_target: None,
         menu_token: 0,
+        on_start: true,
+        start: StartState::default(),
+        recents: demo_recents(),
+        project_name: "Untitled project".into(),
         dock: demo_dock(),
         // Nothing until Slint says otherwise, which it does on its first
         // layout. Publishing an empty workspace until then is right: there is
@@ -2609,6 +2748,7 @@ fn main() -> Result<(), slint::PlatformError> {
         voices: Rc::new(VecModel::default()),
         seats: Rc::new(VecModel::default()),
         dividers: Rc::new(VecModel::default()),
+        recents: Rc::new(VecModel::default()),
     });
     // Handed over once, here, and never replaced: a fresh model is a reset,
     // and a reset rebuilds every row that hangs off it.
@@ -2622,6 +2762,17 @@ fn main() -> Result<(), slint::PlatformError> {
     app.set_voices(ModelRc::from(models.voices.clone()));
     editor.set_seats(ModelRc::from(models.seats.clone()));
     editor.set_dividers(ModelRc::from(models.dividers.clone()));
+    app.set_recents(ModelRc::from(models.recents.clone()));
+
+    // The two ladders' labels, handed over once: they are constants, and the
+    // index the form reports back is what carries the meaning. See
+    // RESOLUTIONS and START_RATES.
+    app.set_start_resolutions(ModelRc::from(Rc::new(VecModel::from(
+        RESOLUTIONS.iter().map(|(label, _, _)| SharedString::from(*label)).collect::<Vec<_>>(),
+    ))));
+    app.set_start_rates(ModelRc::from(Rc::new(VecModel::from(
+        START_RATES.iter().map(|(label, _, _)| SharedString::from(*label)).collect::<Vec<_>>(),
+    ))));
 
     // Mutate, then republish. Handed the weak handle rather than the app so a
     // callback outliving the window is a no-op instead of a panic.
@@ -2653,6 +2804,85 @@ fn main() -> Result<(), slint::PlatformError> {
     macro_rules! on_lanes {
         ($($handler:tt)*) => { publishing!(publish_lanes, $($handler)*) };
     }
+
+    // ── the launch screen ──
+    //
+    // Everything here ends in the full publish: the form is chrome, and the
+    // one thing it can do is stop being on screen.
+    app.on_start_name_edited(on_timeline!(|state, name: SharedString| {
+        state.start.name = name.to_string();
+    }));
+    app.on_start_location_edited(on_timeline!(|state, path: SharedString| {
+        state.start.location = path.to_string();
+    }));
+    app.on_start_resolution_changed(on_timeline!(|state, index: i32| {
+        state.start.resolution = (index.max(0) as usize).min(RESOLUTIONS.len() - 1);
+    }));
+    app.on_start_rate_changed(on_timeline!(|state, index: i32| {
+        state.start.rate = (index.max(0) as usize).min(START_RATES.len() - 1);
+    }));
+    app.on_start_dismiss_error(on_timeline!(|state| { state.start.error.clear(); }));
+
+    // No folder picker in this crate, for the reason `import-media` has none:
+    // reaching for a native dialog is a dependency decision and not a detail
+    // of this screen. The seam is here so the field is wired to something the
+    // day one lands.
+    app.on_start_browse(|| {});
+
+    // Creating a project is, here, choosing what the editor opens as. There is
+    // no engine to write a manifest and no folder to make — so what the form
+    // decides is what it can actually decide: the name in the title bar and
+    // the rate and frame size the timeline and the monitor work in.
+    app.on_start_create(on_timeline!(|state| {
+        let name = state.start.name.trim().to_string();
+        state.project_name = if name.is_empty() {
+            "Untitled project".into()
+        } else {
+            name
+        };
+
+        let (_, width, height) = RESOLUTIONS[state.start.resolution];
+        let (_, num, den) = START_RATES[state.start.rate];
+        state.frame_rate = num as f32 / den as f32;
+        // The monitor's list is a different ladder — a project's frame size is
+        // not always one of the aspect presets — so this only moves it when
+        // the two agree, and leaves it where it is when they do not.
+        if let Some(index) = OUTPUTS.iter().position(|size| *size == (width, height)) {
+            state.ratio = index;
+        }
+        state.on_start = false;
+    }));
+
+    // Reopening does what creating does, minus the form: the recent row
+    // already carries the size and the rate the project was made with.
+    app.on_start_open_recent(on_timeline!(|state, path: SharedString| {
+        // Copied out before anything is written: the row lives in the same
+        // struct as the fields being set from it.
+        let Some((name, rate, size)) = state
+            .recents
+            .iter()
+            .find(|entry| entry.path == path.as_str())
+            .map(|entry| {
+                (
+                    entry.name.clone(),
+                    entry.rate_num as f32 / entry.rate_den as f32,
+                    (entry.width, entry.height),
+                )
+            })
+        else {
+            return;
+        };
+        state.project_name = name;
+        state.frame_rate = rate;
+        if let Some(index) = OUTPUTS.iter().position(|entry| *entry == size) {
+            state.ratio = index;
+        }
+        state.on_start = false;
+    }));
+
+    app.on_start_forget_recent(on_timeline!(|state, path: SharedString| {
+        state.recents.retain(|entry| entry.path != path.as_str());
+    }));
 
     // ── the workspace's arrangement ──
     //

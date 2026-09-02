@@ -80,7 +80,7 @@ component SwitchRow inherits Rectangle {
         width: parent.width - 8px;
         height: parent.height;
         border-radius: Theme.r-xs;
-        background: touch.has-hover ? Theme.field : Colors.transparent;
+        background: touch.has-hover ? Theme.field-hover : Colors.transparent;
 
         HorizontalLayout {
             padding-left: 8px;
@@ -313,7 +313,12 @@ export component PaneSwitcher inherits Rectangle {
         close-policy: close-on-click-outside;
 
         Rectangle {
-            background: Theme.raised;
+            // The tone the library's page strip gives its selected tab, which
+            // is also what the button that opened this wears. A picker and the
+            // list it opens are one control in two states, and one tone for
+            // both is what says so; `raised` put the list a step off the thing
+            // it belongs to.
+            background: Theme.field;
             border-width: 1px;
             border-color: Theme.line-strong;
             border-radius: Theme.r;
@@ -407,7 +412,12 @@ export component AddPaneButton inherits Rectangle {
         close-policy: close-on-click-outside;
 
         Rectangle {
-            background: Theme.raised;
+            // The tone the library's page strip gives its selected tab, which
+            // is also what the button that opened this wears. A picker and the
+            // list it opens are one control in two states, and one tone for
+            // both is what says so; `raised` put the list a step off the thing
+            // it belongs to.
+            background: Theme.field;
             border-width: 1px;
             border-color: Theme.line-strong;
             border-radius: Theme.r;

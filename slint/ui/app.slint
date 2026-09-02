@@ -24,6 +24,7 @@ import { ModelData, SettingsData, SettingsDialog } from "dialogs/settings.slint"
 import { DockDivider, DockSide, SeatBox } from "dock.slint";
 import { Editor } from "editor.slint";
 import { PaneKind } from "workspace/pane-switcher.slint";
+import { RecentProjectData, StartData, StartScreen } from "start.slint";
 import { TitleBar } from "title-bar.slint";
 import { TooltipLayer } from "primitives/tooltip.slint";
 import { Workspace } from "workspace/workspace.slint";
@@ -40,6 +41,7 @@ export {
     ClipData, ClipField, ClipKind, ClipTextField, DropData, SelectedClipData,
     TextAlignment, TimelineTabData, TimelineTool, TrackData, TrackSize,
     MenuItemData, MenuRow, ExportData, ExportPhase, ModelData, SettingsData,
+    RecentProjectData, StartData,
 }
 
 export component App inherits Window {
@@ -60,6 +62,28 @@ export component App inherits Window {
     // The editor's own state and actions live on the Editor global rather
     // than here — see editor.slint. What is left on the window is the window:
     // its title bar, its menus, and the two sheets that cover everything.
+
+    // ── the launch screen ────────────────────────────────────────────────
+    //
+    // Which screen the window is showing. The editor is not built until a
+    // project exists, so nothing behind this is instantiated meanwhile — and
+    // the workspace, when it does arrive, arrives with every callback already
+    // bound rather than during the window's own construction.
+    in property <bool> on-start: true;
+    in property <StartData> start;
+    in property <[string]> start-resolutions;
+    in property <[string]> start-rates;
+    in property <[RecentProjectData]> recents;
+
+    callback start-name-edited(name: string);
+    callback start-location-edited(path: string);
+    callback start-browse();
+    callback start-resolution-changed(index: int);
+    callback start-rate-changed(index: int);
+    callback start-create();
+    callback start-open-recent(path: string);
+    callback start-forget-recent(path: string);
+    callback start-dismiss-error();
 
     // Title bar. The drag/maximize pair must be handled in main.rs — a window
     // cannot drag itself from inside the scene graph; the rest are seams like
@@ -147,6 +171,7 @@ export component App inherits Window {
     VerticalLayout {
         TitleBar {
             macos: root.macos;
+            minimal: root.on-start;
             project-name: root.project-name;
             status: root.project-status;
 
@@ -166,10 +191,29 @@ export component App inherits Window {
             export-clicked => { root.export-clicked(); }
         }
 
+        if root.on-start: StartScreen {
+            vertical-stretch: 1;
+
+            data: root.start;
+            resolutions: root.start-resolutions;
+            rates: root.start-rates;
+            recents: root.recents;
+
+            name-edited(name) => { root.start-name-edited(name); }
+            location-edited(path) => { root.start-location-edited(path); }
+            browse => { root.start-browse(); }
+            resolution-changed(index) => { root.start-resolution-changed(index); }
+            rate-changed(index) => { root.start-rate-changed(index); }
+            create => { root.start-create(); }
+            open-recent(path) => { root.start-open-recent(path); }
+            forget-recent(path) => { root.start-forget-recent(path); }
+            dismiss-error => { root.start-dismiss-error(); }
+        }
+
         // Everything the workspace shows now reads the Editor global, so
         // nothing is passed to it: it is a box with four seats in it, and the
         // views inside those seats reach the state directly. See editor.slint.
-        Workspace {
+        if !root.on-start: Workspace {
             vertical-stretch: 1;
         }
     }

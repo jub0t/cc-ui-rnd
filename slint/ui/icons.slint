@@ -98,6 +98,9 @@ export enum Glyph {
     skip-back,
     skip-forward,
     text-mark,
+    // the start screen
+    info,
+    folder,
 }
 
 component Stroked inherits Path {
@@ -159,6 +162,19 @@ export component Icon inherits Rectangle {
 
     width: root.size;
     height: root.size;
+
+    // lucide/info
+    if root.glyph == Glyph.info: Stroked {
+        size: root.size; tint: root.tint; weight: root.weight;
+        commands: "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0 M12 16v-4 M12 8h.01";
+    }
+
+    // lucide/folder
+    if root.glyph == Glyph.folder: Stroked {
+        size: root.size; tint: root.tint; weight: root.weight;
+        commands: "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9"
+            + "A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z";
+    }
 
     // lucide/plus
     if root.glyph == Glyph.plus: Stroked {
