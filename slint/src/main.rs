@@ -1956,6 +1956,10 @@ stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="{glyp
 /// carried the same two numbers as `min-col` and `min-row`.
 const SEAT_MIN_W: f32 = 240.0;
 const SEAT_MIN_H: f32 = 140.0;
+/// The floor that holds where the one above cannot: enough of a seat left to
+/// find its corner button with, which is the only way back from a layout that
+/// has been squeezed too far.
+const SEAT_MIN_GRAB: f32 = 64.0;
 /// The gutter between the halves of a split, and the margin round the lot.
 const SEAT_GAP: f32 = 8.0;
 
@@ -2723,7 +2727,13 @@ fn main() -> Result<(), slint::PlatformError> {
         else {
             return;
         };
-        let side = if biggest.width >= biggest.height {
+        // The longer side, unless the longer side has no room to be halved and
+        // the shorter one does — a tall narrow seat is cut across even when it
+        // is the widest thing on screen, because the alternative is two seats
+        // too narrow to carry a header.
+        let across = biggest.width >= SEAT_MIN_W * 2.0;
+        let down = biggest.height >= SEAT_MIN_H * 2.0;
+        let side = if biggest.width >= biggest.height && (across || !down) {
             DockSide::Right
         } else {
             DockSide::Bottom
@@ -2756,12 +2766,21 @@ fn main() -> Result<(), slint::PlatformError> {
         let Some(path) = state.dock.split_path(held) else { return };
         let Dock::Split { columns, ratio, .. } = state.dock.at_mut(&path) else { return };
         // The floor is in pixels and the ratio is a fraction, so the clamp is
-        // the floor divided by the extent — and guarded, because on a split
-        // too small to honour it twice the range inverts and an unguarded
-        // clamp snaps the gutter to the wrong end.
-        let floor = if *columns { SEAT_MIN_W } else { SEAT_MIN_H } / extent;
-        let (low, high) = (floor.min(0.5), (1.0 - floor).max(0.5));
-        *ratio = (from + delta / extent).clamp(low.min(high), high.max(low));
+        // the floor divided by the extent.
+        //
+        // Two floors, because a split narrower than twice the preferred one
+        // cannot honour it — and clamping to it anyway pinned the gutter at
+        // dead centre, so dragging it did nothing at all and read as broken.
+        // Where the room is not there, what is defended instead is only that
+        // both sides stay wide enough to keep their corner button reachable:
+        // a seat squeezed to nothing is a seat that cannot be put back.
+        let wanted = if *columns { SEAT_MIN_W } else { SEAT_MIN_H };
+        let floor = if wanted * 2.0 <= extent {
+            wanted
+        } else {
+            SEAT_MIN_GRAB.min(extent / 2.0)
+        } / extent;
+        *ratio = (from + delta / extent).clamp(floor, 1.0 - floor);
     }));
 
     // ── tabs ──
@@ -3514,7 +3533,17 @@ fn main() -> Result<(), slint::PlatformError> {
     // ── the context menu ──
     editor.on_clip_context(on_timeline!(|state, id: SharedString| {
         let id = id.to_string();
+        // The token moves either way, even when there is nothing to show.
+        //
+        // The panel that right-clicked arms itself before calling, and
+        // disarms when the token it is waiting for arrives — so a request
+        // that quietly declined to bump left it armed, and the *next* one,
+        // from a different timeline seat, opened a second menu here at
+        // whatever corner this pane was last pointed at. An empty list draws
+        // no menu (see ContextMenu), so bumping regardless costs nothing.
+        state.menu_token += 1;
         if state.clip(&id).is_none() {
+            state.menu_target = None;
             return;
         }
         // Right-clicking selects, the way the reference does: the menu acts on
@@ -3523,7 +3552,6 @@ fn main() -> Result<(), slint::PlatformError> {
             state.selection = vec![id.clone()];
         }
         state.menu_target = Some(id);
-        state.menu_token += 1;
     }));
 
     editor.on_menu_selected(on_timeline!(|state, action: SharedString| {

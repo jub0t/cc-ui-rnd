@@ -375,6 +375,23 @@ export component Lanes inherits Rectangle {
     in property <[MenuItemData]> menu-items;
     in property <length> menu-height;
     in property <int> menu-token;
+
+    /// The token, but only for the Lanes that asked.
+    ///
+    /// `menu-token` is one number for the whole window, and a bump on it used
+    /// to open every menu bound to it. That was exactly one menu while there
+    /// was exactly one timeline; a second timeline seat makes it two, and the
+    /// one that was not right-clicked opens at the corner of itself, because
+    /// the position was only set on the one that was. So the pane that asked
+    /// says so, and only its own token moves.
+    property <bool> asked;
+    property <int> own-token;
+    changed menu-token => {
+        if (root.asked) {
+            root.asked = false;
+            root.own-token = root.menu-token;
+        }
+    }
     /// A band closed over this box. Committed on release rather than live:
     /// selecting as the band sweeps looks busy and makes a mistaken sweep hard
     /// to back out of.
@@ -563,9 +580,12 @@ export component Lanes inherits Rectangle {
             context-requested => {
                 // Captured before the round trip: by the time the items come
                 // back the pointer may have moved, and a menu that opens away
-                // from the click reads as a misfire.
+                // from the click reads as a misfire. `asked` goes up first for
+                // the same reason — the call below publishes before it
+                // returns, so the token can arrive inside it.
                 menu.request-x = wheel.mouse-x;
                 menu.request-y = wheel.mouse-y;
+                root.asked = true;
                 root.clip-context(entry.id);
             }
         }
@@ -754,7 +774,7 @@ export component Lanes inherits Rectangle {
             height: parent.height;
             items: root.menu-items;
             menu-height: root.menu-height;
-            token: root.menu-token;
+            token: root.own-token;
             selected(id) => { root.menu-selected(id); }
         }
 

@@ -903,6 +903,13 @@ export component MediaPane inherits Rectangle {
     /// so one slot is enough.
     property <length> press-sidebar;
 
+    /// The sidebar as it is actually drawn — see `headers-w` in the timeline
+    /// pane, which has the same problem for the same reason. A library
+    /// dropped into a narrow seat would otherwise hand the card grid a
+    /// negative width.
+    property <length> sidebar: Math.max(0px,
+        Math.min(root.sidebar-w, root.width / 2));
+
     // The catalogues, mirrored from lib/effects.ts in the reference: same ids
     // (they are written into project files there — pick them like you mean
     // them), same labels, same category split. The effect artwork is the
@@ -1093,7 +1100,7 @@ export component MediaPane inherits Rectangle {
             // name — so it was also the one most likely to be wrong for a
             // given page at a given window width.
             HairlineSplitter {
-                x: root.sidebar-w;
+                x: root.sidebar;
                 y: 0;
                 height: parent.height;
 
@@ -1114,7 +1121,7 @@ export component MediaPane inherits Rectangle {
                 // grid because of exactly that. Every element in this file
                 // that sets one dimension must pin the other axis too.
                 x: 0;
-                width: root.sidebar-w;
+                width: root.sidebar;
                 clip: true;
 
                 // One group per page, each behind its own `if`.
@@ -1296,8 +1303,8 @@ export component MediaPane inherits Rectangle {
             }
 
             PaneScroll {
-                x: root.sidebar-w + 1px;
-                width: parent.width - root.sidebar-w - 1px;
+                x: root.sidebar + 1px;
+                width: Math.max(0px, parent.width - root.sidebar - 1px);
                 height: parent.height;
 
                 if root.tab == 0: HorizontalLayout {

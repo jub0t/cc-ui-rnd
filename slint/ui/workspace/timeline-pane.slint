@@ -47,6 +47,18 @@ export component TimelinePane inherits Rectangle {
     in property <[MenuItemData]> av-items;
     in property <length> av-height;
     in property <int> av-token;
+
+    /// The token, but only for the pane that asked — see the same pair in
+    /// lanes.slint. Two timeline seats share one token, and a bump on it
+    /// would open a menu in both.
+    property <bool> asked-av;
+    property <int> own-av-token;
+    changed av-token => {
+        if (root.asked-av) {
+            root.asked-av = false;
+            root.own-av-token = root.av-token;
+        }
+    }
     callback av-selected(id: string);
     callback add-track();
     callback zoom-to-fit(width: length);
@@ -111,6 +123,17 @@ export component TimelinePane inherits Rectangle {
     /// Where the column was when the divider went down. A drag is one pointer,
     /// so one slot is enough.
     property <length> press-width;
+
+    /// The column as it is actually drawn.
+    ///
+    /// `header-width` is where the divider was left, and it outlives the pane
+    /// it was left in: a timeline dropped into a narrow seat, or squeezed by a
+    /// gutter drag, can be narrower than the column it is carrying — and then
+    /// the lanes get a negative width and the whole grid folds up. Capped at
+    /// half, which is the same rule the divider drag below enforces, so a
+    /// pane that grows again finds its column where it left it.
+    property <length> headers-w: Math.max(0px,
+        Math.min(root.header-width, root.width / 2));
     in property <length> ruler-height: 28px;
 
     /// Clamped here rather than only where it is written, so a pane dragged
@@ -171,6 +194,7 @@ export component TimelinePane inherits Rectangle {
             merge => { root.merge(); }
             delete-selected => { root.delete-selected(); }
             av-tools(at-x) => {
+                root.asked-av = true;
                 av.request-x = at-x;
                 // Just under the tray: the menu's own origin is the top of
                 // the lane grid, so a couple of pixels is all the air it
@@ -206,14 +230,14 @@ export component TimelinePane inherits Rectangle {
                 height: parent.height;
                 items: root.av-items;
                 menu-height: root.av-height;
-                token: root.av-token;
+                token: root.own-av-token;
                 selected(id) => { root.av-selected(id); }
             }
 
             TrackHeaders {
                 x: 0;
                 y: 0;
-                width: root.header-width;
+                width: root.headers-w;
                 height: parent.height;
 
                 tracks: root.tracks;
@@ -231,7 +255,7 @@ export component TimelinePane inherits Rectangle {
             }
 
             HairlineSplitter {
-                x: root.header-width;
+                x: root.headers-w;
                 y: 0;
                 height: parent.height;
 
@@ -245,9 +269,9 @@ export component TimelinePane inherits Rectangle {
             }
 
             lanes := Lanes {
-                x: root.header-width + 1px;
+                x: root.headers-w + 1px;
                 y: 0;
-                width: parent.width - root.header-width - 1px;
+                width: Math.max(0px, parent.width - root.headers-w - 1px);
                 height: parent.height;
 
                 tracks: root.tracks;

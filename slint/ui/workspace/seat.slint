@@ -41,8 +41,25 @@ export component Seat inherits Rectangle {
     /// narrow one a flat 72 is the entire seat and the middle disappears. The
     /// quarter is what keeps a small seat usable and the cap is what keeps a
     /// large one from being all edge.
-    property <length> margin-x: Math.min(72px, root.width / 4);
-    property <length> margin-y: Math.min(72px, root.height / 4);
+    ///
+    /// Floored at a pixel because `side-at` divides by them, and a seat can
+    /// be handed a zero box — on the frame before the first layout, and any
+    /// time a gutter is dragged to the end of its travel.
+    property <length> margin-x: Math.max(1px, Math.min(72px, root.width / 4));
+    property <length> margin-y: Math.max(1px, Math.min(72px, root.height / 4));
+
+    /// Whether this seat has the room to be cut in two along each axis.
+    ///
+    /// Below this a split makes two seats too small to use — and, worse, too
+    /// small to *undo*, since the corner button that would put them back is
+    /// the first thing a narrow header loses. So the edge stops being an edge
+    /// and the whole seat is the middle: what the drop would do is what the
+    /// outline shows, which is a trade rather than a split.
+    /// Different numbers per axis, because the two halves are different
+    /// shapes: a pane needs width for a header with a name and a corner button
+    /// in it, and only enough height to draw that header and a row under it.
+    property <bool> splits-across: root.width >= 320px;
+    property <bool> splits-down: root.height >= 200px;
 
     /// Which part of the seat a point is in.
     ///
@@ -55,8 +72,10 @@ export component Seat inherits Rectangle {
             ? DockSide.centre
             : Math.min(x, root.width - x) / root.margin-x
                 <= Math.min(y, root.height - y) / root.margin-y
-            ? (x < root.width / 2 ? DockSide.left : DockSide.right)
-            : (y < root.height / 2 ? DockSide.top : DockSide.bottom);
+            ? (!root.splits-across ? DockSide.centre
+                : x < root.width / 2 ? DockSide.left : DockSide.right)
+            : (!root.splits-down ? DockSide.centre
+                : y < root.height / 2 ? DockSide.top : DockSide.bottom);
     }
 
     if root.kind == PaneKind.media: MediaPane {
