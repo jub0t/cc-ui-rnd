@@ -59,8 +59,16 @@ slint-build = "1.17"
 
 [profile.release]
 # Every knob here is set for the fastest possible binary, and each one costs
-# build time. Measured on an M5: clean build 74.5s -> 105.4s, binary 21.1MB
-# -> 12.6MB. No runtime win was ever demonstrated; the UI is vsync-locked.
+# build time. When they went in, on an M5: clean build 74.5s -> 105.4s, binary
+# 21.1MB -> 12.6MB. No runtime win was ever demonstrated; the UI is
+# vsync-locked, and this profile is a bet on the frames where it is not.
+#
+# Those figures are old and describe a much smaller tree. As it stands now,
+# same machine: clean release build 3m18s, binary 22MB — of which about 1.7MB
+# is the fonts and effect previews the build script embeds. The rest is the
+# application having roughly tripled, and `target-cpu=native` trading size for
+# instruction selection. Neither number has been split further, so do not
+# quote a breakdown of them.
 #
 # Two more levers live outside this block, because they are not profile
 # settings:
