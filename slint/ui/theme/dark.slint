@@ -1,16 +1,18 @@
-// The dark palette — every value the interface is made of, and the only file
-// in the tree that names one.
+// The dark palette — the colours the interface is made of, and one of the two
+// files in the tree allowed to name one.
 //
-// This is what `theme.slint` next door re-exports. To make another theme:
-// copy this file, change the values, and point that one line at the copy.
-// Nothing else in the tree needs touching, because nothing else knows a
-// colour by anything but its name here.
+// `theme.slint` next door picks between this and `light.slint` on a single
+// property. Nothing else in the tree knows a colour by anything but its name
+// in `Theme`, so a value changed here changes it everywhere and nowhere else
+// needs touching.
 //
 // ── what a palette has to keep ───────────────────────────────────────────────
 //
 // The values are not a list of favourite colours; they are a set of
 // relationships, and a fork that keeps them will look like a theme rather than
-// a recolour. The load-bearing ones:
+// a recolour. This is where they are written down; the light palette answers
+// the same list, and its header only says where it had to answer differently.
+// The load-bearing ones:
 //
 //   - `page` is under every surface, and stays there. The panes float on it,
 //     and the gap between what a pane is and what the ground is *is* the
@@ -19,11 +21,14 @@
 //     field-active` only means anything as a ladder. Each step exists to be
 //     told from the one under it: a sunken well inside a panel, a raised card
 //     on it, a field on the card, and the two answers a field gives a pointer.
-//     Move them together or not at all.
+//     Move them together or not at all. What the ladder is measuring is
+//     prominence, and here prominence happens to run towards white; that is
+//     the one thing about it a light palette cannot copy.
 //   - `on-accent` is the ink that sits *on* the accent, and it is dark because
 //     the accent is bright. Swap the accent for a dark one and this has to
 //     become light in the same edit, or every activated control loses its
-//     label. The same pairing holds for `on-green` and `on-scrim`.
+//     label — which is exactly what the light palette does. The same pairing
+//     holds for `on-green` and `on-scrim`.
 //   - The five media kinds are pairs: a vivid mark and the darker same-hue
 //     ground it sits on. A card in the bin and the clip it becomes on a track
 //     wear the same pair, which is what makes them read as one object moved.
@@ -32,11 +37,6 @@
 //     stretches read as content.
 //   - The clip-ink family holds against all five kind hues, not against a
 //     grey. It cannot be borrowed from the text colours for that reason.
-//
-// Sizes under about 5px — a 2px scrollbar thumb, a 1px splitter pill — are
-// shape rather than theme, and stay where they are drawn. What is here is what
-// a look is made of: the surfaces, the hues, the radii a control can have, the
-// steps of the type scale.
 //
 // ── where the values came from ───────────────────────────────────────────────
 //
@@ -50,51 +50,7 @@
 // mirrors the legacy editor (desktop/src/styles.css, the
 // `:root[data-theme="dark"]` block), because those name things the engine and
 // the project format also name.
-export global Theme {
-    // type — two roles, not one, following the reference's own split.
-    //
-    // Synonym carries the interface. It is a text face, drawn for paragraph
-    // sizes, and it stays readable at the 10 and 11px this app is full of.
-    //
-    // Inter is the technical face: timecode, the ruler, clip labels, paths,
-    // dimensions, counts — anything you read as a *value* rather than as
-    // language. Its even, mechanical figures suit numbers, and keeping it off
-    // the prose is what stops the whole interface reading like a spec sheet.
-    //
-    // The reference spends a third face (Cabinet Grotesk) on display headings.
-    // There is nothing here big enough to need one yet.
-    out property <string> font: "Synonym";
-    out property <string> font-technical: "Inter";
-    /// The scale. `fs` is the body size everything inherits; the two either
-    /// side of it are the dense readout and the panel title. `xl` is for the
-    /// few lines that are content rather than chrome — a project's name in a
-    /// list — and `display` is the launch screen's heading and nothing else.
-    out property <length> fs-xs: 10px;
-    out property <length> fs-sm: 11px;
-    out property <length> fs: 12px;
-    out property <length> fs-lg: 13px;
-    out property <length> fs-xl: 14px;
-    out property <length> fs-input: 15px;
-    out property <length> fs-display: 34px;
-
-    // The weights the design actually calls for, uncompensated.
-    //
-    // Skia composites glyph coverage with gamma correction, so light text on a
-    // dark panel comes out at the weight the tokens name — the same as it does
-    // in a browser. FemtoVG does not correct for it and thins small text, which
-    // is what the 500/600 these used to carry was compensating for. Put those
-    // back if you build --features wgpu; leave them alone otherwise, or the
-    // text is over-corrected and reads as too heavy.
-    //
-    // Weight is the one axis that can absorb a renderer difference without
-    // touching a colour token, and every face is bundled, so it costs nothing
-    // at runtime. Reach for it rather than nudging a surface to compensate.
-    out property <int> weight-body: 400;    // 500 under --features wgpu
-    out property <int> weight-title: 500;   // 600 under --features wgpu
-    /// The launch screen's heading, and the wordmark in the title bar. The one
-    /// weight above `title`, and the only place the type gets to be loud.
-    out property <int> weight-display: 600;
-
+export global Dark {
     // surfaces — web/src/styles/tokens.css
     //
     // Panels are a grey that visibly floats on the near-black ground — never
@@ -280,42 +236,8 @@ export global Theme {
     out property <color> danger-wash: #2a1614;
     out property <color> danger-edge: #5a2b28;
 
-    // radii
-    out property <length> r-xs: 3px;
-    out property <length> r-sm: 5px;
-    out property <length> r: 7px;
-    out property <length> r-lg: 12px;
-    /// The dialog sheet, and nothing smaller. A modal is the largest rounded
-    /// thing in the window and wants a corner to match.
-    out property <length> r-xl: 16px;
-
-    // metrics
-    out property <length> h: 28px;        // standard control height
-    out property <length> gap: 6px;
-    out property <length> pad: 14px;      // panel horizontal padding
-    out property <length> label-w: 62px;
-
     // window ground the panes float on — the prototype's page, a shade under
     // the darkest panel so the gutters read as gaps and not as seams
     out property <color> page: #08080a;
     out property <color> page-fg-muted: #a1a1a6;
-
-    // ── content ──────────────────────────────────────────────────────────
-    //
-    // Colours the *edit* can be made of, as opposed to the interface. They are
-    // here rather than beside the control that offers them because a fork that
-    // retones the window will want the shelf inside it to agree — a lime
-    // interface offering a blue-heavy swatch row reads as two designs.
-    //
-    // The shelf is the colours a title can be: the neutrals first, then the
-    // interface's own accent and status hues, then the clip palette's marks.
-    out property <[color]> swatches: [
-        #ffffff, #f5f5f7, #a1a1a6, #6e6e73, #15220a, #000000,
-        #cbf53f, #30d158, #ffd60a, #f09e2f, #ff453a, #e8355e,
-        #8b5cf6, #4d8df6, #34c759, #142640,
-    ];
-    /// What a title's plate is set to when the switch is turned on. A colour
-    /// and not a flag: turning it off is clearing it, and this is what "on"
-    /// means the first time.
-    out property <color> plate-on: #000000cc;
 }

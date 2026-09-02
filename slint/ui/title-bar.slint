@@ -194,10 +194,14 @@ export component TitleBar inherits Rectangle {
             }
         }
 
+        // The one control that is on both screens. It shows where the click
+        // goes rather than where the window is — a sun to turn the lights on,
+        // a moon to turn them off — which is the only reading that stays
+        // right when the icon is the only thing you can see.
         VerticalLayout {
             alignment: center;
             HeaderIconButton {
-                glyph: Glyph.sun;
+                glyph: Theme.dark ? Glyph.sun : Glyph.moon;
                 clicked => { root.toggle-theme(); }
             }
         }

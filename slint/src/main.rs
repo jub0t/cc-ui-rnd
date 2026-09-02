@@ -363,6 +363,7 @@ struct SettingsState {
     transcribe_language: i32,
 }
 
+
 impl Default for SettingsState {
     fn default() -> Self {
         Self { open: false, tab: 0, language: 0, transcribe_language: 0 }
@@ -3879,6 +3880,20 @@ fn main() -> Result<(), slint::PlatformError> {
         state.export.message = String::new();
     }));
     app.on_open_settings(on_timeline!(|state| { state.settings.open = true; }));
+    // The theme is not editor state and never reaches a project file: it is
+    // one bool on the Theme global, and every colour in the tree is a binding
+    // away from it, so flipping it here retones the window on the next frame
+    // without anything being rebuilt or republished. Handled in Rust rather
+    // than in the .slint so there is somewhere for a remembered preference to
+    // be read and written the day there is a place to keep one.
+    app.on_toggle_theme({
+        let weak = app.as_weak();
+        move || {
+            let Some(app) = weak.upgrade() else { return };
+            let theme = app.global::<Theme>();
+            theme.set_dark(!theme.get_dark());
+        }
+    });
     app.on_export_closed(on_timeline!(|state| { state.export.open = false; }));
     app.on_settings_closed(on_timeline!(|state| { state.settings.open = false; }));
 
@@ -4245,14 +4260,19 @@ fn main() -> Result<(), slint::PlatformError> {
     app.global::<Payload>().on_preview({
         let weak = app.as_weak();
         let library = library.clone();
+        // Keyed by theme *and* payload: the chip is rasterised in the
+        // palette's own colours, so the same clip dragged under the other
+        // theme is a different picture. One character in front of the payload
+        // is cheaper than reaching in to clear the map when the toggle flips.
         let chips: RefCell<std::collections::HashMap<String, slint::Image>> =
             RefCell::new(std::collections::HashMap::new());
         move |payload| {
             let Some(app) = weak.upgrade() else { return slint::Image::default() };
-            if let Some(chip) = chips.borrow().get(payload.as_str()) {
+            let theme = app.global::<Theme>();
+            let key = format!("{}{payload}", if theme.get_dark() { 'd' } else { 'l' });
+            if let Some(chip) = chips.borrow().get(&key) {
                 return chip.clone();
             }
-            let theme = app.global::<Theme>();
 
             // A panel being dragged out of its seat. Not a clip, so it never
             // reaches the library: `pane:<seat>:<name>:<slug>`, and the chip
@@ -4275,7 +4295,7 @@ fn main() -> Result<(), slint::PlatformError> {
                     .as_bytes(),
                 )
                 .unwrap_or_default();
-                chips.borrow_mut().insert(payload.to_string(), chip.clone());
+                chips.borrow_mut().insert(key, chip.clone());
                 return chip;
             }
 
@@ -4311,7 +4331,7 @@ fn main() -> Result<(), slint::PlatformError> {
             );
             let chip = slint::Image::load_from_svg_data(document.as_bytes())
                 .unwrap_or_default();
-            chips.borrow_mut().insert(payload.to_string(), chip.clone());
+            chips.borrow_mut().insert(key, chip.clone());
             chip
         }
     });
