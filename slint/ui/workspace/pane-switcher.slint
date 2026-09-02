@@ -1,5 +1,6 @@
 import { Theme } from "../theme.slint";
 import { Glyph, Icon } from "../icons.slint";
+import { Payload } from "../util.slint";
 import { Tip } from "../primitives/tooltip.slint";
 
 // Which editor a seat is showing, and the control that changes it.
@@ -39,6 +40,16 @@ export global Panes {
             : kind == PaneKind.preview ? "Preview"
             : kind == PaneKind.inspector ? "Inspector"
             : "Timeline";
+    }
+
+    /// The name a view goes by in a drag payload — stable, lower-case, and
+    /// the same string Rust matches on to draw the chip under the cursor.
+    /// Not the label: that is prose and could be translated tomorrow.
+    public pure function id(kind: PaneKind) -> string {
+        return kind == PaneKind.media ? "media"
+            : kind == PaneKind.preview ? "preview"
+            : kind == PaneKind.inspector ? "inspector"
+            : "timeline";
     }
 
     /// The mark a view is known by, and the one the corner button wears.
@@ -111,47 +122,103 @@ component SwitchRow inherits Rectangle {
     }
 }
 
-// The square in a pane's top-right corner: the mark of what this pane is
-// currently showing, and the way to make it show something else.
+// The button in a pane's top-right corner: the mark of what this pane is
+// currently showing, and the two ways to change it.
+//
+// Click it and a list drops down — pick a view and this seat shows it. Drag it
+// onto another seat and the two trade places, which is the same operation said
+// with the pointer: it answers "put this *there*" without having to work out
+// which of the four boxes "there" is and then name the view that is in it.
+// Blender's corner drag does the same job; a browser's tab strip is the other
+// place everyone has already learnt it.
 export component PaneSwitcher inherits Rectangle {
     /// What this pane is right now.
     in property <PaneKind> kind;
+    /// Which of the workspace's boxes it is in, so a drop knows where it came
+    /// from. See the payload below.
+    in property <int> seat;
 
     callback picked(kind: PaneKind);
+
+    /// `pane:<seat>:<name>:<slug>` — the seat for the drop, the name for the
+    /// chip under the cursor, and the slug for the mark on it.
+    property <string> payload:
+        "pane:\{root.seat}:\{Panes.label(root.kind)}:\{Panes.id(root.kind)}";
 
     property <length> menu-w: 168px;
     /// Four rows and the surface's own padding.
     property <length> menu-h: 4 * 26px + 8px;
 
-    width: 24px;
+    // The mark, a gap, and the chevron, with even padding either side.
+    property <length> mark: 14px;
+    property <length> caret: 10px;
+    property <length> pad: 6px;
+
+    width: 2 * root.pad + root.mark + 3px + root.caret;
     height: 24px;
 
-    chip := Rectangle {
-        width: parent.width;
-        height: parent.height;
-        border-radius: Theme.r-xs;
-        background: touch.pressed ? Theme.field-active
-            : touch.has-hover ? Theme.field
-            : Colors.transparent;
+    // The drag only starts once the press has travelled past the threshold,
+    // so the TouchArea inside keeps its click and the menu still opens — the
+    // same arrangement the bin's cards use.
+    drag := DragArea {
+        // Move, not copy: a panel is somewhere, and dropping it somewhere else
+        // is where it now is.
+        allow-move: true;
+        data: Payload.of(root.payload);
+        drag-image: Payload.preview(root.payload);
+        drag-image-offset-x: -8;
+        drag-image-offset-y: -4;
 
-        animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+        chip := Rectangle {
+            width: parent.width;
+            height: parent.height;
+            border-radius: Theme.r-xs;
+            // Filled at rest, unlike every other icon button in this window,
+            // which idles transparent and only takes a ground when the pointer
+            // finds it. Those are actions, and a tray of them wants to read as a
+            // row of marks; this one is a *state*, and the one control in the pane
+            // that says what the pane is. Blender does the same and for the same
+            // reason — its editor-type button is a raised well in a header of flat
+            // ones — and it is the only way to find the thing without knowing
+            // already that it is there.
+            background: touch.pressed ? Theme.field-active
+                : touch.has-hover ? Theme.field-hover
+                : Theme.field;
 
-        Icon {
-            x: (parent.width - self.width) / 2;
-            y: (parent.height - self.height) / 2;
-            glyph: Panes.glyph(root.kind);
-            size: 13px;
-            tint: touch.has-hover ? Theme.fg : Theme.fg-muted;
-        }
+            animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
-        touch := TouchArea {
-            mouse-cursor: pointer;
-            clicked => { menu.show(); }
-        }
+            Icon {
+                x: root.pad;
+                y: (parent.height - self.height) / 2;
+                glyph: Panes.glyph(root.kind);
+                size: root.mark;
+                tint: touch.has-hover ? Theme.fg : Theme.fg-muted;
+            }
 
-        Tip {
-            text: "Change what this panel shows";
-            active: touch.has-hover;
+            // The chevron: what says this is a picker and not a button that does
+            // something. Dimmer than the mark beside it, because the mark is the
+            // answer and this is only the invitation to change it.
+            Icon {
+                x: parent.width - root.pad - self.width;
+                y: (parent.height - self.height) / 2;
+                glyph: Glyph.chevron-down;
+                size: root.caret;
+                // Heavier than the set's own weight, because it is drawn smaller
+                // than anything else in the window: at 1.9 on a 10-unit glyph the
+                // stroke is under a pixel and the chevron greys out to a smudge.
+                weight: 2.6;
+                tint: touch.has-hover ? Theme.fg-muted : Theme.fg-dim;
+            }
+
+            touch := TouchArea {
+                mouse-cursor: pointer;
+                clicked => { menu.show(); }
+            }
+
+            Tip {
+                text: "Change what this panel shows, or drag it onto another";
+                active: touch.has-hover;
+            }
         }
     }
 

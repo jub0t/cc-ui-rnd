@@ -110,6 +110,9 @@ export component ConfigPane inherits Rectangle {
 
     /// The corner button: show something else in this pane's seat.
     callback pane-picked(kind: PaneKind);
+    /// Which seat this pane is in. It travels no further than the corner
+    /// button, whose drag payload has to say where it is being taken from.
+    in property <int> pane-seat;
 
     // ── the clip inspector's chains, owned by Rust ───────────────────────
     in property <[AppliedPresetData]> filters-applied;
@@ -217,6 +220,7 @@ export component ConfigPane inherits Rectangle {
                     alignment: center;
                     PaneSwitcher {
                         kind: PaneKind.inspector;
+                        seat: root.pane-seat;
                         picked(kind) => { root.pane-picked(kind); }
                     }
                 }
@@ -344,6 +348,7 @@ export component ConfigPane inherits Rectangle {
                     alignment: center;
                     PaneSwitcher {
                         kind: PaneKind.inspector;
+                        seat: root.pane-seat;
                         picked(kind) => { root.pane-picked(kind); }
                     }
                 }

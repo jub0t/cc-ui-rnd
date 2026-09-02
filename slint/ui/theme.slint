@@ -66,12 +66,18 @@ export global Theme {
     // panel without lifting the rest would close those gaps instead of moving
     // them. Only `page` stays where it is: it is the ground the panes float
     // on, and holding it down is what widens the gutters as the panes lighten.
-    out property <color> panel: #171717;
-    out property <color> raised: #202020;
-    out property <color> well: #0e0e0e;
-    out property <color> field: #262626;
-    out property <color> field-hover: #2e2e2e;
-    out property <color> field-active: #383838;
+    //
+    // Lifted a notch again once the outlines came off the panes. An outline
+    // was doing part of the work of separating a pane from the ground; with
+    // it gone the value step has to do all of it, and the darker ladder left
+    // the panes reading as holes in the window rather than as surfaces on it.
+    // Everything moves by the same amount, so no two steps change places.
+    out property <color> panel: #1c1c1c;
+    out property <color> raised: #262626;
+    out property <color> well: #131313;
+    out property <color> field: #2c2c2c;
+    out property <color> field-hover: #343434;
+    out property <color> field-active: #3f3f3f;
 
     // hairlines — white-alpha like the reference, so they hold on panel,
     // well, and ground alike.
@@ -138,7 +144,9 @@ export global Theme {
     // stretches read as content. `lane-alt` is the banded neighbour that keeps
     // a stack of eight tracks countable without a rule between every pair.
     //
-    // Two tones, alternating, and neither of them black. Pitch black made the
+    // Two tones, alternating, and neither of them black. Both follow the
+    // panel ladder up: they are the floor of a pane, and a floor that stays
+    // put while the walls lift stops reading as part of the same room. Pitch black made the
     // grid do all of the work: it answers "where in time" but never "which
     // lane", so an eight-track stack had to be counted from the headers every
     // time. Banding answers the second question for free, and the grid keeps
@@ -148,14 +156,14 @@ export global Theme {
     // still reads as a well cut into the pane, and a clip's own dark ground
     // now sits *on* something rather than floating in a hole. Both stay well
     // under `panel`, or the empty stretches would read as content.
-    out property <color> lane: #0c0c0d;
-    out property <color> lane-alt: #131314;
+    out property <color> lane: #101011;
+    out property <color> lane-alt: #171718;
     // The ruler is its own surface, not the first row of the stack: a step
     // under the darker lane, so the strip carrying the timestamps reads as
     // the floor of the pane and the banding starts below it. It followed
     // `raised` before, which put it above the panel and made it the brightest
     // thing in the pane — the opposite of what a ruler should be.
-    out property <color> ruler: #08080a;
+    out property <color> ruler: #0b0b0c;
     /// The vertical rules. 6% white was set against a lane that was still a
     /// dark grey, and all but vanished when the lanes went black — a grid that
     /// costs elements and reads as nothing. 14% clears both of the tones the

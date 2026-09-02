@@ -1744,10 +1744,10 @@ fn wave_path(media: &str, source_start: f32, duration: f32, gain: f32) -> String
     path
 }
 
-/// The mark a drag chip wears, by kind — lucide's own path data, the same
-/// source as ui/icons.slint. Duplicated rather than reached for because the
-/// glyphs live in the Slint tree as `Path` elements, and an element cannot be
-/// read back out as a string.
+/// The marks a drag chip can wear — lucide's own path data, the same source as
+/// ui/icons.slint. Duplicated rather than reached for because the glyphs live
+/// in the Slint tree as `Path` elements, and an element cannot be read back
+/// out as a string.
 fn chip_glyph(kind: ClipKind) -> &'static str {
     match kind {
         // lucide/film
@@ -1763,6 +1763,25 @@ fn chip_glyph(kind: ClipKind) -> &'static str {
         ClipKind::Text => "M12 4v16 M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2 M9 20h6",
         // lucide/audio-lines
         ClipKind::Filter => "M2 10v3 M6 6v11 M10 3v18 M14 8v7 M18 5v13 M22 10v3",
+    }
+}
+
+/// The same again for a panel being dragged out of its seat. The slugs are
+/// the ones `Panes.id` hands out, and they are what the payload carries.
+fn pane_glyph(slug: &str) -> &'static str {
+    match slug {
+        // lucide/image
+        "preview" => "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z \
+                      M7 9a2 2 0 1 0 4 0a2 2 0 1 0 -4 0 M21 15l-3.086-3.086a2 2 0 0 0-2.828 0L6 21",
+        // lucide/sliders-horizontal
+        "inspector" => "M10 5H3 M12 19H3 M14 3v4 M16 17v4 M21 12h-9 M21 19h-5 M21 5h-7 \
+                        M8 10v4 M8 12H3",
+        // lucide/rows-3
+        "timeline" => "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z \
+                       M21 9H3 M21 15H3",
+        // lucide/film
+        _ => "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z \
+              M7 3v18 M3 7.5h4 M3 12h18 M3 16.5h4 M17 3v18 M17 7.5h4 M17 16.5h4",
     }
 }
 
@@ -1786,7 +1805,7 @@ fn xml_escaped(text: &str) -> String {
 /// chip is inset by it, which is why the offsets the DragAreas pass are that
 /// much larger than the gap they want.
 fn drag_chip_svg(
-    kind: ClipKind,
+    glyph: &str,
     label: &str,
     wave: &str,
     mark: slint::Color,
@@ -1826,7 +1845,6 @@ stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="{glyp
             y = PAD + 5.0 + (BADGE - MARK) / 2.0,
             scale = MARK / 24.0,
             mark = hex_of(mark),
-            glyph = chip_glyph(kind),
         )
     } else {
         format!(
@@ -3512,6 +3530,16 @@ fn main() -> Result<(), slint::PlatformError> {
     app.global::<Payload>()
         .on_text(|payload| payload.plain_text().unwrap_or_default());
 
+    // `pane:2:Inspector:inspector` -> 2. Everything else, including a drag
+    // that came from another application, is -1: a seat only accepts a panel,
+    // and this is how it tells one from anything else.
+    app.global::<Payload>().on_pane_seat(|text| {
+        text.strip_prefix("pane:")
+            .and_then(|rest| rest.split(':').next())
+            .and_then(|seat| seat.parse().ok())
+            .unwrap_or(-1)
+    });
+
     // The picture the cursor carries. Resolved through the same `incoming`
     // the drop does, so the chip and the clip it would leave are one answer
     // to one question — a chip that named a different thing than the ghost
@@ -3531,13 +3559,39 @@ fn main() -> Result<(), slint::PlatformError> {
             if let Some(chip) = chips.borrow().get(payload.as_str()) {
                 return chip.clone();
             }
+            let theme = app.global::<Theme>();
+
+            // A panel being dragged out of its seat. Not a clip, so it never
+            // reaches the library: `pane:<seat>:<name>:<slug>`, and the chip
+            // wears the accent rather than a media kind's hue — what is in the
+            // air is a piece of the window, not a piece of the edit.
+            if let Some(rest) = payload.strip_prefix("pane:") {
+                let mut fields = rest.splitn(3, ':').skip(1);
+                let label = fields.next().unwrap_or_default();
+                let slug = fields.next().unwrap_or_default();
+                let chip = slint::Image::load_from_svg_data(
+                    drag_chip_svg(
+                        pane_glyph(slug),
+                        label,
+                        "",
+                        theme.get_accent(),
+                        theme.get_field(),
+                        theme.get_raised(),
+                        theme.get_fg(),
+                    )
+                    .as_bytes(),
+                )
+                .unwrap_or_default();
+                chips.borrow_mut().insert(payload.to_string(), chip.clone());
+                return chip;
+            }
+
             // An empty payload is a card that opted out of dragging, and an
             // unreadable one is a drag this tree did not start. Both get the
             // empty image, which the overlay skips.
             let Some(plan) = Studio::incoming(payload.as_str(), &library) else {
                 return slint::Image::default();
             };
-            let theme = app.global::<Theme>();
             let (mark, well) = match plan.kind {
                 ClipKind::Video => (theme.get_kind_video(), theme.get_kind_video_well()),
                 ClipKind::Audio => (theme.get_kind_audio(), theme.get_kind_audio_well()),
@@ -3554,7 +3608,7 @@ fn main() -> Result<(), slint::PlatformError> {
                 .map(|item| item.wave.to_string())
                 .unwrap_or_default();
             let document = drag_chip_svg(
-                plan.kind,
+                chip_glyph(plan.kind),
                 &plan.label,
                 &wave,
                 mark,

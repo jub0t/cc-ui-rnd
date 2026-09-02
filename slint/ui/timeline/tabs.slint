@@ -243,15 +243,20 @@ export component TimelineTabs inherits Rectangle {
     }
 
     // The trailing slot, for whatever the pane wants in the corner of its
-    // top bar. Placed rather than laid out: the strip's own layout is
-    // start-aligned so the tabs stay their own width, and a start-aligned
-    // layout has no spare space to push a trailing child into.
-    Rectangle {
-        x: parent.width - self.width - 8px;
-        y: (parent.height - self.height) / 2;
-        width: 24px;
-        height: 24px;
+    // top bar. A second layer over the strip rather than a child of its
+    // layout: that one is start-aligned so the tabs keep their own width, and
+    // a start-aligned layout has no spare space to push a trailing child into.
+    // Nothing here is hit-testable, so the tabs underneath keep their clicks.
+    //
+    // End-aligned rather than placed at a coordinate, so whatever is put in it
+    // is asked how wide it is instead of being told.
+    HorizontalLayout {
+        alignment: end;
+        padding-right: 8px;
 
-        @children
+        VerticalLayout {
+            alignment: center;
+            @children
+        }
     }
 }

@@ -1,3 +1,5 @@
+import { Theme } from "../theme.slint";
+import { Payload } from "../util.slint";
 import { PaneKind } from "pane-switcher.slint";
 import { Editor } from "../editor.slint";
 import { ConfigPane } from "config-pane.slint";
@@ -19,8 +21,14 @@ import { TimelinePane } from "timeline-pane.slint";
 export component Seat inherits Rectangle {
     /// What to show here.
     in property <PaneKind> kind;
+    /// Which box this is, 0..3. Travels in the drag payload so a drop can say
+    /// where the panel came from.
+    in property <int> index;
+
     /// Its corner button was used.
     callback picked(kind: PaneKind);
+    /// A panel was dropped here from another seat. The two trade places.
+    callback swapped(from: int);
 
     if root.kind == PaneKind.media: MediaPane {
             x: 0;
@@ -29,6 +37,7 @@ export component Seat inherits Rectangle {
             height: root.height;
 
             pane-picked(kind) => { root.picked(kind); }
+            pane-seat: root.index;
 
             items: Editor.media;
             count-all: Editor.media-count-all;
@@ -60,6 +69,7 @@ export component Seat inherits Rectangle {
             height: root.height;
 
             pane-picked(kind) => { root.picked(kind); }
+            pane-seat: root.index;
 
             output-width: Editor.output-width;
             output-height: Editor.output-height;
@@ -86,6 +96,7 @@ export component Seat inherits Rectangle {
             height: root.height;
 
             pane-picked(kind) => { root.picked(kind); }
+            pane-seat: root.index;
 
             video-effects: Editor.video-effects;
             audio-effects: Editor.audio-effects;
@@ -101,6 +112,32 @@ export component Seat inherits Rectangle {
             clip-commit => { Editor.clip-commit(); }
         }
 
+    // Declared before the views, so anything inside one of them that takes
+    // drops — the lanes — is hit first and this only ever sees what that
+    // refused. A DropArea that answers `none` passes the event on rather than
+    // swallowing it, which is what lets the two live over each other: a clip
+    // dragged from the bin onto the timeline seat lands on the lanes, and a
+    // panel dragged onto the same pixel lands here.
+    landing := DropArea {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+
+        can-drop(event) => {
+            // Its own seat is not a target: dropping a panel where it already
+            // is should read as nothing happening, not as a move of zero.
+            return Payload.pane-seat(Payload.text(event.data)) >= 0
+                && Payload.pane-seat(Payload.text(event.data)) != root.index
+                ? DragAction.move : DragAction.none;
+        }
+
+        dropped(event) => {
+            root.swapped(Payload.pane-seat(Payload.text(event.data)));
+            return DragAction.move;
+        }
+    }
+
     if root.kind == PaneKind.timeline: TimelinePane {
             x: 0;
             y: 0;
@@ -108,6 +145,7 @@ export component Seat inherits Rectangle {
             height: root.height;
 
             pane-picked(kind) => { root.picked(kind); }
+            pane-seat: root.index;
 
             tabs: Editor.timeline-tabs;
             current-tab: Editor.timeline-current-tab;
@@ -164,4 +202,21 @@ export component Seat inherits Rectangle {
             track-removed(index) => { Editor.track-removed(index); }
             track-renamed(index, name) => { Editor.track-renamed(index, name); }
         }
+
+    // What says the drop will land here. Over the view rather than under it,
+    // and an outline rather than a wash: a pane full of cards or lanes has no
+    // spare contrast to tint, and the accent is what every other target in
+    // this window — a selected clip, a band, the timeline's own ghost — is
+    // drawn in. Nothing in it is hit-testable, so it takes nothing from the
+    // DropArea underneath.
+    if landing.has-drag: Rectangle {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        border-radius: Theme.r-lg;
+        background: Theme.accent-soft;
+        border-width: 2px;
+        border-color: Theme.accent;
+    }
 }

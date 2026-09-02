@@ -49,6 +49,27 @@ export component Workspace inherits Rectangle {
     in-out property <PaneKind> seat-right: PaneKind.inspector;
     in-out property <PaneKind> seat-bottom: PaneKind.timeline;
 
+    /// Scratch for `trade`: the expression language has no local bindings,
+    /// and a swap has to remember what it is displacing.
+    property <PaneKind> displaced;
+
+    /// Two seats change places. This is the drag, and only the drag: picking
+    /// from the dropdown is a plain assignment and leaves the other seat
+    /// alone, because picking says "show me this here" and dragging says "put
+    /// this there" — and the second one has somewhere for the incumbent to go.
+    function trade(a: int, b: int) {
+        root.displaced = root.holds(a);
+        root.put(a, root.holds(b));
+        root.put(b, root.displaced);
+    }
+
+    pure function holds(seat: int) -> PaneKind {
+        return seat == 0 ? root.seat-left
+            : seat == 1 ? root.seat-centre
+            : seat == 2 ? root.seat-right
+            : root.seat-bottom;
+    }
+
     function put(seat: int, kind: PaneKind) {
         if (seat == 0) { root.seat-left = kind; }
         if (seat == 1) { root.seat-centre = kind; }
@@ -132,7 +153,9 @@ export component Workspace inherits Rectangle {
         width: root.seat-w(0);
         height: root.seat-h(0);
         kind: root.seat-left;
+        index: 0;
         picked(kind) => { root.put(0, kind); }
+        swapped(from) => { root.trade(from, 0); }
     }
 
     Seat {
@@ -141,7 +164,9 @@ export component Workspace inherits Rectangle {
         width: root.seat-w(1);
         height: root.seat-h(1);
         kind: root.seat-centre;
+        index: 1;
         picked(kind) => { root.put(1, kind); }
+        swapped(from) => { root.trade(from, 1); }
     }
 
     Seat {
@@ -150,7 +175,9 @@ export component Workspace inherits Rectangle {
         width: root.seat-w(2);
         height: root.seat-h(2);
         kind: root.seat-right;
+        index: 2;
         picked(kind) => { root.put(2, kind); }
+        swapped(from) => { root.trade(from, 2); }
     }
 
     Seat {
@@ -159,7 +186,9 @@ export component Workspace inherits Rectangle {
         width: root.seat-w(3);
         height: root.seat-h(3);
         kind: root.seat-bottom;
+        index: 3;
         picked(kind) => { root.put(3, kind); }
+        swapped(from) => { root.trade(from, 3); }
     }
 
     // Left | centre: the drag moves the left seat's trailing edge, and the

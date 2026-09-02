@@ -226,6 +226,9 @@ export component PreviewPane inherits Rectangle {
 
     /// The corner button: show something else in this pane's seat.
     callback pane-picked(kind: PaneKind);
+    /// Which seat this pane is in. It travels no further than the corner
+    /// button, whose drag payload has to say where it is being taken from.
+    in property <int> pane-seat;
 
     property <[int]> ratios-w: [1920, 3840, 1080, 1080, 1440, 2560];
     property <[int]> ratios-h: [1080, 2160, 1920, 1080, 1080, 1080];
@@ -268,6 +271,7 @@ export component PreviewPane inherits Rectangle {
                 alignment: center;
                 PaneSwitcher {
                     kind: PaneKind.preview;
+                    seat: root.pane-seat;
                     picked(kind) => { root.pane-picked(kind); }
                 }
             }

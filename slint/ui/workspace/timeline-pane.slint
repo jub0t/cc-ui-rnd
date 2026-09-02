@@ -87,6 +87,9 @@ export component TimelinePane inherits Rectangle {
 
     /// The corner button: show something else in this pane's seat.
     callback pane-picked(kind: PaneKind);
+    /// Which seat this pane is in. It travels no further than the corner
+    /// button, whose drag payload has to say where it is being taken from.
+    in property <int> pane-seat;
 
     /// Wide enough for a lane name and its switches without eliding the name
     /// at every default. The reference opens at 164px and carries two toggles;
@@ -142,6 +145,7 @@ export component TimelinePane inherits Rectangle {
 
             PaneSwitcher {
                 kind: PaneKind.timeline;
+                seat: root.pane-seat;
                 picked(kind) => { root.pane-picked(kind); }
             }
         }

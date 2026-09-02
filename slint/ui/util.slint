@@ -112,6 +112,11 @@ export global Payload {
     /// same Inter the cards are. Unbound it returns an empty image, which
     /// draws nothing: the drag still works, it just goes back to bare cursors.
     pure callback preview(text: string) -> image;
+
+    /// The seat index in a `pane:N:...` payload, or -1 for anything else —
+    /// including a drag from another application, whose payload this tree
+    /// cannot read. Rust, for want of split(); see `parse-timecode`.
+    pure callback pane-seat(text: string) -> int;
 }
 
 export global Geom {
