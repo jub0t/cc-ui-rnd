@@ -194,11 +194,13 @@ export component IconButton inherits Rectangle {
     callback clicked();
 
     property <bool> lit: touch.has-hover && root.enabled;
-    // Checked is a lime *glyph* on a tinted chip, never dark ink on a lime
-    // slab. Both references are explicit about this — "an activated tool
-    // button: lime glyph on a slightly darker surface, so the toolbar reads as
-    // 'this mode is on' without shouting" — and with the accent itself now
-    // lime, a filled chip in a tray of eight buttons would shout indeed.
+    // Checked is a lime *glyph* on a darker chip, never dark ink on a lime
+    // slab and not a lime-tinted one either. Both references are explicit
+    // about this — "an activated tool button: lime glyph on a slightly darker
+    // surface, so the toolbar reads as 'this mode is on' without shouting" —
+    // and with the accent itself now lime, even a 20% tint behind eight of
+    // them turned a tray into a row of green slabs. The glyph carries the
+    // state; the chip only has to sit back far enough to be seen behind it.
     property <brush> tint: root.checked ? Theme.accent
         : (root.lit && root.danger) ? Theme.danger
         : root.accent ? (root.lit ? Theme.accent-hover : Theme.accent)
@@ -243,7 +245,7 @@ export component IconButton inherits Rectangle {
         height: root.side;
         border-radius: Theme.r-sm;
         opacity: root.enabled ? 1.0 : 0.4;
-        background: root.checked ? Theme.accent-soft
+        background: root.checked ? Theme.well
             : !root.enabled ? Colors.transparent
             : (touch.has-hover && root.danger) ? Theme.danger-soft
             : (touch.has-hover && root.accent) ? Theme.accent-soft

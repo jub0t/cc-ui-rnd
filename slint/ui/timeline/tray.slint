@@ -77,12 +77,14 @@ export component TimelineTray inherits Rectangle {
         IconButton {
             glyph: Glyph.pointer;
             label: "Select (V)";
+            icon-size: 16px;
             checked: root.tool == TimelineTool.select;
             clicked => { root.tool-changed(TimelineTool.select); }
         }
         IconButton {
             glyph: Glyph.razor;
             label: "Razor (B)";
+            icon-size: 16px;
             checked: root.tool == TimelineTool.razor;
             clicked => { root.tool-changed(TimelineTool.razor); }
         }
@@ -92,6 +94,7 @@ export component TimelineTray inherits Rectangle {
         IconButton {
             glyph: Glyph.split;
             label: "Split at playhead (S)";
+            icon-size: 16px;
             clicked => { root.split(); }
         }
         IconButton {
@@ -105,12 +108,14 @@ export component TimelineTray inherits Rectangle {
             label: root.merge-blocked-because == "" ? "Merge selected"
                 : root.merge-blocked-because;
             enabled: root.merge-blocked-because == "";
+            icon-size: 16px;
             clicked => { root.merge(); }
         }
         IconButton {
             glyph: Glyph.trash;
             label: "Delete selected";
             danger: true;
+            icon-size: 16px;
             enabled: root.selected-count > 0;
             clicked => { root.delete-selected(); }
         }
@@ -131,6 +136,7 @@ export component TimelineTray inherits Rectangle {
         IconButton {
             glyph: Glyph.magnet;
             label: "Snap to edges";
+            icon-size: 16px;
             checked: root.snap;
             clicked => { root.snap-changed(!root.snap); }
         }
@@ -144,6 +150,7 @@ export component TimelineTray inherits Rectangle {
             av := IconButton {
                 glyph: Glyph.waveform;
                 label: "Audio and video tools";
+                icon-size: 16px;
                 wide: true;
                 // Reported in the tray's own coordinates: the button slides
                 // along the bar as the selection count and the merge reason
@@ -159,7 +166,7 @@ export component TimelineTray inherits Rectangle {
         IconButton {
             glyph: Glyph.plus;
             label: "Add track";
-            icon-size: 12px;
+            icon-size: 14px;
             clicked => { root.add-track(); }
         }
 
@@ -182,13 +189,13 @@ export component TimelineTray inherits Rectangle {
         IconButton {
             glyph: Glyph.fit;
             label: "Zoom to fit";
-            icon-size: 13px;
+            icon-size: 15px;
             clicked => { root.fit(); }
         }
         IconButton {
             glyph: Glyph.minus;
             label: "Zoom out";
-            icon-size: 12px;
+            icon-size: 14px;
             // Above 1 is out: the factor multiplies seconds-per-pixel, so a
             // bigger number is more seconds in the same pixel.
             clicked => { root.zoom(1.4); }
@@ -196,7 +203,7 @@ export component TimelineTray inherits Rectangle {
         IconButton {
             glyph: Glyph.plus;
             label: "Zoom in";
-            icon-size: 12px;
+            icon-size: 14px;
             clicked => { root.zoom(1 / 1.4); }
         }
     }
