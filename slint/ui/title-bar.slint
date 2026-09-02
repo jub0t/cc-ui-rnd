@@ -90,7 +90,6 @@ export component TitleBar inherits Rectangle {
     callback open-settings();
     /// A view was picked from the add-panel list.
     callback add-pane(kind: PaneKind);
-    callback toggle-theme();
     callback export-clicked();
 
     height: 32px;
@@ -189,23 +188,18 @@ export component TitleBar inherits Rectangle {
             }
         }
 
-        if !root.minimal: VerticalLayout {
+        // The one control that is on both screens, and the theme's sun and
+        // moon gave it the job when they moved into Settings > Appearance.
+        // Nothing behind this gear needs a project — a theme, a transcriber
+        // model, a voice, a version number are all facts about the
+        // application — so the launch screen has no reason to be shut out of
+        // it, and every reason not to be: it is now the only way through to
+        // the theme.
+        VerticalLayout {
             alignment: center;
             HeaderIconButton {
                 glyph: Glyph.settings;
                 clicked => { root.open-settings(); }
-            }
-        }
-
-        // The one control that is on both screens. It shows where the click
-        // goes rather than where the window is — a sun to turn the lights on,
-        // a moon to turn them off — which is the only reading that stays
-        // right when the icon is the only thing you can see.
-        VerticalLayout {
-            alignment: center;
-            HeaderIconButton {
-                glyph: Theme.dark ? Glyph.sun : Glyph.moon;
-                clicked => { root.toggle-theme(); }
             }
         }
 

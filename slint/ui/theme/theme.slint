@@ -36,10 +36,10 @@ import { Dark } from "dark.slint";
 import { Light } from "light.slint";
 
 export global Theme {
-    /// Which palette every colour below is read from. The title bar's one
-    /// button flips it (main.rs, `on_toggle_theme`), and every binding in the
-    /// tree is a property read away from it, so the window retones in a frame
-    /// without anything being rebuilt.
+    /// Which palette every colour below is read from. Settings > Appearance
+    /// picks it (main.rs, `on_settings_theme_changed`), and every binding in
+    /// the tree is a property read away from it, so the window retones in a
+    /// frame without anything being rebuilt.
     in-out property <bool> dark: true;
 
     // ── type ─────────────────────────────────────────────────────────────

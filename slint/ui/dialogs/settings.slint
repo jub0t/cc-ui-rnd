@@ -4,6 +4,7 @@
 import { Theme } from "../theme/theme.slint";
 import { Glyph, Icon } from "../icons.slint";
 import { Button, DialogSection, Modal, Progress } from "../primitives/modal.slint";
+import { IconButton } from "../primitives/panel.slint";
 import { SegmentedControl } from "../primitives/segmented-control.slint";
 import { PaneScroll } from "../workspace/pane.slint";
 
@@ -34,9 +35,15 @@ export struct ModelData {
     eta: string,
 }
 
+/// One line of the system report: what it is called, and what it says.
+export struct SystemFactData {
+    label: string,
+    value: string,
+}
+
 export struct SettingsData {
     open: bool,
-    /// 0 General, 1 Transcriber, 2 Speech, 3 About
+    /// 0 General, 1 Appearance, 2 Transcriber, 3 Speech, 4 About
     tab: int,
     language: int,
     /// the transcriber's working language
@@ -275,6 +282,41 @@ component PageTab inherits Rectangle {
     }
 }
 
+// One system fact: muted label left, value right. Lifted from the Details
+// panel's FactRow (config-pane.slint) and left there too — that one carries
+// the panel's own gutters, and in here the section already pads. The value is
+// a read-only TextInput for the reason it is one there: a fact you cannot
+// select is a fact you have to retype. The button above copies the lot, and
+// this is how you take one line instead.
+component FactRow inherits HorizontalLayout {
+    in property <string> label;
+    in property <string> value;
+
+    spacing: 12px;
+    min-height: 21px;
+
+    Text {
+        text: root.label;
+        color: Theme.fg-muted;
+        font-size: Theme.fs;
+        vertical-alignment: center;
+    }
+
+    TextInput {
+        horizontal-stretch: 1;
+        text: root.value;
+        color: Theme.fg;
+        font-family: Theme.font-technical;
+        font-size: Theme.fs;
+        horizontal-alignment: right;
+        read-only: true;
+        single-line: false;
+        wrap: word-wrap;
+        selection-background-color: Theme.accent;
+        selection-foreground-color: Theme.on-accent;
+    }
+}
+
 component Choice inherits Rectangle {
     in property <string> label;
     in property <bool> current;
@@ -316,9 +358,19 @@ export component SettingsDialog inherits Modal {
     in property <[ModelData]> transcribers;
     in property <[ModelData]> voices;
     in property <[string]> languages;
+    /// The system report, as rows. See system_facts() in main.rs.
+    in property <[SystemFactData]> system-facts;
+    /// The same facts as one block of text, because a clipboard takes text
+    /// and not a model. Built from the same list, so the page and the paste
+    /// cannot come apart.
+    in property <string> system-report;
 
     callback page-changed(index: int);
     callback language-changed(index: int);
+    /// The theme, chosen rather than flipped. A toggle in the strip could only
+    /// say "the other one"; a page with two named options can say which one is
+    /// on, which is the whole reason it moved in here.
+    callback theme-changed(dark: bool);
     callback transcribe-language-changed(index: int);
     callback model-activated(id: string);
     callback model-download(id: string);
@@ -334,6 +386,32 @@ export component SettingsDialog inherits Modal {
     surface-height: 460px;
 
     HorizontalLayout {
+        // The clipboard takes text, so there has to be a TextInput holding
+        // the report: Slint copies from a text element's own selection and
+        // has no other way in. It is never read — it is zero wide and clipped
+        // — but it cannot live beside the button that uses it, and that is
+        // worth writing down, because it looks like it should.
+        //
+        // A layout gives every child at least its minimum, and a TextInput's
+        // minimum height is its text: seven lines, about 120px, which a
+        // wrapper cannot cap — an explicit `height: 0px` on the box around it
+        // sets that box's preferred size and loses to the child's minimum
+        // anyway. In the section body that bought a 120px band with the copy
+        // button floating in the middle of it. Here it is one more column of
+        // this row, and the row is the sheet's fixed 418px, so the whole of
+        // what it asks for disappears into height that was already there.
+        Rectangle {
+            width: 0px;
+            clip: true;
+
+            report := TextInput {
+                width: 0px;
+                text: root.system-report;
+                read-only: true;
+                single-line: false;
+            }
+        }
+
         // ── the pages ────────────────────────────────────────────────────
         Rectangle {
             width: 164px;
@@ -358,22 +436,28 @@ export component SettingsDialog inherits Modal {
                     clicked => { root.page-changed(0); }
                 }
                 PageTab {
-                    label: "Transcriber";
-                    glyph: Glyph.waveform;
+                    label: "Appearance";
+                    glyph: Glyph.sun;
                     current: root.data.tab == 1;
                     clicked => { root.page-changed(1); }
                 }
                 PageTab {
-                    label: "Speech";
-                    glyph: Glyph.music;
+                    label: "Transcriber";
+                    glyph: Glyph.waveform;
                     current: root.data.tab == 2;
                     clicked => { root.page-changed(2); }
                 }
                 PageTab {
-                    label: "About";
-                    glyph: Glyph.sparkle;
+                    label: "Speech";
+                    glyph: Glyph.music;
                     current: root.data.tab == 3;
                     clicked => { root.page-changed(3); }
+                }
+                PageTab {
+                    label: "About";
+                    glyph: Glyph.sparkle;
+                    current: root.data.tab == 4;
+                    clicked => { root.page-changed(4); }
                 }
             }
         }
@@ -395,7 +479,33 @@ export component SettingsDialog inherits Modal {
                 }
             }
 
-            if root.data.tab == 1: VerticalLayout {
+            // Read straight off the Theme global rather than through
+            // SettingsData: the theme is not editor state — it is one bool
+            // that every colour in the tree already binds to — and routing it
+            // through the struct would be a second copy to keep in step with
+            // the first. The change still goes out as a callback, so Rust
+            // stays the one place a remembered preference will be written.
+            if root.data.tab == 1: DialogSection {
+                first: true;
+                title: "Theme";
+
+                SegmentedControl {
+                    options: ["Dark", "Light"];
+                    current: Theme.dark ? 0 : 1;
+                    changed(index) => { root.theme-changed(index == 0); }
+                }
+
+                Text {
+                    text: "Dark is the edit's own room — a bright window "
+                        + "beside the picture changes how the picture reads. "
+                        + "Light is here for the rooms that are already lit.";
+                    color: Theme.fg-muted;
+                    font-size: Theme.fs-sm;
+                    wrap: word-wrap;
+                }
+            }
+
+            if root.data.tab == 2: VerticalLayout {
                 DialogSection {
                     first: true;
                     title: "Language";
@@ -446,7 +556,7 @@ export component SettingsDialog inherits Modal {
                 }
             }
 
-            if root.data.tab == 2: DialogSection {
+            if root.data.tab == 3: DialogSection {
                 first: true;
                 title: "Voices";
 
@@ -459,31 +569,75 @@ export component SettingsDialog inherits Modal {
                 }
             }
 
-            if root.data.tab == 3: DialogSection {
-                first: true;
-                title: "About";
+            if root.data.tab == 4: VerticalLayout {
+                DialogSection {
+                    first: true;
+                    title: "About";
 
-                Text {
-                    text: "WolfCut " + root.data.version;
-                    color: Theme.fg;
-                    font-size: Theme.fs-lg;
-                    font-weight: Theme.weight-title;
+                    Text {
+                        text: "WolfCut " + root.data.version;
+                        color: Theme.fg;
+                        font-size: Theme.fs-lg;
+                        font-weight: Theme.weight-title;
+                    }
+
+                    Text {
+                        text: root.data.engine;
+                        color: Theme.fg-muted;
+                        font-family: Theme.font-technical;
+                        font-size: Theme.fs-sm;
+                    }
+
+                    Text {
+                        text: "Everything on this machine. Transcription and speech "
+                            + "run against models you download here, and nothing "
+                            + "about a project leaves the device.";
+                        color: Theme.fg-muted;
+                        font-size: Theme.fs;
+                        wrap: word-wrap;
+                    }
                 }
 
-                Text {
-                    text: root.data.engine;
-                    color: Theme.fg-muted;
-                    font-family: Theme.font-technical;
-                    font-size: Theme.fs-sm;
-                }
+                // The block an issue report is opened with. Every line in it
+                // is something the report will be asked for and nobody has to
+                // hand — which build, which renderer, which OS — and reading
+                // them off a screen one at a time is how a report ends up
+                // missing the one that mattered. Hence the button: the whole
+                // block in one press, and the rows still selectable a line at
+                // a time for when only one of them is the answer.
+                DialogSection {
+                    title: "System information";
 
-                Text {
-                    text: "Everything on this machine. Transcription and speech "
-                        + "run against models you download here, and nothing "
-                        + "about a project leaves the device.";
-                    color: Theme.fg-muted;
-                    font-size: Theme.fs;
-                    wrap: word-wrap;
+                    HorizontalLayout {
+                        alignment: end;
+
+                        IconButton {
+                            glyph: Glyph.copy;
+                            label: "Copy system information";
+                            icon-size: 13px;
+                            // Cleared again straight away: the selection is
+                            // the mechanism, not something the reader asked
+                            // for, and leaving it set would light up a block
+                            // of text nobody can see.
+                            clicked => {
+                                report.select-all();
+                                report.copy();
+                                report.clear-selection();
+                            }
+                        }
+                    }
+
+                    // No spacing: the rows carry their own height, the way the
+                    // Details panel's table does, and the section's own 6px on
+                    // top of it opens the table back into a list of paragraphs.
+                    VerticalLayout {
+                        spacing: 0px;
+
+                        for fact in root.system-facts: FactRow {
+                            label: fact.label;
+                            value: fact.value;
+                        }
+                    }
                 }
             }
         }

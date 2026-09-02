@@ -23,7 +23,7 @@ import { EffectData } from "demo/effects-panel.slint";
 import { MediaFilter, MediaItemData, MediaKind } from "workspace/media-pane.slint";
 import { ContextMenu, MenuItemData, MenuRow } from "primitives/context-menu.slint";
 import { ExportData, ExportDialog, ExportPhase } from "dialogs/export.slint";
-import { ModelData, SettingsData, SettingsDialog } from "dialogs/settings.slint";
+import { ModelData, SettingsData, SettingsDialog, SystemFactData } from "dialogs/settings.slint";
 import { DockDivider, DockSide, SeatBox } from "dock.slint";
 import { Editor } from "editor.slint";
 import { PaneKind } from "workspace/pane-switcher.slint";
@@ -45,7 +45,7 @@ export {
     ClipData, ClipField, ClipKind, ClipTextField, DropData, SelectedClipData,
     TextAlignment, TimelineTabData, TimelineTool, TrackData, TrackSize,
     MenuItemData, MenuRow, ExportData, ExportPhase, ModelData, SettingsData,
-    RecentProjectData, StartData, ToastData,
+    RecentProjectData, StartData, SystemFactData, ToastData,
 }
 
 export component App inherits Window {
@@ -119,6 +119,11 @@ export component App inherits Window {
     in property <[ModelData]> transcribers;
     in property <[ModelData]> voices;
     in property <[string]> languages;
+    /// Settings > About's copyable block. Gathered once in main.rs and
+    /// never republished — every line of it is fixed for the life of the
+    /// process.
+    in property <[SystemFactData]> system-facts;
+    in property <string> system-report;
 
     callback export-closed();
     callback export-name-edited(name: string);
@@ -134,6 +139,7 @@ export component App inherits Window {
     callback settings-closed();
     callback settings-page-changed(index: int);
     callback settings-language-changed(index: int);
+    callback settings-theme-changed(dark: bool);
     callback settings-transcribe-language-changed(index: int);
     callback model-activated(id: string);
     callback model-download(id: string);
@@ -141,7 +147,6 @@ export component App inherits Window {
     callback model-remove(id: string);
 
     callback open-settings();
-    callback toggle-theme();
     callback export-clicked();
 
     /// The bottom-right notice: what just happened, said once. Set from Rust
@@ -225,7 +230,6 @@ export component App inherits Window {
                 toggle-maximize => { root.titlebar-toggle-maximize(); }
                 open-settings => { root.open-settings(); }
                 add-pane(kind) => { Editor.dock-add(kind); }
-                toggle-theme => { root.toggle-theme(); }
                 export-clicked => { root.export-clicked(); }
             }
 
@@ -289,10 +293,13 @@ export component App inherits Window {
         transcribers: root.transcribers;
         voices: root.voices;
         languages: root.languages;
+        system-facts: root.system-facts;
+        system-report: root.system-report;
 
         closed => { root.settings-closed(); }
         page-changed(index) => { root.settings-page-changed(index); }
         language-changed(index) => { root.settings-language-changed(index); }
+        theme-changed(dark) => { root.settings-theme-changed(dark); }
         transcribe-language-changed(index) => {
             root.settings-transcribe-language-changed(index);
         }

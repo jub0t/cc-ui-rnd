@@ -2565,6 +2565,106 @@ fn demo_studio() -> Studio {
     }
 }
 
+/// The operating system, named the way an issue report needs it.
+///
+/// Asked of the system rather than inferred: `target_os` says "macos", which
+/// is the one fact about the machine nobody ever has to be told. What is
+/// wanted is the release, because that is what a rendering bug or a file
+/// dialog behaving oddly turns out to depend on.
+///
+/// Spawning a process to find it out is fine here and only here: it happens
+/// once, at startup, and the answer is kept for the life of the window.
+fn os_description() -> String {
+    #[cfg(target_os = "macos")]
+    {
+        // Bare `sw_vers` prints all three lines at once, so this is one
+        // process rather than the three the flags would cost.
+        let fields = std::process::Command::new("sw_vers")
+            .output()
+            .ok()
+            .filter(|out| out.status.success())
+            .map(|out| String::from_utf8_lossy(&out.stdout).into_owned())
+            .unwrap_or_default();
+        let field = |key: &str| {
+            fields
+                .lines()
+                .find_map(|line| line.strip_prefix(key)?.split(':').nth(1))
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_owned)
+        };
+        let name = field("ProductName").unwrap_or_else(|| "macOS".into());
+        return match (field("ProductVersion"), field("BuildVersion")) {
+            (Some(version), Some(build)) => format!("{name} {version} ({build})"),
+            (Some(version), None) => format!("{name} {version}"),
+            _ => name,
+        };
+    }
+    #[cfg(target_os = "linux")]
+    {
+        // The distribution's own name for itself, which is what a report
+        // wants; the kernel version is the next question, not the first.
+        if let Ok(release) = std::fs::read_to_string("/etc/os-release") {
+            if let Some(pretty) = release
+                .lines()
+                .find_map(|line| line.strip_prefix("PRETTY_NAME="))
+                .map(|value| value.trim_matches('"'))
+                .filter(|value| !value.is_empty())
+            {
+                return pretty.to_owned();
+            }
+        }
+        return "Linux".into();
+    }
+    #[cfg(target_os = "windows")]
+    {
+        return std::process::Command::new("cmd")
+            .args(["/c", "ver"])
+            .output()
+            .ok()
+            .filter(|out| out.status.success())
+            .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_owned())
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| "Windows".into());
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    {
+        std::env::consts::OS.to_owned()
+    }
+}
+
+/// What Settings > About shows under "System information", and what its copy
+/// button puts on the clipboard.
+///
+/// One list, read twice: the rows on screen and the block that is copied are
+/// built from the same pairs, so a fact cannot be on the page and missing
+/// from the report. Gathered once — every line of it is fixed for the life of
+/// the process — and handed over as a model that is never replaced.
+fn system_facts() -> Vec<(&'static str, String)> {
+    vec![
+        ("Application", format!("WolfCut {}", env!("CARGO_PKG_VERSION"))),
+        ("Build", format!("{} · {}", env!("BUILD_PROFILE"), env!("BUILD_TARGET"))),
+        // Which of the two renderers in Cargo.toml this binary was built
+        // with. The first question to ask about anything that looks wrong on
+        // screen, and the one nobody can answer by looking at the window.
+        (
+            "Renderer",
+            if cfg!(feature = "skia") { "Skia" } else { "FemtoVG (wgpu)" }.into(),
+        ),
+        ("Engine", "wolfcut-engine · ffmpeg 7.1".into()),
+        ("Operating system", os_description()),
+        (
+            "Processor",
+            format!(
+                "{} · {} threads",
+                std::env::consts::ARCH,
+                std::thread::available_parallelism().map_or(0, |count| count.get())
+            ),
+        ),
+        ("Toolchain", env!("BUILD_RUSTC").into()),
+    ]
+}
+
 fn main() -> Result<(), slint::PlatformError> {
     // The custom title bar. On macOS the native bar is hidden and the traffic
     // lights are overlaid on the strip the UI draws — the winit spelling of
@@ -2832,6 +2932,30 @@ fn main() -> Result<(), slint::PlatformError> {
     editor.set_seats(ModelRc::from(models.seats.clone()));
     editor.set_dividers(ModelRc::from(models.dividers.clone()));
     app.set_recents(ModelRc::from(models.recents.clone()));
+
+    // Settings > About's block, gathered once. Nothing in it can change while
+    // the process runs, so it is set here beside the models that are handed
+    // over rather than rebuilt on every publish — and the rows and the string
+    // the copy button hands to the clipboard are built from the one list, so
+    // a fact cannot be on the page and missing from the paste.
+    let facts = system_facts();
+    app.set_system_report(
+        facts
+            .iter()
+            .map(|(label, value)| format!("{label}: {value}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+            .into(),
+    );
+    app.set_system_facts(ModelRc::from(Rc::new(VecModel::from(
+        facts
+            .into_iter()
+            .map(|(label, value)| SystemFactData {
+                label: label.into(),
+                value: value.into(),
+            })
+            .collect::<Vec<_>>(),
+    ))));
 
     // The two ladders' labels, handed over once: they are constants, and the
     // index the form reports back is what carries the meaning. See
@@ -3948,16 +4072,15 @@ fn main() -> Result<(), slint::PlatformError> {
     app.on_open_settings(on_timeline!(|state| { state.settings.open = true; }));
     // The theme is not editor state and never reaches a project file: it is
     // one bool on the Theme global, and every colour in the tree is a binding
-    // away from it, so flipping it here retones the window on the next frame
+    // away from it, so setting it here retones the window on the next frame
     // without anything being rebuilt or republished. Handled in Rust rather
     // than in the .slint so there is somewhere for a remembered preference to
     // be read and written the day there is a place to keep one.
-    app.on_toggle_theme({
+    app.on_settings_theme_changed({
         let weak = app.as_weak();
-        move || {
+        move |dark| {
             let Some(app) = weak.upgrade() else { return };
-            let theme = app.global::<Theme>();
-            theme.set_dark(!theme.get_dark());
+            app.global::<Theme>().set_dark(dark);
         }
     });
     app.on_export_closed(on_timeline!(|state| { state.export.open = false; }));

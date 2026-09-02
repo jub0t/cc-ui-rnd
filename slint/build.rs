@@ -19,4 +19,33 @@ fn main() {
         .embed_resources(slint_build::EmbedResourcesKind::EmbedFiles);
     slint_build::compile_with_config("ui/app.slint", config)
         .expect("failed to compile ui/app.slint");
+
+    // Three facts about the build that the built thing cannot ask for at run
+    // time. Settings > About shows them in the block a bug report is copied
+    // out of: which triple this binary is for, which profile it came out of,
+    // and which compiler made it — the three questions every "cannot
+    // reproduce" ends up asking.
+    //
+    // slint_build emits rerun-if-changed for the .slint tree, which turns off
+    // cargo's rerun-on-any-change default, so the toolchain is watched by
+    // hand: change rustc and this file has to run again or `Toolchain` would
+    // name the old one.
+    println!("cargo:rerun-if-env-changed=RUSTC");
+    println!(
+        "cargo:rustc-env=BUILD_TARGET={}",
+        std::env::var("TARGET").unwrap_or_else(|_| "unknown".into())
+    );
+    println!(
+        "cargo:rustc-env=BUILD_PROFILE={}",
+        std::env::var("PROFILE").unwrap_or_else(|_| "unknown".into())
+    );
+    let rustc = std::env::var("RUSTC").unwrap_or_else(|_| "rustc".into());
+    let version = std::process::Command::new(rustc)
+        .arg("-V")
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
+        .unwrap_or_else(|| "unknown".into());
+    println!("cargo:rustc-env=BUILD_RUSTC={version}");
 }
