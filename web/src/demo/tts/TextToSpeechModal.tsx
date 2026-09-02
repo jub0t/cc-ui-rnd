@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-FileCopyrightText: 2026 Jareer and Concat contributors
+
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AudioLines, Check, Pause, Play, Sparkles } from 'lucide-react'
 import { Modal, Panel, Row, Section, SegmentedControl, Select, Tooltip, clamp, cx } from '../../primitives'

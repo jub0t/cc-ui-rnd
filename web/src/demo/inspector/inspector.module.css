@@ -1,3 +1,6 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* SPDX-FileCopyrightText: 2026 Jareer and Concat contributors */
+
 /* Clip inspector. Composition-level styling only — every colour, radius and
    height comes from tokens.css, so this panel retheme with the ones above it. */
 

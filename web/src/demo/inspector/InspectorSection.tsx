@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-FileCopyrightText: 2026 Jareer and Concat contributors
+
 import { ClipInspector } from './ClipInspector'
 import { TextInspector } from './TextInspector'
 import styles from './section.module.css'

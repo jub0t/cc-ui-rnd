@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-FileCopyrightText: 2026 Jareer and Concat contributors
+
 import { EffectsPanel } from './demo/EffectsPanel'
 import { InterpolationPanel } from './demo/InterpolationPanel'
 import { TransformPanel } from './demo/TransformPanel'

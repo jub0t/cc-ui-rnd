@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-FileCopyrightText: 2026 Jareer and Concat contributors
+
 /**
  * The sequence model. Everything is in frames — a timeline that stores
  * seconds has to round somewhere, and wherever it rounds is where two clips

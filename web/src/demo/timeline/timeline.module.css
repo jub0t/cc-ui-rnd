@@ -1,3 +1,6 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* SPDX-FileCopyrightText: 2026 Jareer and Concat contributors */
+
 /* Timeline. Every horizontal measurement in here comes from one number —
    pixels per frame — so zooming is a single state change and nothing has to
    be kept in sync by hand. */

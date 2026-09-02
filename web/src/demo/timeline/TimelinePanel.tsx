@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-FileCopyrightText: 2026 Jareer and Concat contributors
+
 import { Fragment, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { AudioLines, Eye, EyeOff, Magnet, Maximize2, MousePointer2, Scissors, Split, Trash2, Volume2, VolumeX } from 'lucide-react'

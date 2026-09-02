@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-FileCopyrightText: 2026 Jareer and Concat contributors
+
 import { useEffect, useRef, useState } from 'react'
 import { CheckCircle2, FolderOpen, Loader2, Upload, X } from 'lucide-react'
 import { Select, clamp } from '../../primitives'

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-FileCopyrightText: 2026 Jareer and Concat contributors
+
 /** Shared formatters. Every number the user reads goes through one of these. */
 
 const pad2 = (n: number) => String(Math.floor(n)).padStart(2, '0')

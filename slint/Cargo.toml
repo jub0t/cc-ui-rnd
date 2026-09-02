@@ -3,6 +3,9 @@ name = "wolfcut-ui"
 version = "0.1.0"
 edition = "2021"
 publish = false
+# AGPL, and Slint is taken under its GPL-3.0-only option to match.
+# See ../THIRD_PARTY_NOTICES.md for why those two combine legally.
+license = "AGPL-3.0-or-later"
 
 [dependencies]
 # FemtoVG over wgpu rather than over OpenGL. Same renderer, native graphics API

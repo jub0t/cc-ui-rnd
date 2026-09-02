@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-FileCopyrightText: 2026 Jareer and Concat contributors
+
 /**
  * The catalogue behind the browser. Data only — nothing in here knows how an
  * item is drawn, so adding a tab is one array plus one preview renderer, and
