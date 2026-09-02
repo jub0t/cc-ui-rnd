@@ -1,5 +1,6 @@
 import { Theme, SegmentedControl } from "../primitives/primitives.slint";
 import { Pane, PaneBody, PaneScroll } from "pane.slint";
+import { PaneKind, PaneSwitcher } from "pane-switcher.slint";
 import { EffectData } from "../demo/effects-panel.slint";
 import {
     AdjustPanel, AppliedPresetData, FilterPanel, PresetCatalog, PresetStack,
@@ -107,6 +108,9 @@ export component ConfigPane inherits Rectangle {
 
     callback modify-project();
 
+    /// The corner button: show something else in this pane's seat.
+    callback pane-picked(kind: PaneKind);
+
     // ── the clip inspector's chains, owned by Rust ───────────────────────
     in property <[AppliedPresetData]> filters-applied;
     in property <[AppliedPresetData]> effects-applied;
@@ -188,6 +192,8 @@ export component ConfigPane inherits Rectangle {
 
             HorizontalLayout {
                 padding-left: Theme.pad;
+                padding-right: 8px;
+                spacing: 8px;
 
                 Text {
                     text: "DETAILS";
@@ -203,6 +209,16 @@ export component ConfigPane inherits Rectangle {
                     font-weight: Theme.weight-title;
                     letter-spacing: 1px;
                     vertical-alignment: center;
+                }
+
+                Rectangle { horizontal-stretch: 1; }
+
+                VerticalLayout {
+                    alignment: center;
+                    PaneSwitcher {
+                        kind: PaneKind.inspector;
+                        picked(kind) => { root.pane-picked(kind); }
+                    }
                 }
             }
         }
@@ -321,6 +337,14 @@ export component ConfigPane inherits Rectangle {
                     SegmentedControl {
                         options: root.tabs;
                         current <=> root.tab;
+                    }
+                }
+
+                VerticalLayout {
+                    alignment: center;
+                    PaneSwitcher {
+                        kind: PaneKind.inspector;
+                        picked(kind) => { root.pane-picked(kind); }
                     }
                 }
             }

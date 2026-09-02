@@ -4,6 +4,7 @@ import { ColSplitter, RowSplitter } from "splitter.slint";
 import { MenuItemData } from "../primitives/context-menu.slint";
 import { ConfigPane } from "config-pane.slint";
 import { MediaFilter, MediaItemData, MediaPane } from "media-pane.slint";
+import { PaneKind } from "pane-switcher.slint";
 import { PreviewPane } from "preview-pane.slint";
 import { TimelinePane } from "timeline-pane.slint";
 import {
@@ -11,8 +12,8 @@ import {
     TimelineTabData, TimelineTool, TrackData, TrackSize,
 } from "../timeline/model.slint";
 
-// The editor shell: Media | Preview | Config across the top, Timeline across
-// the full width below, every edge draggable.
+// The editor shell: three seats across the top and one along the bottom, every
+// edge draggable, and any of the four views in any seat — see pane-switcher.
 //
 // Positioned by hand rather than with nested layouts. A layout would give the
 // same picture, but the splitters need the one thing a layout hides — the
@@ -143,16 +144,69 @@ export component Workspace inherits Rectangle {
     // the layout around them is `p-2`, which is the same single value said
     // twice. 12px here read as loose beside it.
     in property <length> gap: 8px;
-    /// smallest a column may be dragged to
-    in property <length> min-col: 220px;
-    /// Config used to floor at 320px, because the demo panels it carried
-    /// bottomed out at the bezier editor's own 200px minimum. Those are gone —
-    /// the pane now holds Details, Adjust, Text and the preset stacks, whose
-    /// rows all reflow — so the floor comes down under the reference's own
-    /// 300px default, which the old one would not even have allowed.
-    in property <length> min-config: 280px;
+    /// Smallest a side column may be dragged to.
+    ///
+    /// One floor for both, where the inspector used to carry its own 280px.
+    /// A minimum belonged to a pane while a pane belonged to a column; now
+    /// that any view can sit in any seat, a per-view floor would mean the
+    /// gutter jumping the moment two views swapped. 240 is between the two
+    /// numbers this had, and above the 220 the bin was happy at.
+    in property <length> min-col: 240px;
     /// smallest a row may be dragged to
     in property <length> min-row: 140px;
+
+    // ── the four seats ───────────────────────────────────────────────────
+    //
+    // The layout is four boxes — three across the top and one along the
+    // bottom — and which editor is in which is a property rather than a fact
+    // about the file. Every pane below is declared exactly once and takes its
+    // geometry from whichever seat currently holds it, so moving one is
+    // assigning an enum and not re-parenting a subtree. Declaring each pane
+    // four times, once per seat, is the other way to do this, and it is forty
+    // properties of wiring duplicated four times over.
+    in-out property <PaneKind> seat-left: PaneKind.media;
+    in-out property <PaneKind> seat-centre: PaneKind.preview;
+    in-out property <PaneKind> seat-right: PaneKind.inspector;
+    in-out property <PaneKind> seat-bottom: PaneKind.timeline;
+
+    /// Which seat a view is in: 0 left, 1 centre, 2 right, 3 bottom. Every
+    /// view is always in exactly one, which is what `show` below preserves.
+    pure function seat-of(kind: PaneKind) -> int {
+        return root.seat-left == kind ? 0
+            : root.seat-centre == kind ? 1
+            : root.seat-right == kind ? 2
+            : 3;
+    }
+
+    pure function seat-holds(seat: int) -> PaneKind {
+        return seat == 0 ? root.seat-left
+            : seat == 1 ? root.seat-centre
+            : seat == 2 ? root.seat-right
+            : root.seat-bottom;
+    }
+
+    /// Scratch for `show`: the expression language has no local bindings, and
+    /// a swap needs to remember what it is displacing before it displaces it.
+    property <PaneKind> displaced;
+    property <int> vacated;
+
+    function put(seat: int, kind: PaneKind) {
+        if (seat == 0) { root.seat-left = kind; }
+        if (seat == 1) { root.seat-centre = kind; }
+        if (seat == 2) { root.seat-right = kind; }
+        if (seat == 3) { root.seat-bottom = kind; }
+    }
+
+    /// Put a view in a seat, and the view that was there where it came from.
+    public function show(seat: int, kind: PaneKind) {
+        if (root.seat-holds(seat) == kind) {
+            return;
+        }
+        root.displaced = root.seat-holds(seat);
+        root.vacated = root.seat-of(kind);
+        root.put(seat, kind);
+        root.put(root.vacated, root.displaced);
+    }
 
     // Shares of the usable box. The middle column and the bottom row are the
     // remainder, so the three columns always sum to the width exactly — no
@@ -160,11 +214,14 @@ export component Workspace inherits Rectangle {
     //
     // The reference opens at 420px of library and 300px of inspector, which at
     // this window's preferred 1400px is 0.31 and 0.22 of the usable track. The
-    // library is the wider of the two because it is a grid of cards and the
-    // inspector is a column of rows: one needs width to show anything at all,
-    // the other only needs enough not to elide its labels.
-    in-out property <float> media-share: 0.31;
-    in-out property <float> config-share: 0.22;
+    // left column is the wider of the two because it opens on the bin, which
+    // is a grid of cards, while the right opens on a column of rows: one needs
+    // width to show anything at all, the other only enough not to elide its
+    // labels. They are properties of the *seat* now rather than of the pane,
+    // so swapping two views keeps the shape of the window and changes what is
+    // in it — which is the point.
+    in-out property <float> left-share: 0.31;
+    in-out property <float> right-share: 0.22;
     // The reference opens with 340px of timeline, which at this window's
     // preferred 900px is a fraction under 0.6 of the usable track. 0.66 left
     // the lanes cramped enough that a four-track stack needed scrolling before
@@ -179,15 +236,41 @@ export component Workspace inherits Rectangle {
 
     // The minimums are enforced here and not only on the drag, because a share
     // is a share: shrink the window far enough and a column that was legal
-    // when it was dragged is not any more. Preview and Timeline take the
-    // remainder, so they are the ones that give — which is the right way
-    // round, they are the two that stay useful at any size.
-    property <length> media-w: Math.max(root.min-col, root.track-w * root.media-share);
-    property <length> config-w: Math.max(root.min-config, root.track-w * root.config-share);
-    property <length> preview-w: Math.max(0px, root.track-w - root.media-w - root.config-w);
+    // when it was dragged is not any more. The centre column and the bottom
+    // row take the remainder, so they are the ones that give.
+    property <length> left-w: Math.max(root.min-col, root.track-w * root.left-share);
+    property <length> right-w: Math.max(root.min-col, root.track-w * root.right-share);
+    property <length> centre-w: Math.max(0px, root.track-w - root.left-w - root.right-w);
     property <length> top-h: Math.min(Math.max(root.min-row, root.track-h * root.top-share),
         Math.max(root.min-row, root.track-h - root.min-row));
-    property <length> timeline-h: root.track-h - root.top-h;
+    property <length> bottom-h: root.track-h - root.top-h;
+
+    // A seat's box. Four functions rather than four sets of properties,
+    // because each pane asks for its own and the answer depends on where that
+    // pane happens to be sitting this second.
+    pure function seat-x(seat: int) -> length {
+        return seat == 1 ? 2 * root.gap + root.left-w
+            : seat == 2 ? 3 * root.gap + root.left-w + root.centre-w
+            : root.gap;
+    }
+    pure function seat-y(seat: int) -> length {
+        return seat == 3 ? 2 * root.gap + root.top-h : root.gap;
+    }
+    pure function seat-w(seat: int) -> length {
+        return seat == 0 ? root.left-w
+            : seat == 1 ? root.centre-w
+            : seat == 2 ? root.right-w
+            : root.width - 2 * root.gap;
+    }
+    pure function seat-h(seat: int) -> length {
+        return seat == 3 ? root.bottom-h : root.top-h;
+    }
+
+    // Resolved once each rather than at every one of the four dimensions.
+    property <int> media-seat: root.seat-of(PaneKind.media);
+    property <int> preview-seat: root.seat-of(PaneKind.preview);
+    property <int> inspector-seat: root.seat-of(PaneKind.inspector);
+    property <int> timeline-seat: root.seat-of(PaneKind.timeline);
 
     // A drag is one pointer, so one slot holds whichever share went down.
     property <float> press-share;
@@ -202,10 +285,12 @@ export component Workspace inherits Rectangle {
     background: Theme.page;
 
     MediaPane {
-        x: root.gap;
-        y: root.gap;
-        width: root.media-w;
-        height: root.top-h;
+        x: root.seat-x(root.media-seat);
+        y: root.seat-y(root.media-seat);
+        width: root.seat-w(root.media-seat);
+        height: root.seat-h(root.media-seat);
+
+        pane-picked(kind) => { root.show(root.media-seat, kind); }
 
         items: root.media;
         count-all: root.media-count-all;
@@ -231,10 +316,12 @@ export component Workspace inherits Rectangle {
     }
 
     PreviewPane {
-        x: 2 * root.gap + root.media-w;
-        y: root.gap;
-        width: root.preview-w;
-        height: root.top-h;
+        x: root.seat-x(root.preview-seat);
+        y: root.seat-y(root.preview-seat);
+        width: root.seat-w(root.preview-seat);
+        height: root.seat-h(root.preview-seat);
+
+        pane-picked(kind) => { root.show(root.preview-seat, kind); }
 
         output-width: root.output-width;
         output-height: root.output-height;
@@ -255,10 +342,12 @@ export component Workspace inherits Rectangle {
     }
 
     config := ConfigPane {
-        x: 3 * root.gap + root.media-w + root.preview-w;
-        y: root.gap;
-        width: root.config-w;
-        height: root.top-h;
+        x: root.seat-x(root.inspector-seat);
+        y: root.seat-y(root.inspector-seat);
+        width: root.seat-w(root.inspector-seat);
+        height: root.seat-h(root.inspector-seat);
+
+        pane-picked(kind) => { root.show(root.inspector-seat, kind); }
 
         video-effects: root.video-effects;
         audio-effects: root.audio-effects;
@@ -275,10 +364,12 @@ export component Workspace inherits Rectangle {
     }
 
     TimelinePane {
-        x: root.gap;
-        y: 2 * root.gap + root.top-h;
-        width: root.width - 2 * root.gap;
-        height: root.timeline-h;
+        x: root.seat-x(root.timeline-seat);
+        y: root.seat-y(root.timeline-seat);
+        width: root.seat-w(root.timeline-seat);
+        height: root.seat-h(root.timeline-seat);
+
+        pane-picked(kind) => { root.show(root.timeline-seat, kind); }
 
         tabs: root.timeline-tabs;
         current-tab: root.timeline-current-tab;
@@ -336,34 +427,37 @@ export component Workspace inherits Rectangle {
         track-renamed(index, name) => { root.track-renamed(index, name); }
     }
 
-    // Media | Preview: the drag moves Media's edge, Preview absorbs it.
+    // Left | centre: the drag moves the left seat's trailing edge, and the
+    // centre absorbs it. Named for the seats and not for what is in them —
+    // the gutter between the first and second columns is the same gutter
+    // whichever two views are either side of it.
     ColSplitter {
-        x: root.gap + root.media-w;
+        x: root.gap + root.left-w;
         y: root.gap;
         width: root.gap;
         height: root.top-h;
 
-        pressed => { root.press-share = root.media-share; }
+        pressed => { root.press-share = root.left-share; }
         moved(delta) => {
-            root.media-share = root.fit(root.press-share + delta / root.track-w,
+            root.left-share = root.fit(root.press-share + delta / root.track-w,
                 root.min-col / root.track-w,
-                1 - (root.config-w + root.min-col) / root.track-w);
+                1 - (root.right-w + root.min-col) / root.track-w);
         }
     }
 
-    // Preview | Config: the same drag the other way round, since it is
-    // Config's leading edge that moves.
+    // Centre | right: the same drag the other way round, since it is the
+    // right seat's leading edge that moves.
     ColSplitter {
-        x: 2 * root.gap + root.media-w + root.preview-w;
+        x: 2 * root.gap + root.left-w + root.centre-w;
         y: root.gap;
         width: root.gap;
         height: root.top-h;
 
-        pressed => { root.press-share = root.config-share; }
+        pressed => { root.press-share = root.right-share; }
         moved(delta) => {
-            root.config-share = root.fit(root.press-share - delta / root.track-w,
-                root.min-config / root.track-w,
-                1 - (root.media-w + root.min-col) / root.track-w);
+            root.right-share = root.fit(root.press-share - delta / root.track-w,
+                root.min-col / root.track-w,
+                1 - (root.left-w + root.min-col) / root.track-w);
         }
     }
 

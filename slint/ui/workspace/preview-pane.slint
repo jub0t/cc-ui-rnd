@@ -5,6 +5,7 @@ import { IconButton } from "../primitives/panel.slint";
 import { NumberField } from "../primitives/number-field.slint";
 import { Select } from "../primitives/select.slint";
 import { Pane, PaneHeader } from "pane.slint";
+import { PaneKind, PaneSwitcher } from "pane-switcher.slint";
 
 // The programme monitor, ported from web/'s preview panel: a header that says
 // what the output is, a stage on a sunken viewport, and a transport tray under
@@ -223,6 +224,9 @@ export component PreviewPane inherits Rectangle {
     callback ratio-changed(index: int);
     callback quality-changed(index: int);
 
+    /// The corner button: show something else in this pane's seat.
+    callback pane-picked(kind: PaneKind);
+
     property <[int]> ratios-w: [1920, 3840, 1080, 1080, 1440, 2560];
     property <[int]> ratios-h: [1080, 2160, 1920, 1080, 1080, 1080];
     property <[string]> ratio-names: ["16:9", "16:9 4K", "9:16", "1:1", "4:3", "21:9"];
@@ -257,6 +261,14 @@ export component PreviewPane inherits Rectangle {
                     font-family: Theme.font-technical;
                     font-size: Theme.fs;
                     vertical-alignment: center;
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+                PaneSwitcher {
+                    kind: PaneKind.preview;
+                    picked(kind) => { root.pane-picked(kind); }
                 }
             }
         }

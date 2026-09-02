@@ -1,0 +1,201 @@
+import { Theme } from "../theme.slint";
+import { Glyph, Icon } from "../icons.slint";
+import { Tip } from "../primitives/tooltip.slint";
+
+// Which editor a seat is showing, and the control that changes it.
+//
+// Blender's model, reduced to the part that earns its keep. There, every area
+// carries an editor-type dropdown in its corner and any editor can be put in
+// any area; areas can also be split and joined by dragging their corners. The
+// dropdown is the half that changes how the window is used day to day — it is
+// what lets someone who lives in the timeline give it the whole top of the
+// screen — and it is the half that does not need a new layout engine.
+//
+// Picking a view that is already on screen *swaps* the two seats rather than
+// showing it twice. Two copies of one editor is a thing Blender allows and an
+// editor with one document does not want: two inspectors would both be
+// describing the same clip, and one of them would be occupying the seat the
+// preview was in. Swapping means the four views are always all present, and
+// re-arranging them is picking the one you want where you want it.
+export enum PaneKind {
+    /// the bin and the catalogues
+    media,
+    /// the monitor
+    preview,
+    /// details, adjust, text, the preset stacks
+    inspector,
+    /// tabs, tray, lanes
+    timeline,
+}
+
+export global Panes {
+    public pure function label(kind: PaneKind) -> string {
+        return kind == PaneKind.media ? "Library"
+            : kind == PaneKind.preview ? "Preview"
+            : kind == PaneKind.inspector ? "Inspector"
+            : "Timeline";
+    }
+
+    /// The mark a view is known by, and the one the corner button wears.
+    /// Chosen to be tellable apart at 13px rather than to be the most literal
+    /// picture of each: a strip of film, a still frame, the inspector's own
+    /// sliders, and a stack of lanes.
+    public pure function glyph(kind: PaneKind) -> Glyph {
+        return kind == PaneKind.media ? Glyph.film
+            : kind == PaneKind.preview ? Glyph.image
+            : kind == PaneKind.inspector ? Glyph.settings
+            : Glyph.rows;
+    }
+}
+
+// One row of the dropdown: the view's mark, its name, and a tick on the one
+// that is already here.
+component SwitchRow inherits Rectangle {
+    in property <PaneKind> kind;
+    in property <bool> current;
+
+    callback chosen();
+
+    height: 26px;
+
+    Rectangle {
+        x: 4px;
+        y: 0;
+        width: parent.width - 8px;
+        height: parent.height;
+        border-radius: Theme.r-xs;
+        background: touch.has-hover ? Theme.field : Colors.transparent;
+
+        HorizontalLayout {
+            padding-left: 8px;
+            padding-right: 8px;
+            spacing: 8px;
+
+            VerticalLayout {
+                alignment: center;
+                Icon {
+                    glyph: Panes.glyph(root.kind);
+                    size: 13px;
+                    tint: root.current ? Theme.accent : Theme.fg-muted;
+                }
+            }
+
+            Text {
+                horizontal-stretch: 1;
+                text: Panes.label(root.kind);
+                color: root.current ? Theme.fg : Theme.fg-muted;
+                font-size: Theme.fs;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+
+            if root.current: VerticalLayout {
+                alignment: center;
+                Icon {
+                    glyph: Glyph.check;
+                    size: 12px;
+                    tint: Theme.accent;
+                }
+            }
+        }
+
+        touch := TouchArea {
+            mouse-cursor: pointer;
+            clicked => { root.chosen(); }
+        }
+    }
+}
+
+// The square in a pane's top-right corner: the mark of what this pane is
+// currently showing, and the way to make it show something else.
+export component PaneSwitcher inherits Rectangle {
+    /// What this pane is right now.
+    in property <PaneKind> kind;
+
+    callback picked(kind: PaneKind);
+
+    property <length> menu-w: 168px;
+    /// Four rows and the surface's own padding.
+    property <length> menu-h: 4 * 26px + 8px;
+
+    width: 24px;
+    height: 24px;
+
+    chip := Rectangle {
+        width: parent.width;
+        height: parent.height;
+        border-radius: Theme.r-xs;
+        background: touch.pressed ? Theme.field-active
+            : touch.has-hover ? Theme.field
+            : Colors.transparent;
+
+        animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+
+        Icon {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            glyph: Panes.glyph(root.kind);
+            size: 13px;
+            tint: touch.has-hover ? Theme.fg : Theme.fg-muted;
+        }
+
+        touch := TouchArea {
+            mouse-cursor: pointer;
+            clicked => { menu.show(); }
+        }
+
+        Tip {
+            text: "Change what this panel shows";
+            active: touch.has-hover;
+        }
+    }
+
+    // Hung under the button and aligned to its trailing edge, which is also
+    // the pane's: this control is always in a top-right corner, so a menu that
+    // opened rightwards would open off the pane every time. A PopupWindow is
+    // its own layer, so it clears the pane's clip on its own.
+    menu := PopupWindow {
+        x: root.width - root.menu-w;
+        y: root.height + 4px;
+        width: root.menu-w;
+        height: root.menu-h;
+        close-policy: close-on-click-outside;
+
+        Rectangle {
+            background: Theme.raised;
+            border-width: 1px;
+            border-color: Theme.line-strong;
+            border-radius: Theme.r;
+            clip: true;
+
+            VerticalLayout {
+                padding: 4px;
+                alignment: start;
+
+                // Written out rather than looped: four is the whole list, and
+                // a `for` over it would need the array to exist somewhere the
+                // rows could reach, which is more machinery than the rows.
+                SwitchRow {
+                    kind: PaneKind.media;
+                    current: root.kind == PaneKind.media;
+                    chosen => { menu.close(); root.picked(PaneKind.media); }
+                }
+                SwitchRow {
+                    kind: PaneKind.preview;
+                    current: root.kind == PaneKind.preview;
+                    chosen => { menu.close(); root.picked(PaneKind.preview); }
+                }
+                SwitchRow {
+                    kind: PaneKind.inspector;
+                    current: root.kind == PaneKind.inspector;
+                    chosen => { menu.close(); root.picked(PaneKind.inspector); }
+                }
+                SwitchRow {
+                    kind: PaneKind.timeline;
+                    current: root.kind == PaneKind.timeline;
+                    chosen => { menu.close(); root.picked(PaneKind.timeline); }
+                }
+            }
+        }
+    }
+}

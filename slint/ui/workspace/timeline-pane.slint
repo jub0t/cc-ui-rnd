@@ -1,6 +1,7 @@
 import { Theme } from "../theme.slint";
 import { Fmt } from "../util.slint";
 import { Pane } from "pane.slint";
+import { PaneKind, PaneSwitcher } from "pane-switcher.slint";
 import { ContextMenu, MenuItemData } from "../primitives/context-menu.slint";
 import { HairlineSplitter } from "splitter.slint";
 import { ThinScrollbar } from "../primitives/scrollbar.slint";
@@ -84,6 +85,9 @@ export component TimelinePane inherits Rectangle {
     callback track-removed(index: int);
     callback track-renamed(index: int, name: string);
 
+    /// The corner button: show something else in this pane's seat.
+    callback pane-picked(kind: PaneKind);
+
     /// Wide enough for a lane name and its switches without eliding the name
     /// at every default. The reference opens at 164px and carries two toggles;
     /// this column carries four, and 164 left the name with about six
@@ -135,6 +139,11 @@ export component TimelinePane inherits Rectangle {
             renamed(index, name) => { root.tab-renamed(index, name); }
             close-requested(index) => { root.tab-close-requested(index); }
             added => { root.tab-added(); }
+
+            PaneSwitcher {
+                kind: PaneKind.timeline;
+                picked(kind) => { root.pane-picked(kind); }
+            }
         }
 
         TimelineTray {

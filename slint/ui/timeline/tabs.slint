@@ -241,4 +241,17 @@ export component TimelineTabs inherits Rectangle {
             }
         }
     }
+
+    // The trailing slot, for whatever the pane wants in the corner of its
+    // top bar. Placed rather than laid out: the strip's own layout is
+    // start-aligned so the tabs stay their own width, and a start-aligned
+    // layout has no spare space to push a trailing child into.
+    Rectangle {
+        x: parent.width - self.width - 8px;
+        y: (parent.height - self.height) / 2;
+        width: 24px;
+        height: 24px;
+
+        @children
+    }
 }

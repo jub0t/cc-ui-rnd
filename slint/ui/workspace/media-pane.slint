@@ -1,6 +1,7 @@
 import { Theme, Fmt, Glyph, Icon, Payload } from "../primitives/primitives.slint";
 import { Pane, PaneScroll } from "pane.slint";
 import { HairlineSplitter } from "splitter.slint";
+import { PaneKind, PaneSwitcher } from "pane-switcher.slint";
 
 // The library pane: a strip of pages across the top, then a narrow category
 // sidebar and the browsing area beside it. Ported from the reference editor's
@@ -869,6 +870,9 @@ export component MediaPane inherits Rectangle {
     /// Templates page: open the save-as-template flow for this project.
     callback save-template();
 
+    /// The corner button: show something else in this pane's seat.
+    callback pane-picked(kind: PaneKind);
+
     property <int> tab;
     property <bool> categories-open: true;
     property <bool> text-open: true;
@@ -999,6 +1003,7 @@ export component MediaPane inherits Rectangle {
 
             HorizontalLayout {
                 padding: 8px;
+                spacing: 8px;
 
                 // A sunken track and nothing else. No border: this sits
                 // inside a pane that is already outlined, and a second rule
@@ -1046,6 +1051,18 @@ export component MediaPane inherits Rectangle {
                             current: root.tab == 5;
                             clicked => { root.tab = 5; }
                         }
+                    }
+                }
+
+                // Outside the sunken track, not in it: the track holds the
+                // pages of *this* view and this button changes which view the
+                // pane is, which is a different question about a different
+                // thing.
+                VerticalLayout {
+                    alignment: center;
+                    PaneSwitcher {
+                        kind: PaneKind.media;
+                        picked(kind) => { root.pane-picked(kind); }
                     }
                 }
             }
