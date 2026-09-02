@@ -41,6 +41,12 @@ export global Editor {
     /// A seat's dropdown was used: show this view in this seat, and leave
     /// every other seat alone.
     callback dock-set(seat: int, kind: PaneKind);
+    /// The window's add-panel list was used. Where it lands is the layout's
+    /// business, not the caller's — see `dock-add` in main.rs.
+    callback dock-add(kind: PaneKind);
+    /// A seat closed itself. The seat beside it takes the room, which is the
+    /// split they were two halves of ceasing to exist.
+    callback dock-remove(seat: int);
     /// A panel was dragged from one seat and dropped on another. The middle
     /// trades the two; an edge splits the seat it landed on.
     callback dock-dropped(from: int, onto: int, side: DockSide);

@@ -1,5 +1,6 @@
 import { Theme } from "theme.slint";
 import { Glyph, Icon } from "icons.slint";
+import { AddPaneButton, PaneKind } from "workspace/pane-switcher.slint";
 
 // The custom title bar, ported from the reference's TitleBar.tsx.
 //
@@ -79,6 +80,8 @@ export component TitleBar inherits Rectangle {
     /// Which menu is open, or -1.
     in property <int> menu: -1;
     callback open-settings();
+    /// A view was picked from the add-panel list.
+    callback add-pane(kind: PaneKind);
     callback toggle-theme();
     callback export-clicked();
 
@@ -165,6 +168,18 @@ export component TitleBar inherits Rectangle {
         }
 
         Rectangle { horizontal-stretch: 1; }
+
+        // Beside Settings, because it is the same sort of thing: neither one
+        // is about the project, both are about the window you are looking at
+        // it through. A seat's own corner button changes or closes that seat;
+        // this is the only place a seat can be brought into existence, which
+        // is why it lives on the window and not in a pane.
+        VerticalLayout {
+            alignment: center;
+            AddPaneButton {
+                added(kind) => { root.add-pane(kind); }
+            }
+        }
 
         VerticalLayout {
             alignment: center;

@@ -45,6 +45,7 @@ export component Workspace inherits Rectangle {
 
         picked(kind) => { Editor.dock-set(seat.index, kind); }
         dropped-on(from, side) => { Editor.dock-dropped(from, seat.index, side); }
+        removed => { Editor.dock-remove(seat.index); }
     }
 
     // Declared after the seats so a gutter is hit before the panes either side

@@ -161,6 +161,7 @@ export component App inherits Window {
             begin-drag => { root.titlebar-begin-drag(); }
             toggle-maximize => { root.titlebar-toggle-maximize(); }
             open-settings => { root.open-settings(); }
+            add-pane(kind) => { Editor.dock-add(kind); }
             toggle-theme => { root.toggle-theme(); }
             export-clicked => { root.export-clicked(); }
         }

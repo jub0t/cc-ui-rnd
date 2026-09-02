@@ -875,6 +875,11 @@ export component MediaPane inherits Rectangle {
     /// Which seat this pane is in. It travels no further than the corner
     /// button, whose drag payload has to say where it is being taken from.
     in property <int> pane-seat;
+    /// False when this is the last panel on screen. Travels the same way, and
+    /// only greys the one row that would close it.
+    in property <bool> pane-removable: true;
+    /// That row was used.
+    callback pane-removed();
 
     property <int> tab;
     property <bool> categories-open: true;
@@ -1066,7 +1071,9 @@ export component MediaPane inherits Rectangle {
                     PaneSwitcher {
                         kind: PaneKind.media;
                         seat: root.pane-seat;
+                        removable: root.pane-removable;
                         picked(kind) => { root.pane-picked(kind); }
+                        removed => { root.pane-removed(); }
                     }
                 }
             }

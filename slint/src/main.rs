@@ -1504,36 +1504,33 @@ impl Studio {
     /// while everything else in the window — the clips, the menus, the
     /// dialogs — changes without moving a single seat.
     fn publish_dock(&self, _app: &App, models: &Models) {
+        let out = self.dock_layout();
+        sync(&models.seats, out.seats);
+        sync(&models.dividers, out.dividers);
+    }
+
+    /// The tree walked into the box Slint last reported.
+    ///
+    /// Walked afresh wherever it is wanted rather than cached: it is a handful
+    /// of nodes, and a cache would be one more thing that can disagree with
+    /// the tree — the same call the lane heights make.
+    fn dock_layout(&self) -> DockLayout {
         let mut out = DockLayout::default();
         let (width, height) = self.workspace;
         if width > SEAT_GAP * 2.0 && height > SEAT_GAP * 2.0 {
             lay_out(
                 &self.dock,
-                (
-                    SEAT_GAP,
-                    SEAT_GAP,
-                    width - 2.0 * SEAT_GAP,
-                    height - 2.0 * SEAT_GAP,
-                ),
+                (SEAT_GAP, SEAT_GAP, width - 2.0 * SEAT_GAP, height - 2.0 * SEAT_GAP),
                 &mut out,
             );
         }
-        sync(&models.seats, out.seats);
-        sync(&models.dividers, out.dividers);
+        out
     }
 
-    /// The usable extent of one split, from a fresh walk. Only a press needs
-    /// it, and a press is not a hot path — cheaper than keeping the last
-    /// layout's copy in step with a tree that can change under it.
+    /// The usable extent of one split — what a divider drag's pixels are a
+    /// fraction of.
     fn split_extent(&self, index: usize) -> Option<f32> {
-        let mut out = DockLayout::default();
-        let (width, height) = self.workspace;
-        lay_out(
-            &self.dock,
-            (SEAT_GAP, SEAT_GAP, width - 2.0 * SEAT_GAP, height - 2.0 * SEAT_GAP),
-            &mut out,
-        );
-        out.extents.get(index).copied()
+        self.dock_layout().extents.get(index).copied()
     }
 
     /// The ratio a split is currently at.
@@ -2711,6 +2708,36 @@ fn main() -> Result<(), slint::PlatformError> {
         };
         state.dock.split_leaf(&onto_path, taken, side);
         state.dock.remove_leaf(&from_path);
+    }));
+
+    // A view added from the window's own corner, which has no seat to be added
+    // beside — so it halves whichever seat currently has the most room, along
+    // that seat's longer side. That is what a tiling window manager does with
+    // a new window, and it is the only rule that does not need the user to
+    // have already decided something they were not asked.
+    editor.on_dock_add(on_dock!(|state, kind: PaneKind| {
+        let seats = state.dock_layout().seats;
+        let Some(biggest) = seats
+            .iter()
+            .max_by(|a, b| (a.width * a.height).total_cmp(&(b.width * b.height)))
+        else {
+            return;
+        };
+        let side = if biggest.width >= biggest.height {
+            DockSide::Right
+        } else {
+            DockSide::Bottom
+        };
+        let Some(path) = state.dock.leaf_path(biggest.index.max(0) as usize) else { return };
+        state.dock.split_leaf(&path, kind, side);
+    }));
+
+    // A seat closed from its own dropdown. Its sibling takes the room, which
+    // is the split the two were halves of ceasing to exist — `remove_leaf`
+    // refuses the last one, so the window cannot be emptied.
+    editor.on_dock_remove(on_dock!(|state, seat: i32| {
+        let Some(path) = state.dock.leaf_path(seat.max(0) as usize) else { return };
+        state.dock.remove_leaf(&path);
     }));
 
     editor.on_divider_pressed(on_dock!(|state, index: i32| {

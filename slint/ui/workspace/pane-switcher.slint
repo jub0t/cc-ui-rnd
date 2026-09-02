@@ -122,6 +122,77 @@ component SwitchRow inherits Rectangle {
     }
 }
 
+// The rule above the row that removes the panel. A list of four views and a
+// fifth row that closes one are not the same kind of thing, and a menu that
+// runs them together is a menu you can misfire.
+component SwitchDivider inherits Rectangle {
+    height: 9px;
+
+    Rectangle {
+        x: 6px;
+        y: (parent.height - 1px) / 2;
+        width: parent.width - 12px;
+        height: 1px;
+        background: Theme.line;
+    }
+}
+
+// "Remove panel". Red on hover like every other destructive row in the
+// window, and greyed when it is the last panel there is: a window with no
+// seats has nowhere to put anything back, so the tree refuses to lose its
+// last leaf and the row says so before you try rather than after.
+component RemoveRow inherits Rectangle {
+    in property <bool> enabled: true;
+
+    callback chosen();
+
+    height: 26px;
+
+    row := Rectangle {
+        x: 4px;
+        y: 0;
+        width: parent.width - 8px;
+        height: parent.height;
+        border-radius: Theme.r-xs;
+        background: (touch.has-hover && root.enabled) ? Theme.danger-soft
+            : Colors.transparent;
+
+        property <brush> ink: !root.enabled ? Theme.fg-dim
+            : touch.has-hover ? Theme.danger
+            : Theme.fg-muted;
+
+        HorizontalLayout {
+            padding-left: 8px;
+            padding-right: 8px;
+            spacing: 8px;
+
+            VerticalLayout {
+                alignment: center;
+                Icon {
+                    glyph: Glyph.trash;
+                    size: 13px;
+                    tint: row.ink;
+                }
+            }
+
+            Text {
+                horizontal-stretch: 1;
+                text: root.enabled ? "Remove panel" : "Only panel";
+                color: row.ink;
+                font-size: Theme.fs;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+        }
+
+        touch := TouchArea {
+            enabled: root.enabled;
+            mouse-cursor: pointer;
+            clicked => { root.chosen(); }
+        }
+    }
+}
+
 // The button in a pane's top-right corner: the mark of what this pane is
 // currently showing, and the two ways to change it.
 //
@@ -138,7 +209,11 @@ export component PaneSwitcher inherits Rectangle {
     /// from. See the payload below.
     in property <int> seat;
 
+    /// False when this is the last panel on screen, which cannot be removed.
+    in property <bool> removable: true;
     callback picked(kind: PaneKind);
+    /// The bottom row of the list was used: close this panel.
+    callback removed();
 
     /// `pane:<seat>:<name>:<slug>` — the seat for the drop, the name for the
     /// chip under the cursor, and the slug for the mark on it.
@@ -146,8 +221,12 @@ export component PaneSwitcher inherits Rectangle {
         "pane:\{root.seat}:\{Panes.label(root.kind)}:\{Panes.id(root.kind)}";
 
     property <length> menu-w: 168px;
-    /// Four rows and the surface's own padding.
-    property <length> menu-h: 4 * 26px + 8px;
+    /// Four view rows, then the rule and the row that removes the panel, then
+    /// the surface's own padding. Summed here because a PopupWindow is sized
+    /// by whoever places it — the same rule the context menu follows, and the
+    /// same reason: a layout cannot report its height back up before it has
+    /// somewhere to be laid out.
+    property <length> menu-h: 4 * 26px + 9px + 26px + 8px;
 
     // The mark, a gap, and the chevron, with even padding either side.
     property <length> mark: 14px;
@@ -266,6 +345,93 @@ export component PaneSwitcher inherits Rectangle {
                     kind: PaneKind.timeline;
                     current: root.kind == PaneKind.timeline;
                     chosen => { menu.close(); root.picked(PaneKind.timeline); }
+                }
+
+                SwitchDivider { }
+
+                RemoveRow {
+                    enabled: root.removable;
+                    chosen => { menu.close(); root.removed(); }
+                }
+            }
+        }
+    }
+}
+
+// "Add a panel", for the window's own top-right corner.
+//
+// The same list as a seat's own dropdown, minus the tick and the remove row:
+// there is nothing here yet to be current and nothing yet to close. What it
+// adds goes wherever there is most room — see `dock-add` in main.rs, which
+// halves the largest seat along its longer side, the way a tiling window
+// manager places a new window.
+export component AddPaneButton inherits Rectangle {
+    callback added(kind: PaneKind);
+
+    property <length> menu-w: 168px;
+    property <length> menu-h: 4 * 26px + 8px;
+
+    width: 24px;
+    height: 24px;
+    border-radius: Theme.r-sm;
+    background: touch.has-hover ? Theme.field : Colors.transparent;
+
+    animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+
+    Icon {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        glyph: Glyph.slot;
+        size: 14px;
+        tint: touch.has-hover ? Theme.fg : Theme.fg-muted;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { menu.show(); }
+    }
+
+    Tip {
+        text: "Add a panel";
+        active: touch.has-hover;
+    }
+
+    // Under the button and pulled back inside the window: this one sits within
+    // a few pixels of the right edge of the strip, so a menu hung from its
+    // leading edge would fall off the screen.
+    menu := PopupWindow {
+        x: root.width - root.menu-w;
+        y: root.height + 4px;
+        width: root.menu-w;
+        height: root.menu-h;
+        close-policy: close-on-click-outside;
+
+        Rectangle {
+            background: Theme.raised;
+            border-width: 1px;
+            border-color: Theme.line-strong;
+            border-radius: Theme.r;
+            clip: true;
+
+            VerticalLayout {
+                padding: 4px;
+                alignment: start;
+
+                SwitchRow {
+                    kind: PaneKind.media;
+                    chosen => { menu.close(); root.added(PaneKind.media); }
+                }
+                SwitchRow {
+                    kind: PaneKind.preview;
+                    chosen => { menu.close(); root.added(PaneKind.preview); }
+                }
+                SwitchRow {
+                    kind: PaneKind.inspector;
+                    chosen => { menu.close(); root.added(PaneKind.inspector); }
+                }
+                SwitchRow {
+                    kind: PaneKind.timeline;
+                    chosen => { menu.close(); root.added(PaneKind.timeline); }
                 }
             }
         }

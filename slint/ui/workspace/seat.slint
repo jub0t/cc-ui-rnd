@@ -28,6 +28,9 @@ export component Seat inherits Rectangle {
 
     /// Its corner button was used.
     callback picked(kind: PaneKind);
+    /// The bottom row of its dropdown was used: close this seat.
+    callback removed();
+
     /// A panel was dropped here from another seat, on this part of it.
     callback dropped-on(from: int, side: DockSide);
 
@@ -64,6 +67,8 @@ export component Seat inherits Rectangle {
 
             pane-picked(kind) => { root.picked(kind); }
             pane-seat: root.index;
+            pane-removable: Editor.seats.length > 1;
+            pane-removed => { root.removed(); }
 
             items: Editor.media;
             count-all: Editor.media-count-all;
@@ -96,6 +101,8 @@ export component Seat inherits Rectangle {
 
             pane-picked(kind) => { root.picked(kind); }
             pane-seat: root.index;
+            pane-removable: Editor.seats.length > 1;
+            pane-removed => { root.removed(); }
 
             output-width: Editor.output-width;
             output-height: Editor.output-height;
@@ -123,6 +130,8 @@ export component Seat inherits Rectangle {
 
             pane-picked(kind) => { root.picked(kind); }
             pane-seat: root.index;
+            pane-removable: Editor.seats.length > 1;
+            pane-removed => { root.removed(); }
 
             video-effects: Editor.video-effects;
             audio-effects: Editor.audio-effects;
@@ -181,6 +190,8 @@ export component Seat inherits Rectangle {
 
             pane-picked(kind) => { root.picked(kind); }
             pane-seat: root.index;
+            pane-removable: Editor.seats.length > 1;
+            pane-removed => { root.removed(); }
 
             tabs: Editor.timeline-tabs;
             current-tab: Editor.timeline-current-tab;

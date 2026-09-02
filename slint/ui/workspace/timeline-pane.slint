@@ -90,6 +90,11 @@ export component TimelinePane inherits Rectangle {
     /// Which seat this pane is in. It travels no further than the corner
     /// button, whose drag payload has to say where it is being taken from.
     in property <int> pane-seat;
+    /// False when this is the last panel on screen. Travels the same way, and
+    /// only greys the one row that would close it.
+    in property <bool> pane-removable: true;
+    /// That row was used.
+    callback pane-removed();
 
     /// Wide enough for a lane name and its switches without eliding the name
     /// at every default. The reference opens at 164px and carries two toggles;
@@ -146,7 +151,9 @@ export component TimelinePane inherits Rectangle {
             PaneSwitcher {
                 kind: PaneKind.timeline;
                 seat: root.pane-seat;
+                removable: root.pane-removable;
                 picked(kind) => { root.pane-picked(kind); }
+                removed => { root.pane-removed(); }
             }
         }
 
