@@ -526,7 +526,16 @@ component MediaGrid inherits Rectangle {
     callback clicked(id: int, additive: bool);
     callback activated(id: int);
     callback removed(id: int);
-    callback cleared();
+    /// A marquee closed over the grid, given as the block of cells it caught:
+    /// the two corners inclusive, and the column count they were measured
+    /// against. A block and not a list of ids, because the cards are placed by
+    /// arithmetic rather than by a layout — the geometry lives on this side,
+    /// so this side is what resolves it, and a rectangle of cells is the whole
+    /// answer without a model to carry it. An empty block — `to` before
+    /// `from` on either axis — is a press that caught nothing, which for a
+    /// plain band is how the selection gets cleared.
+    callback band-selected(columns: int, from-col: int, to-col: int,
+        from-row: int, to-row: int, additive: bool);
 
     property <length> gap: 8px;
     property <length> min-card: 88px;
@@ -537,17 +546,80 @@ component MediaGrid inherits Rectangle {
     /// thumbnail + the 4px gap + one line of label
     property <length> card-h: root.card-w * 9 / 16 + 4px + 14px;
     property <int> rows: Math.ceil(root.items.length / root.cols);
+    /// One card and the gutter after it — what a column, or a row, advances by.
+    property <length> col-pitch: root.card-w + root.gap;
+    property <length> row-pitch: root.card-h + root.gap;
 
-    height: root.rows > 0 ? root.rows * (root.card-h + root.gap) - root.gap : 0px;
+    height: root.rows > 0 ? root.rows * root.row-pitch - root.gap : 0px;
 
-    // Pressing the background drops the selection, the way pressing empty
-    // space in the reference's grid does. The band that gesture also drags
-    // there is not ported: a marquee wants a pointer grab over the whole
-    // window, and there is nothing yet for a multiple selection to be dragged
-    // onto. Declared first, so the cards take their own presses.
-    TouchArea {
-        clicked => {
-            root.cleared();
+    // Which cards a band's edges touch. The reference asks every card for its
+    // rect and tests them one by one; the grid here is arithmetic, so the
+    // question inverts — an edge maps straight to a column, and the four
+    // answers are the block. The tests are the reference's, strict on both
+    // sides (`left < right && right > left`), so a band that stops exactly on
+    // a gutter catches neither of the cards it runs between.
+    pure function first-col(edge: length) -> int {
+        return Math.max(0, Math.floor((edge - root.card-w) / root.col-pitch) + 1);
+    }
+    pure function last-col(edge: length) -> int {
+        return Math.min(root.cols - 1, Math.ceil(edge / root.col-pitch) - 1);
+    }
+    pure function first-row(edge: length) -> int {
+        return Math.max(0, Math.floor((edge - root.card-h) / root.row-pitch) + 1);
+    }
+    pure function last-row(edge: length) -> int {
+        return Math.min(root.rows - 1, Math.ceil(edge / root.row-pitch) - 1);
+    }
+
+    // Pressing the background drags a selection band, the way pressing empty
+    // space in the reference's grid does. Declared first, so the cards take
+    // their own presses and what is left to press is the gutter between them.
+    //
+    // Committed on release rather than as it sweeps — the timeline's band is
+    // the same gesture in the same window and does the same, for the reason
+    // written there: selecting live looks busy and makes a mistaken sweep hard
+    // to back out of. It also keeps the bin off the pointer-rate path, which
+    // it has no cheap publish for; the reference re-derives on every move
+    // because a React list can afford to.
+    //
+    // A press that never moves closes an empty band, which is a click on empty
+    // space and clears the selection — the same event doing the same job, so
+    // there is no second handler that could disagree with this one about what
+    // a press on the background means.
+    band := TouchArea {
+        property <bool> drawing;
+        property <bool> additive;
+        property <length> from-x;
+        property <length> from-y;
+        property <length> to-x;
+        property <length> to-y;
+
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) {
+                self.additive = event.modifiers.shift;
+                self.from-x = self.mouse-x;
+                self.from-y = self.mouse-y;
+                self.to-x = self.mouse-x;
+                self.to-y = self.mouse-y;
+                self.drawing = true;
+            } else if (event.kind == PointerEventKind.up
+                || event.kind == PointerEventKind.cancel) {
+                if (self.drawing) {
+                    self.drawing = false;
+                    root.band-selected(
+                        root.cols,
+                        root.first-col(Math.min(self.from-x, self.to-x)),
+                        root.last-col(Math.max(self.from-x, self.to-x)),
+                        root.first-row(Math.min(self.from-y, self.to-y)),
+                        root.last-row(Math.max(self.from-y, self.to-y)),
+                        self.additive);
+                }
+            }
+        }
+
+        moved => {
+            self.to-x = self.mouse-x;
+            self.to-y = self.mouse-y;
         }
     }
 
@@ -567,6 +639,19 @@ component MediaGrid inherits Rectangle {
         removed => {
             root.removed(entry.id);
         }
+    }
+
+    // The band being drawn, declared last so it lies over the cards it is
+    // closing on. Same wash and same edge as the timeline's: one gesture, one
+    // look, wherever in the window it is made.
+    if band.drawing: Rectangle {
+        x: Math.min(band.from-x, band.to-x);
+        y: Math.min(band.from-y, band.to-y);
+        width: Math.max(band.from-x, band.to-x) - Math.min(band.from-x, band.to-x);
+        height: Math.max(band.from-y, band.to-y) - Math.min(band.from-y, band.to-y);
+        background: Theme.accent-soft;
+        border-width: 1px;
+        border-color: Theme.accent;
     }
 }
 
@@ -858,7 +943,9 @@ export component MediaPane inherits Rectangle {
     callback import-media();
     callback filter-changed(filter: MediaFilter);
     callback select(id: int, additive: bool);
-    callback clear-selection();
+    /// A marquee closed over the card grid — see MediaGrid.band-selected.
+    callback band-selected(columns: int, from-col: int, to-col: int,
+        from-row: int, to-row: int, additive: bool);
     callback remove(id: int);
     callback remove-selected();
     /// double-clicked: place it on the timeline at the playhead
@@ -1390,7 +1477,10 @@ export component MediaPane inherits Rectangle {
                         clicked(id, additive) => { root.select(id, additive); }
                         activated(id) => { root.activate(id); }
                         removed(id) => { root.remove(id); }
-                        cleared => { root.clear-selection(); }
+                        band-selected(columns, from-col, to-col, from-row, to-row, additive) => {
+                            root.band-selected(columns, from-col, to-col,
+                                from-row, to-row, additive);
+                        }
                     }
                 }
 

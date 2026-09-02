@@ -100,7 +100,10 @@ export component Seat inherits Rectangle {
             import-media => { Editor.import-media(); }
             filter-changed(filter) => { Editor.media-filter-changed(filter); }
             select(id, additive) => { Editor.media-select(id, additive); }
-            clear-selection => { Editor.media-clear-selection(); }
+            band-selected(columns, from-col, to-col, from-row, to-row, additive) => {
+                Editor.media-band-selected(columns, from-col, to-col,
+                    from-row, to-row, additive);
+            }
             remove(id) => { Editor.media-remove(id); }
             remove-selected => { Editor.media-remove-selected(); }
             activate(id) => { Editor.media-activate(id); }

@@ -2696,14 +2696,36 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     });
 
-    editor.on_media_clear_selection({
+    // A marquee closed over the grid. The panel hands down the block of cells
+    // it caught rather than a list of ids: the bin is placed by arithmetic on
+    // that side, so that side is the only one that knows which cell a card is
+    // in, and a rectangle of cells says the same thing in six numbers without
+    // a model to carry it back.
+    //
+    // The walk is over the *filtered* order, because that is what the grid was
+    // laid out from — the panel's third card is the third card the filter let
+    // through, not the third row of the bin. Cards the filter is hiding are
+    // not in the grid and so were never under the band: a plain sweep clears
+    // them the way the reference's `onSelect([])` does, and a shift-sweep
+    // leaves them exactly as they were.
+    editor.on_media_band_selected({
         let weak = app.as_weak();
         let library = library.clone();
         let view = view.clone();
-        move || {
+        move |columns, from_col, to_col, from_row, to_row, additive| {
             let Some(app) = weak.upgrade() else { return };
+            let filter = library.filter.get();
+            let mut cell = 0;
             for item in library.items.borrow_mut().iter_mut() {
-                item.selected = false;
+                if !Library::shows(filter, item.kind) {
+                    item.selected = additive && item.selected;
+                    continue;
+                }
+                let (row, col) = (cell / columns.max(1), cell % columns.max(1));
+                let caught = row >= from_row && row <= to_row
+                    && col >= from_col && col <= to_col;
+                item.selected = caught || (additive && item.selected);
+                cell += 1;
             }
             library.publish(&app, &view);
         }
