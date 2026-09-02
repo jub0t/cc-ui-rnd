@@ -26,6 +26,7 @@ import { Editor } from "editor.slint";
 import { PaneKind } from "workspace/pane-switcher.slint";
 import { RecentProjectData, StartData, StartScreen } from "start.slint";
 import { TitleBar } from "title-bar.slint";
+import { ToastData, ToastLayer } from "primitives/toast.slint";
 import { TooltipLayer } from "primitives/tooltip.slint";
 import { Workspace } from "workspace/workspace.slint";
 import {
@@ -41,7 +42,7 @@ export {
     ClipData, ClipField, ClipKind, ClipTextField, DropData, SelectedClipData,
     TextAlignment, TimelineTabData, TimelineTool, TrackData, TrackSize,
     MenuItemData, MenuRow, ExportData, ExportPhase, ModelData, SettingsData,
-    RecentProjectData, StartData,
+    RecentProjectData, StartData, ToastData,
 }
 
 export component App inherits Window {
@@ -58,6 +59,10 @@ export component App inherits Window {
     // start eating each other.
     min-width: 900px;
     min-height: 560px;
+    // So the shortcuts work before anything has been clicked. Without it the
+    // window opens with nothing focused, and a key would have nowhere to be
+    // delivered from until the first press landed somewhere.
+    forward-focus: keys;
 
     // The editor's own state and actions live on the Editor global rather
     // than here — see editor.slint. What is left on the window is the window:
@@ -136,6 +141,10 @@ export component App inherits Window {
     callback toggle-theme();
     callback export-clicked();
 
+    /// The bottom-right notice: what just happened, said once. Set from Rust
+    /// and watched by its token — see ToastLayer, which owns the timing.
+    in property <ToastData> toast;
+
     // The level feed is a Rust timer, and a property cannot reach across to
     // stop it, so the hover edge is forwarded as a callback: Rust arms the
     // timer on the way in and disarms it on the way out. Idle then costs
@@ -153,68 +162,96 @@ export component App inherits Window {
     /// The same seam, and just as idle. main.rs reads it on every tick.
     out property <bool> muted;
 
-    // Clicking anything that is not a control blurs the one that had focus,
-    // the way a browser does. Slint holds focus until something else takes it,
-    // so without this a number field stays in its editing state — ring and all
-    // — for the rest of the session. Both sit first in the tree so every real
-    // control is above them and takes its own clicks.
-    sink := FocusScope {
+    // The window's keyboard, and the thing focus falls back to.
+    //
+    // It wraps the content rather than sitting beside it, and both of its jobs
+    // come out of that:
+    //
+    //   - Clicking anything that is not a control blurs the one that had
+    //     focus, the way a browser does. Slint holds focus until something
+    //     else takes it, so without somewhere for it to land a number field
+    //     stays in its editing state — ring and all — for the rest of the
+    //     session. Every real control is inside this and takes its own press
+    //     first; what reaches here is a press on nothing, and a FocusScope
+    //     takes focus on one.
+    //   - A key goes to the focused element first and walks up the ancestors
+    //     with whatever that one rejects, so the bindings below only fire when
+    //     nothing in the window wanted the keystroke. That is the rule the
+    //     reference writes out by hand — its handler returns early when the
+    //     event target is an input — and here it is the delivery order.
+    //
+    // `Control` in a binding is the platform's own command modifier: Slint
+    // remaps it to ⌘ on macOS, which is also what the menu row beside it says.
+    keys := FocusScope {
+        width: 100%;
+        height: 100%;
         focus-on-tab-navigation: false;
-    }
 
-    TouchArea {
-        clicked => {
-            sink.focus();
+        // Through the menu's own callback rather than a second handler: a
+        // shortcut and the row that advertises it have to do the same thing,
+        // and the cheapest way to be sure of that is for there to be one
+        // thing. Every other row in those menus is a KeyBinding away from
+        // working the same way.
+        KeyBinding {
+            keys: @keys(Control + S);
+            // Nothing on the launch screen has a project to act on, which is
+            // why the strip up there is missing the menus this belongs to.
+            enabled: !root.on-start;
+            activated => { root.app-menu-selected("save"); }
         }
-    }
 
-    VerticalLayout {
-        TitleBar {
-            macos: root.macos;
-            minimal: root.on-start;
-            project-name: root.project-name;
-            status: root.project-status;
+        VerticalLayout {
+            width: 100%;
+            height: 100%;
 
-            menu: root.open-menu;
-            menu-opened(index, at-x) => {
-                appmenu.request-x = at-x;
-                // Under the strip, which is 32px tall.
-                appmenu.request-y = 32px;
-                root.menu-opened(index);
+            TitleBar {
+                macos: root.macos;
+                minimal: root.on-start;
+                project-name: root.project-name;
+                status: root.project-status;
+
+                menu: root.open-menu;
+                menu-opened(index, at-x) => {
+                    appmenu.request-x = at-x;
+                    // Under the strip, which is 32px tall.
+                    appmenu.request-y = 32px;
+                    root.menu-opened(index);
+                }
+
+                begin-drag => { root.titlebar-begin-drag(); }
+                toggle-maximize => { root.titlebar-toggle-maximize(); }
+                open-settings => { root.open-settings(); }
+                add-pane(kind) => { Editor.dock-add(kind); }
+                toggle-theme => { root.toggle-theme(); }
+                export-clicked => { root.export-clicked(); }
             }
 
-            begin-drag => { root.titlebar-begin-drag(); }
-            toggle-maximize => { root.titlebar-toggle-maximize(); }
-            open-settings => { root.open-settings(); }
-            add-pane(kind) => { Editor.dock-add(kind); }
-            toggle-theme => { root.toggle-theme(); }
-            export-clicked => { root.export-clicked(); }
-        }
+            if root.on-start: StartScreen {
+                vertical-stretch: 1;
 
-        if root.on-start: StartScreen {
-            vertical-stretch: 1;
+                data: root.start;
+                resolutions: root.start-resolutions;
+                rates: root.start-rates;
+                recents: root.recents;
 
-            data: root.start;
-            resolutions: root.start-resolutions;
-            rates: root.start-rates;
-            recents: root.recents;
+                name-edited(name) => { root.start-name-edited(name); }
+                location-edited(path) => { root.start-location-edited(path); }
+                browse => { root.start-browse(); }
+                resolution-changed(index) => { root.start-resolution-changed(index); }
+                rate-changed(index) => { root.start-rate-changed(index); }
+                create => { root.start-create(); }
+                open-recent(path) => { root.start-open-recent(path); }
+                forget-recent(path) => { root.start-forget-recent(path); }
+                dismiss-error => { root.start-dismiss-error(); }
+            }
 
-            name-edited(name) => { root.start-name-edited(name); }
-            location-edited(path) => { root.start-location-edited(path); }
-            browse => { root.start-browse(); }
-            resolution-changed(index) => { root.start-resolution-changed(index); }
-            rate-changed(index) => { root.start-rate-changed(index); }
-            create => { root.start-create(); }
-            open-recent(path) => { root.start-open-recent(path); }
-            forget-recent(path) => { root.start-forget-recent(path); }
-            dismiss-error => { root.start-dismiss-error(); }
-        }
-
-        // Everything the workspace shows now reads the Editor global, so
-        // nothing is passed to it: it is a box with four seats in it, and the
-        // views inside those seats reach the state directly. See editor.slint.
-        if !root.on-start: Workspace {
-            vertical-stretch: 1;
+            // Everything the workspace shows now reads the Editor global, so
+            // nothing is passed to it: it is a box with four seats in it, and
+            // the views inside those seats reach the state directly. See
+            // editor.slint.
+            if !root.on-start: Workspace {
+                vertical-stretch: 1;
+            }
         }
     }
 
@@ -287,5 +324,17 @@ export component App inherits Window {
         menu-height: root.app-menu-height;
         token: root.app-menu-token;
         selected(id) => { root.app-menu-selected(id); }
+    }
+
+    // Last of all, and over everything including the sheets: an export that
+    // failed behind a dialog is exactly the case a notice is for. It takes no
+    // events — there is no TouchArea anywhere in it — so covering the window
+    // costs the window nothing.
+    ToastLayer {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        data: root.toast;
     }
 }

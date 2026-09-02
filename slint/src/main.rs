@@ -363,6 +363,19 @@ struct SettingsState {
     transcribe_language: i32,
 }
 
+/// The bottom-right notice — one at a time, because a column of them is a log
+/// and what this is for is the one sentence about what just happened.
+///
+/// The token is what the panel watches. It is bumped per notice rather than
+/// the message being compared, so the same sentence said twice is two
+/// notices: saving twice should blink twice, and a message-equality test
+/// would show the first and swallow the second.
+#[derive(Default)]
+struct ToastState {
+    token: i32,
+    message: String,
+    failed: bool,
+}
 
 impl Default for SettingsState {
     fn default() -> Self {
@@ -681,6 +694,10 @@ struct Studio {
     /// The drag from the library that is over the lanes, already resolved
     /// into the clip it would leave. None when nothing is hovering.
     drop: Option<DropPlan>,
+    /// The last notice raised, and the count that makes it new. Held with the
+    /// rest of the state because every publish carries it, and because what
+    /// raises one is whatever else the same handler just did.
+    toast: ToastState,
     next_id: u32,
 }
 
@@ -1503,6 +1520,16 @@ impl Studio {
     }
 
     /// Everything the window shows.
+    /// Raises the bottom-right notice. Every caller is some other handler
+    /// that has just done — or refused to do — the thing it is reporting, so
+    /// this only records; the publish that handler was going to make anyway is
+    /// what puts it on screen.
+    fn notify(&mut self, message: &str, failed: bool) {
+        self.toast.token += 1;
+        self.toast.message = message.into();
+        self.toast.failed = failed;
+    }
+
     fn publish(&self, app: &App, models: &Models) {
         self.publish_lanes(app, models);
         self.publish_chrome(app, models);
@@ -1692,6 +1719,11 @@ impl Studio {
 
         app.set_on_start(self.on_start);
         app.set_project_name(self.project_name.as_str().into());
+        app.set_toast(ToastData {
+            token: self.toast.token,
+            message: self.toast.message.as_str().into(),
+            failed: self.toast.failed,
+        });
         let (_, width, height) = RESOLUTIONS[self.start.resolution.min(RESOLUTIONS.len() - 1)];
         let (_, num, den) = START_RATES[self.start.rate.min(START_RATES.len() - 1)];
         app.set_start(StartData {
@@ -2525,6 +2557,7 @@ fn demo_studio() -> Studio {
         divider_press: None,
         gesture: Gesture::None,
         drop: None,
+        toast: ToastState::default(),
         next_id: 100,
     }
 }
@@ -3526,11 +3559,19 @@ fn main() -> Result<(), slint::PlatformError> {
     // effect it was needs the applied-effect chain the inspector's stack is
     // drawn for, and nothing on this side owns one yet.
     editor.on_library_apply_effect(on_timeline!(|state, _id: SharedString| {
-        let Some(id) = state.selection.first().cloned() else { return };
+        // The two refusals the reference explains rather than swallows. A
+        // card that does nothing when clicked and says nothing about it is
+        // the one failure mode a catalogue cannot afford: there is no way to
+        // tell it from a card that is broken.
+        let Some(id) = state.selection.first().cloned() else {
+            state.notify("Select a video or image clip on the timeline first", true);
+            return;
+        };
         let has_picture = state
             .clip(&id)
             .is_some_and(|clip| matches!(clip.kind, ClipKind::Video | ClipKind::Image));
         if !has_picture {
+            state.notify("Select a video or image clip on the timeline first", true);
             return;
         }
         if let Some(clip) = state.now_mut().clips.iter_mut().find(|clip| clip.id == id) {
@@ -4223,10 +4264,15 @@ fn main() -> Result<(), slint::PlatformError> {
                             state.now_mut().clips.push(tail);
                         }
                     }
-                    // Saving, templates, speech and closing a project all need
-                    // a store this crate does not have. The rows are here so
-                    // the menu is the shape it will be; wiring them is a
-                    // handler each the day one exists.
+                    // Nothing is written: there is no store in this crate.
+                    // The notice is the whole of what Save does here, which is
+                    // also the shape it keeps — the reference saves and then
+                    // says so, and the day this one has a file to write it
+                    // reports what happened to it, `failed` and all.
+                    "save" => state.notify("Project saved", false),
+                    // Templates, speech and closing a project need that same
+                    // store. The rows are here so the menu is the shape it
+                    // will be; wiring them is a handler each the day it exists.
                     _ => {}
                 }
             }
