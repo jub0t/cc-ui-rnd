@@ -37,7 +37,9 @@ export component PanelHeader inherits Rectangle {
             vertical-alignment: center;
         }
 
-        Rectangle { horizontal-stretch: 1; }
+        Rectangle {
+            horizontal-stretch: 1;
+        }
 
         HorizontalLayout {
             spacing: 2px;
@@ -113,7 +115,9 @@ export component SectionHeader inherits Rectangle {
             }
         }
 
-        Rectangle { horizontal-stretch: 1; }
+        Rectangle {
+            horizontal-stretch: 1;
+        }
 
         if root.collapsible && !root.open && root.summary != "": Text {
             text: root.summary;
@@ -243,7 +247,10 @@ export component IconButton inherits Rectangle {
             : touch.has-hover ? Theme.field
             : Colors.transparent;
 
-        animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+        animate background {
+            duration: 100ms;
+            easing: cubic-bezier(0.4, 0, 0.2, 1);
+        }
 
         if root.glyph != Glyph.none: Icon {
             x: (parent.width - self.width) / 2;
